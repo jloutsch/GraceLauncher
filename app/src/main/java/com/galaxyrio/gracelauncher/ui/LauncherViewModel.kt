@@ -20,6 +20,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.galaxyrio.gracelauncher.data.AppRepository
+import com.galaxyrio.gracelauncher.data.backup.widgetIdsToDelete
+import com.galaxyrio.gracelauncher.data.backup.withoutWidgetPlaceholders
 import com.galaxyrio.gracelauncher.data.LauncherAppCache
 import com.galaxyrio.gracelauncher.data.CalendarRepository
 import com.galaxyrio.gracelauncher.data.CatalogRefreshState
@@ -372,7 +374,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 val reload = !itemsReady || snapshot.icons != itemsSnapshot.icons || snapshot.shortcuts != itemsSnapshot.shortcuts
                 itemsReady = true
                 itemsSnapshot = snapshot
-                _uiState.update { it.copy(popups = snapshot.popups, itemIcons = snapshot.icons,
+                _uiState.update { it.copy(popups = snapshot.popups.withoutWidgetPlaceholders(), itemIcons = snapshot.icons,
                     shownShortcutKeys = snapshot.shortcuts.filter { saved -> saved.showInAppList }.map { saved -> saved.itemKey }.toSet(),
                     itemRevision = it.itemRevision + 1) }
                 if (reload) refreshApps()
@@ -942,7 +944,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         rememberPopupItems(defaults + listOf(owner))
         val removed = itemsRepository.updatePopup(owner.key, defaults.map { PopupItem(it.key) }, transform)
         val host = com.galaxyrio.gracelauncher.platform.HomeWidgetHost(getApplication())
-        removed.forEach { runCatching { host.deleteAppWidgetId(it) } }
+        widgetIdsToDelete(removed).forEach { runCatching { host.deleteAppWidgetId(it) } }
     }
 
     suspend fun ensurePopup(owner: LauncherApp, defaults: List<LauncherApp>): Boolean = settingsWriteMutex.withLock {
@@ -1121,7 +1123,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val previous = itemsSnapshot.icons["folder:$id"]
         val removed = settingsRepository.deleteFolder(id)
         val host = com.galaxyrio.gracelauncher.platform.HomeWidgetHost(getApplication())
-        removed.forEach { runCatching { host.deleteAppWidgetId(it) } }
+        widgetIdsToDelete(removed).forEach { runCatching { host.deleteAppWidgetId(it) } }
         if (previous?.kind == "image" && !itemsRepository.isImageReferenced(previous.source)) itemIcons.deleteImage(previous)
     }
 
