@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.galaxyrio.gracelauncher.data.LauncherDatabase
+import com.galaxyrio.gracelauncher.data.backup.AutoBackupRunner
 import com.galaxyrio.gracelauncher.data.backup.WidgetRestoreRepository
 import com.galaxyrio.gracelauncher.platform.LauncherAppTransitions
 import com.galaxyrio.gracelauncher.ui.LauncherAppTheme
@@ -25,13 +26,16 @@ import com.galaxyrio.gracelauncher.ui.LauncherRoute
 import com.galaxyrio.gracelauncher.ui.LauncherViewModel
 import com.galaxyrio.gracelauncher.ui.components.LocalAppTransitions
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private val launcherViewModel: LauncherViewModel by viewModels()
     private var widgetEditRequest by mutableIntStateOf(0)
     private val appTransitions by lazy { LauncherAppTransitions(this, lifecycleScope) }
     private var widgetRestoreInFlight = false
+    private var autoBackupInFlight = false
     // The result arrives just before the next onResume, once WidgetSetupActivity has resolved its placeholder.
     private val widgetRestore = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { widgetRestoreInFlight = false }
 
@@ -57,6 +61,7 @@ class MainActivity : ComponentActivity() {
         launcherViewModel.refreshOnResume()
         launcherViewModel.refreshSchedule()
         restoreNextWidget()
+        runAutoBackup()
     }
 
     /** Binds one imported widget per home resume until no placeholders remain. */
@@ -73,6 +78,16 @@ class MainActivity : ComponentActivity() {
             widgetRestore.launch(Intent(this@MainActivity, WidgetSetupActivity::class.java)
                 .putExtra(WidgetSetupActivity.EXTRA_RESTORE_PLACEHOLDER, next.placeholderId)
                 .putExtra(WidgetSetupActivity.EXTRA_RESTORE_OWNER, next.ownerKey))
+        }
+    }
+
+    private fun runAutoBackup() {
+        if (autoBackupInFlight) return
+        autoBackupInFlight = true
+        val labels = launcherViewModel.uiState.value.apps.associate { it.key to it.label }
+        lifecycleScope.launch {
+            try { withContext(Dispatchers.IO) { AutoBackupRunner(this@MainActivity).runIfDue(labels) } }
+            finally { autoBackupInFlight = false }
         }
     }
 
