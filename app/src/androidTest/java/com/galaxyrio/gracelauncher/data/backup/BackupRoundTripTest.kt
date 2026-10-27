@@ -36,10 +36,14 @@ import java.util.zip.ZipOutputStream
 import kotlin.random.Random
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import org.json.JSONArray
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -177,6 +181,38 @@ class BackupRoundTripTest {
             assertTrue("$failing: $result", result is ImportResult.Failed && result.restored)
             assertEquals("$failing", before, state())
             assertTrue(File(context.noBackupFilesDir, "backup-safety.zip").isFile)
+            wipe()
+        }
+    }
+
+    @Test
+    fun cancelledImportFinishesOrRestores() = runBlocking {
+        // Popups: cancel inside the DB transaction. Favorites: cancel after the DB commit, before the other files.
+        for (gated in listOf(BackupSection.Popups, BackupSection.Favorites)) {
+            seed()
+            val seeded = state()
+            val backup = export()
+            LauncherSettingsRepository(database).deleteFolder("f2")
+            prefs(FavoritesFile).edit().putString("favorite_component_order", JSONArray(listOf("c/c.Main")).toString()).commit()
+            File(context.filesDir, "clock_fonts/other_Font.ttf").writeText("other")
+            val before = state()
+            val entered = CompletableDeferred<Unit>()
+            val gate = CompletableDeferred<Unit>()
+            // The gated wait ignores the cancel, like blocking DB work; every later section is a cancellable suspension.
+            val importer = BackupImporter(context, database, databaseFile, afterSection = {
+                if (it == gated) { entered.complete(Unit); withContext(NonCancellable) { gate.await() } } else yield()
+            })
+
+            val job = launch(Dispatchers.IO) { importer.import(backup.inputStream(), allApps, emptySet()) }
+            withTimeout(10_000) { entered.await() }
+            job.cancel()
+            gate.complete(Unit)
+            withTimeout(10_000) { job.join() }
+
+            val after = state()
+            val applied = after.folders.map { it.id } == listOf("f1", "f2") && after.favorites == seeded.favorites &&
+                after.appearance == seeded.appearance && after.fonts == seeded.fonts && after.iconFiles == seeded.iconFiles
+            assertTrue("$gated half-applied: $after", applied || after == before)
             wipe()
         }
     }

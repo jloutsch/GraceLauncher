@@ -22,6 +22,7 @@ import java.io.InputStream
 import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -84,11 +85,14 @@ class BackupImporter(
                     return ImportResult.Failed(e, restored = true)
                 }
             }
-            return try {
-                apply(backup, dir, restoring)
-                ImportResult.Success(summary(backup, installedAppKeys, installedProviders))
-            } catch (e: CancellationException) { throw e } catch (e: Exception) {
-                ImportResult.Failed(e, restored = !restoring && restoreSafetyExport())
+            // A cancel here could leave the DB committed but preferences and files old; finish or restore instead.
+            return withContext(NonCancellable) {
+                try {
+                    apply(backup, dir, restoring)
+                    ImportResult.Success(summary(backup, installedAppKeys, installedProviders))
+                } catch (e: Exception) {
+                    ImportResult.Failed(e, restored = !restoring && restoreSafetyExport())
+                }
             }
         } finally {
             dir.deleteRecursively()
@@ -221,7 +225,7 @@ class BackupImporter(
 
     private suspend fun restoreSafetyExport(): Boolean = try {
         File(context.noBackupFilesDir, SafetyFile).inputStream().use { run(it, emptySet(), emptySet(), restoring = true) } is ImportResult.Success
-    } catch (e: CancellationException) { throw e } catch (_: Exception) { false }
+    } catch (_: Exception) { false }
 }
 
 private inline fun <T> parse(block: () -> T): T = try { block() } catch (_: Exception) { throw Rejection(BackupProblem.NotABackup) }
