@@ -83,8 +83,11 @@ class MainActivity : ComponentActivity() {
 
     private fun runAutoBackup() {
         if (autoBackupInFlight) return
+        // Right after process start the app list is still loading; a backup now would carry no labels.
+        val state = launcherViewModel.uiState.value
+        if (state.isLoadingApps || state.appLoadFailed || state.apps.isEmpty()) return
         autoBackupInFlight = true
-        val labels = launcherViewModel.uiState.value.apps.associate { it.key to it.label }
+        val labels = state.apps.associate { it.key to it.label }
         lifecycleScope.launch {
             try { withContext(Dispatchers.IO) { AutoBackupRunner(this@MainActivity).runIfDue(labels) } }
             finally { autoBackupInFlight = false }

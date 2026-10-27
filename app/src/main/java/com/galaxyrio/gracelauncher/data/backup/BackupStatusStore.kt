@@ -26,6 +26,8 @@ class BackupStatusStore(context: Context) {
         get() = prefs.getString("last_failure_reason", null)
         set(value) = prefs.edit { if (value == null) remove("last_failure_reason") else putString("last_failure_reason", value) }
 
+    fun recordExport(atMillis: Long, hash: String) = prefs.edit { putLong("last_export_at", atMillis); putString("last_auto_hash", hash) }
+
     private fun long(key: String) = if (prefs.contains(key)) prefs.getLong(key, 0L) else null
     private fun put(key: String, value: Long?) = prefs.edit { if (value == null) remove(key) else putLong(key, value) }
 }

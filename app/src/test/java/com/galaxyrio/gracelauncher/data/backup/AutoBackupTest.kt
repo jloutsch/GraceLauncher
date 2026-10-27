@@ -36,4 +36,12 @@ class AutoBackupTest {
         assertEquals("gracelauncher-auto-2026-10-27.zip", autoBackupName(date))
         assertEquals("gracelauncher-2026-10-27.zip", manualBackupName(date))
     }
+
+    @Test fun stalePartFilesMatchOnlyAutoParts() {
+        val names = listOf(
+            "gracelauncher-auto-2026-10-05.zip.part", "gracelauncher-auto-2026-10-05 (1).zip.part",
+            "gracelauncher-auto-2026-10-05.zip", "gracelauncher-2026-10-05.zip.part", "notes.part", "gracelauncher-auto-x.zip.part",
+        )
+        assertEquals(names.take(2), stalePartFiles(names))
+    }
 }
