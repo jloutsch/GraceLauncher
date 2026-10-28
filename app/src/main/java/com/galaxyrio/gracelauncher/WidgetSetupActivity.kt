@@ -27,6 +27,7 @@ import com.galaxyrio.gracelauncher.data.LauncherSettingsRepository
 import com.galaxyrio.gracelauncher.data.LauncherItemsRepository
 import com.galaxyrio.gracelauncher.data.HomeLayout
 import com.galaxyrio.gracelauncher.data.PopupItem
+import com.galaxyrio.gracelauncher.data.backup.WidgetRestoreRepository
 import com.galaxyrio.gracelauncher.platform.HomeWidgetHost
 import com.galaxyrio.gracelauncher.platform.hasOptionalConfiguration
 import com.galaxyrio.gracelauncher.platform.initialWidgetOptions
@@ -40,6 +41,7 @@ import com.galaxyrio.gracelauncher.ui.theme.LauncherAppearance
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,7 +51,9 @@ class WidgetSetupActivity : ComponentActivity() {
     private val viewModel: LauncherViewModel by viewModels()
     private val repository by lazy { LauncherSettingsRepository(LauncherDatabase.getInstance(this)) }
     private val itemsRepository by lazy { LauncherItemsRepository(LauncherDatabase.getInstance(this)) }
-    private val popupOwner get() = intent.getStringExtra(EXTRA_POPUP_OWNER)
+    private val restoreRepository by lazy { WidgetRestoreRepository(LauncherDatabase.getInstance(this)) }
+    private val popupOwner get() = intent.getStringExtra(EXTRA_POPUP_OWNER) ?: intent.getStringExtra(EXTRA_RESTORE_OWNER)
+    private var restorePlaceholder: Int? = null
     private val manager by lazy { AppWidgetManager.getInstance(this) }
     private val host by lazy { HomeWidgetHost(this) }
     private var pendingId = -1
@@ -73,6 +77,8 @@ class WidgetSetupActivity : ComponentActivity() {
         configuringExisting = savedInstanceState?.getBoolean("configuringExisting") ?: false
         stage = savedInstanceState?.getString("stage") ?: "loading"
         expectedProfile = savedInstanceState?.getLong("expectedProfile", -1)?.takeIf { it >= 0 }
+        restorePlaceholder = (savedInstanceState ?: intent.extras)?.takeIf { it.containsKey(EXTRA_RESTORE_PLACEHOLDER) }
+            ?.getInt(EXTRA_RESTORE_PLACEHOLDER)
         setContent {
             LauncherAppTheme(viewModel) {
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -105,6 +111,8 @@ class WidgetSetupActivity : ComponentActivity() {
                     pendingId = configureId
                     configuringExisting = true
                     configure()
+                } else if (restorePlaceholder != null) {
+                    restoreWidget()
                 } else {
                     providers = withContext(Dispatchers.IO) {
                         getSystemService(UserManager::class.java).userProfiles.filter { profile ->
@@ -124,6 +132,21 @@ class WidgetSetupActivity : ComponentActivity() {
                 fail(R.string.widget_setup_error, error)
             }
         }
+    }
+
+    /** Restore mode skips the picker: the provider is the one the backup saved for this placeholder. */
+    private suspend fun restoreWidget() {
+        val placeholderId = restorePlaceholder ?: return
+        val provider = restoreRepository.pending().firstOrNull { it.placeholderId == placeholderId }?.provider
+        val info = provider?.let { wanted ->
+            withContext(Dispatchers.IO) {
+                runCatching { manager.getInstalledProvidersForProfile(Process.myUserHandle()) }.getOrDefault(emptyList())
+            }.firstOrNull { it.provider.flattenToString() == wanted }
+        }
+        Log.i(TAG, "restore placeholder=$placeholderId provider=$provider found=${info != null}")
+        if (info == null) { cancelSetup(); return }
+        busy = false
+        select(info)
     }
 
     private fun select(info: AppWidgetProviderInfo) {
@@ -257,8 +280,9 @@ class WidgetSetupActivity : ComponentActivity() {
             try {
                 val layout = HomeLayout(widgetId = id, widgetProvider = info.provider.flattenToString(),
                     widgetLabel = runCatching { info.loadLabel(packageManager) }.getOrDefault(info.provider.className))
-                val owner = popupOwner ?: com.galaxyrio.gracelauncher.data.HomeContentKey
-                itemsRepository.updatePopup(owner, emptyList()) { entries ->
+                val placeholder = restorePlaceholder
+                if (placeholder != null) restoreRepository.resolve(placeholder, id)
+                else itemsRepository.updatePopup(popupOwner ?: com.galaxyrio.gracelauncher.data.HomeContentKey, emptyList()) { entries ->
                     if (entries.any { it.widget?.widgetId == id }) entries else entries + PopupItem("widget:$id", layout)
                 }
                 host.untrackPendingId(pendingId)
@@ -275,7 +299,16 @@ class WidgetSetupActivity : ComponentActivity() {
     private fun fail(message: Int, error: Throwable? = null) {
         Log.e(TAG, "failed stage=$stage id=$pendingId provider=$expectedProvider existing=$configuringExisting", error)
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-        cancelSetup()
+        // An error is not a refusal: keep the imported slot so a later home start can retry it.
+        if (restorePlaceholder != null) skipRestore() else cancelSetup()
+    }
+
+    private fun skipRestore() {
+        if (pendingId >= 0) runCatching { host.deleteAppWidgetId(pendingId) }
+        host.untrackPendingId(pendingId)
+        pendingId = -1
+        setResult(RESULT_RESTORE_SKIPPED, Intent().putExtra(EXTRA_RESTORE_PLACEHOLDER, restorePlaceholder))
+        finish()
     }
 
     private fun cancelSetup() {
@@ -284,7 +317,17 @@ class WidgetSetupActivity : ComponentActivity() {
         if (!configuringExisting && pendingId >= 0) runCatching { host.deleteAppWidgetId(pendingId) }
         host.untrackPendingId(pendingId)
         pendingId = -1
-        finish()
+        val placeholder = restorePlaceholder ?: return finish()
+        // Finish only after the slot is gone, so the home screen's next resume sees the shorter queue.
+        // A repeated cancel repeats the drop, which is then a no-op.
+        lifecycleScope.launch {
+            try { withContext(NonCancellable) { restoreRepository.resolve(placeholder, null) } }
+            catch (error: Exception) {
+                if (error is CancellationException) throw error
+                Log.e(TAG, "restore drop failed placeholder=$placeholder", error)
+            }
+            finish()
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -294,6 +337,7 @@ class WidgetSetupActivity : ComponentActivity() {
         outState.putBoolean("saving", saving)
         outState.putString("stage", stage)
         expectedProfile?.let { outState.putLong("expectedProfile", it) }
+        restorePlaceholder?.let { outState.putInt(EXTRA_RESTORE_PLACEHOLDER, it) }
         super.onSaveInstanceState(outState)
     }
 
@@ -307,6 +351,9 @@ class WidgetSetupActivity : ComponentActivity() {
         private const val TAG = "GraceWidgetSetup"
         const val EXTRA_POPUP_OWNER = "popupOwner"
         const val EXTRA_CONFIGURE_ID = "configureWidgetId"
+        const val EXTRA_RESTORE_PLACEHOLDER = "restorePlaceholderId"
+        const val EXTRA_RESTORE_OWNER = "restoreOwner"
+        const val RESULT_RESTORE_SKIPPED = Activity.RESULT_FIRST_USER
         private const val REQUEST_BIND = 4001
         private const val REQUEST_CONFIGURE = 4002
     }

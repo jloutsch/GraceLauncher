@@ -218,11 +218,19 @@ internal fun PopupEditorScreen(owner: LauncherApp, uiState: LauncherUiState, act
         } },
         onRemove = { key -> actions.updatePopup(owner, shortcuts) { it.filterNot { item -> item.key == key } } },
         onReorder = { keys -> actions.updatePopup(owner, shortcuts) { current ->
-            val byKey = current.associateBy { it.key }
-            val ordered = keys.mapNotNull(byKey::get) + current.filterNot { it.key in keys }
+            val ordered = reorderPopupItems(keys, current)
             if (widgetScreen) ordered.map { it.copy(grid = it.grid?.copy(column = null, row = null)) } else ordered
         } }, onDone = onBack,
     )
+}
+
+/** Like FavoritesStore.reorder: entries the editor did not show (for example uninstalled apps) keep their slots. */
+internal fun reorderPopupItems(requested: List<String>, current: List<PopupItem>): List<PopupItem> {
+    val byKey = current.associateBy { it.key }
+    val moving = requested.distinct().mapNotNull(byKey::get)
+    val keys = moving.map { it.key }.toSet()
+    val replacements = moving.iterator()
+    return current.map { if (it.key in keys) replacements.next() else it }
 }
 
 @Composable
