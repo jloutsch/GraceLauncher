@@ -54,6 +54,31 @@ internal class WidgetHostState(val host: HomeWidgetHost) {
 
 internal val LocalWidgetHost = staticCompositionLocalOf<WidgetHostState?> { null }
 
+/**
+ * AppWidgetHost sends a widget's updates only to the view created last for its ID, so a second
+ * view would freeze the first. Surfaces that show one widget in several slots (widget stack pages)
+ * keep one view per ID here and move it into whichever slot shows it.
+ */
+internal class WidgetViewCache {
+    private class Entry(val info: AppWidgetProviderInfo, val view: HomeWidgetHostView, var owner: Any)
+    private val entries = mutableMapOf<Int, Entry>()
+
+    /** The cached view detached from its previous slot, or null when it must be created. */
+    fun take(id: Int, info: AppWidgetProviderInfo, owner: Any): HomeWidgetHostView? {
+        val entry = entries[id]?.takeIf { it.info === info } ?: return null
+        (entry.view.parent as? android.view.ViewGroup)?.removeView(entry.view)
+        entry.owner = owner
+        return entry.view
+    }
+
+    fun keep(id: Int, info: AppWidgetProviderInfo, owner: Any, view: HomeWidgetHostView) { entries[id] = Entry(info, view, owner) }
+
+    /** A slot releasing a view another slot already took must leave its callbacks alone. */
+    fun owns(id: Int, owner: Any) = entries[id]?.owner.let { it == null || it === owner }
+
+    fun retain(ids: Collection<Int>) { entries.keys.retainAll(ids.toSet()) }
+}
+
 /** Only one listener per Activity/host ID, shared by HOME and pop-up widgets. */
 @Composable
 internal fun rememberWidgetHost(): WidgetHostState {
@@ -105,8 +130,10 @@ internal fun HomeWidget(
     contentScale: Float = 1f,
     removeHorizontalPadding: Boolean = false,
     editGesturesEnabled: Boolean = true,
+    viewCache: WidgetViewCache? = null,
 ) = WidgetLongPressConfiguration {
     val density = LocalDensity.current.density
+    val slot = remember { Any() }
     val latestLongPress by rememberUpdatedState(onLongPress)
     val latestDragStart by rememberUpdatedState(onDragStart)
     val latestDrag by rememberUpdatedState(onDrag)
@@ -155,8 +182,10 @@ internal fun HomeWidget(
         AndroidView(
             modifier = modifier,
             factory = { context ->
-                // A provider may be removed/updated between lookup and creation.
-                runCatching { widget.host.createView(context, layout.widgetId, widget.info) as HomeWidgetHostView }
+                viewCache?.take(layout.widgetId, widget.info, slot)?.also { view = it }
+                    // A provider may be removed/updated between lookup and creation.
+                    ?: runCatching { widget.host.createView(context, layout.widgetId, widget.info) as HomeWidgetHostView }
+                    .onSuccess { viewCache?.keep(layout.widgetId, widget.info, slot, it) }
                     .getOrElse {
                         Log.e("GraceWidgetHost", "create failed id=${layout.widgetId} provider=${layout.widgetProvider}", it)
                         creationFailed = true; HomeWidgetHostView(context)
@@ -178,7 +207,9 @@ internal fun HomeWidget(
                 }
             },
             onRelease = {
-                it.onWidgetLongPress = null; it.onWidgetDragStart = null; it.onWidgetDrag = null; it.onWidgetDragEnd = null
+                if (viewCache?.owns(layout.widgetId, slot) != false) {
+                    it.onWidgetLongPress = null; it.onWidgetDragStart = null; it.onWidgetDrag = null; it.onWidgetDragEnd = null
+                }
                 if (view === it) view = null
             },
         )

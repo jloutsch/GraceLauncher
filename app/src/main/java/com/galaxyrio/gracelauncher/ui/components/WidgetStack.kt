@@ -23,6 +23,7 @@ import com.galaxyrio.gracelauncher.data.LauncherFolder
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.widgets.HomeWidget
+import com.galaxyrio.gracelauncher.ui.widgets.WidgetViewCache
 import com.galaxyrio.gracelauncher.ui.widgets.rememberHostedWidget
 
 /** Enough pages that nobody reaches either end, so a swipe never falls through to the home pager. */
@@ -75,6 +76,12 @@ internal fun WidgetStack(
     val pager = key(stack.id, count) {
         rememberPagerState(initialPage = widgetStackStartPage(count)) { widgetStackPageCount(count) }
     }
+    val viewCache = remember(stack.id) { WidgetViewCache() }
+    SideEffect { viewCache.retain(widgets.map { it.widgetId }) }
+    // Pages the pager prepares off screen can show the same widget as a page on screen (two
+    // widgets sit on both sides of each other), so only on-screen pages hold a widget view.
+    val onScreen by remember(pager) { derivedStateOf { pager.layoutInfo.visiblePagesInfo.map { it.index }.toSet() } }
+    val position = stringResource(R.string.widget_stack_position, pager.currentPage % count + 1, count)
     BoxWithConstraints(modifier.fillMaxWidth().then(semantics)) {
         val indicator = if (count > 1) IndicatorHeight else 0.dp
         val height = if (fillHeight && constraints.hasBoundedHeight)
@@ -83,10 +90,13 @@ internal fun WidgetStack(
             HorizontalPager(pager, Modifier.fillMaxWidth().height(height.dp),
                 userScrollEnabled = inputEnabled && count > 1, key = { it }) { page ->
                 val index = page % count
-                HomeWidget(widgets[index], hosted[index], height, editing = false, enabled = inputEnabled,
-                    hapticsEnabled = uiState.settings.allowHapticFeedback, onLongPress = onEdit)
+                if (onScreen.isEmpty() || page in onScreen) HomeWidget(widgets[index], hosted[index], height, editing = false,
+                    enabled = inputEnabled, hapticsEnabled = uiState.settings.allowHapticFeedback, onLongPress = onEdit, viewCache = viewCache)
+                else Spacer(Modifier.fillMaxWidth().height(height.dp))
             }
-            if (count > 1) Row(Modifier.fillMaxWidth().height(indicator).clearAndSetSemantics {},
+            if (count > 1) Row(Modifier.fillMaxWidth().height(indicator).clearAndSetSemantics {
+                    contentDescription = position; liveRegion = LiveRegionMode.Polite
+                },
                 horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                 val current = pager.currentPage % count
                 repeat(count) { index ->
