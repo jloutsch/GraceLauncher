@@ -121,7 +121,9 @@ fun DailyWeather(
 }
 
 @Composable
-fun HourlyWeather(snapshot: WeatherSnapshot, now: Instant, modifier: Modifier = Modifier) {
+fun HourlyWeather(snapshot: WeatherSnapshot, now: Instant, modifier: Modifier = Modifier,
+    /** Opens the user's weather app; taps only, so the row still scrolls sideways. */
+    onClick: (() -> Unit)? = null, onClickLabel: String? = null) {
     val locale = LocalConfiguration.current.locales[0]
     val use24Hour = DateFormat.is24HourFormat(LocalContext.current)
     val timeFormat = remember(locale, use24Hour, snapshot.location.timeZone) {
@@ -139,7 +141,8 @@ fun HourlyWeather(snapshot: WeatherSnapshot, now: Instant, modifier: Modifier = 
     if (current == null && hours.isEmpty()) return
     LazyRow(
         modifier.fillMaxWidth().testTag("weather_hourly")
-            .clip(RoundedCornerShape(22.dp)).background(MaterialTheme.colorScheme.surfaceBright),
+            .clip(RoundedCornerShape(22.dp)).background(MaterialTheme.colorScheme.surfaceBright)
+            .then(if (onClick == null) Modifier else Modifier.clickable(onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)),
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 14.dp),
     ) {
         if (current != null) item(key = "now") {

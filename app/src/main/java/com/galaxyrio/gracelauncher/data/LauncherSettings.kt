@@ -35,6 +35,8 @@ data class LauncherSettings(
     val weatherEnabled: Boolean = false,
     val weatherForecastDays: Int = 7,
     val weatherLocationId: String? = null,
+    /** Opened by tapping the hourly forecast; null leaves the forecast without a tap action. */
+    val weatherAppKey: String? = null,
     /** null delegates to Android's standard SHOW_ALARMS action. */
     val clockAppKey: String? = null,
     val clockStyle: ClockStyle = ClockStyle(),

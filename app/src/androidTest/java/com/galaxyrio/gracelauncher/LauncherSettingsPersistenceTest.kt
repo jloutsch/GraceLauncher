@@ -68,7 +68,7 @@ class LauncherSettingsPersistenceTest {
                 LauncherDatabase.Migration20To21, LauncherDatabase.Migration21To22,
                 LauncherDatabase.Migration22To23, LauncherDatabase.Migration23To24,
                 LauncherDatabase.Migration24To25, LauncherDatabase.Migration25To26,
-                LauncherDatabase.Migration26To27, LauncherDatabase.Migration27To28, LauncherDatabase.Migration28To29).build()
+                LauncherDatabase.Migration26To27, LauncherDatabase.Migration27To28, LauncherDatabase.Migration28To29, LauncherDatabase.Migration29To30).build()
         database = reopened
         return LauncherSettingsRepository(reopened)
     }

@@ -273,7 +273,7 @@ private fun BackupContents.remapped(serials: Map<Long, Long>): BackupContents {
         settings = settings.map {
             it.copy(iconPackPackage = json(it.iconPackPackage), iconPackPackagesJson = json(it.iconPackPackagesJson),
                 iconDesignJson = json(it.iconDesignJson), mediaAppKey = json(it.mediaAppKey), graceButtonJson = json(it.graceButtonJson),
-                weatherLocationId = json(it.weatherLocationId), clockAppKey = json(it.clockAppKey), clockStyleJson = json(it.clockStyleJson),
+                weatherLocationId = json(it.weatherLocationId), weatherAppKey = json(it.weatherAppKey), clockAppKey = json(it.clockAppKey), clockStyleJson = json(it.clockStyleJson),
                 homeLayoutJson = json(it.homeLayoutJson), appFontId = json(it.appFontId), fontLibraryJson = json(it.fontLibraryJson),
                 listAppearanceJson = json(it.listAppearanceJson), privateSpaceJson = json(it.privateSpaceJson),
                 workProfileJson = json(it.workProfileJson), homeGesturesJson = json(it.homeGesturesJson), searchJson = json(it.searchJson),
