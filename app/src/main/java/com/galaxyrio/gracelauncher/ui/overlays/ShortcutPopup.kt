@@ -293,7 +293,9 @@ fun ShortcutPopup(
                         val notification = uiState.ownNotificationsFor(itemApp, expanded = true).firstOrNull()
                         // Swipe right opens an app's own shortcuts, as it does on home and in the app list.
                         // Shortcuts and folders have no pop-up of their own to open.
-                        val openOwnPopup = onOpenAppPopup?.takeIf { itemApp.shortcut == null && itemApp.folderId == null }
+                        val openOwnPopup = onOpenAppPopup?.takeIf {
+                            uiState.settings.shortcutsFolders.enabled && itemApp.shortcut == null && itemApp.folderId == null
+                        }
                         val popupGestures = LocalPopupGestureSettings.current
                         val shortcutsLabel = stringResource(R.string.app_shortcuts)
                         val swipeEnabled = openOwnPopup != null && !reveal.dragging && reveal.expanded
