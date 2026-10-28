@@ -50,13 +50,15 @@ internal data class WidgetGridCell(val key: String, val column: Int, val row: In
 }
 
 /** Existing coordinates win over new entries. Adding/removing an item never fills unrelated holes. */
-internal fun restoreWidgetGrid(entries: List<PopupItem>, columns: Int, sizes: Map<String, WidgetGridSize>): List<WidgetGridCell> {
+internal fun restoreWidgetGrid(entries: List<PopupItem>, columns: Int, sizes: Map<String, WidgetGridSize>,
+    /** Non-widget entries the user can resize, such as widget stacks, keep their saved size. */
+    resizable: Set<String> = emptySet()): List<WidgetGridCell> {
     val width = columns.coerceIn(2, 8)
     val placed = mutableListOf<WidgetGridCell>()
     val ordered = entries.distinctBy { it.key }.sortedBy { it.grid?.row == null || it.grid.column == null }
     for (entry in ordered) {
         val saved = entry.grid
-        val requested = if (entry.widget == null) sizes[entry.key] ?: WidgetGridSize() else
+        val requested = if (entry.widget == null && entry.key !in resizable) sizes[entry.key] ?: WidgetGridSize() else
             saved?.let { WidgetGridSize(it.columns, it.rows) } ?: sizes[entry.key] ?: WidgetGridSize(2, 2)
         val size = WidgetGridSize(requested.columns.coerceIn(1, width), requested.rows.coerceIn(1, 20))
         val cell = WidgetGridCell(entry.key, (saved?.column ?: 0).coerceIn(0, width - size.columns),

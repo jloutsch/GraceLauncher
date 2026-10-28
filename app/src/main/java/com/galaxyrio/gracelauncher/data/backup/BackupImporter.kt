@@ -148,7 +148,8 @@ class BackupImporter(
         database.withTransaction {
             section(BackupSection.Settings) { dao.clearSettings(); dao.insertSettings(backup.settings) }
             section(BackupSection.HiddenApps) { dao.clearHiddenApps(); dao.insertHiddenApps(backup.hiddenApps) }
-            section(BackupSection.Folders) { dao.clearFolders(); dao.insertFolders(backup.folders) }
+            // A widget stack is always a stack; a file that says otherwise would open as a folder without its app list.
+            section(BackupSection.Folders) { dao.clearFolders(); dao.insertFolders(backup.folders.map { it.copy(isAppStack = it.isAppStack || it.isWidgetStack) }) }
             section(BackupSection.ItemIcons) { dao.clearItemIcons(); dao.insertItemIcons(backup.itemIcons) }
             section(BackupSection.SavedShortcuts) { dao.clearSavedShortcuts(); dao.insertSavedShortcuts(backup.savedShortcuts) }
             section(BackupSection.Popups) { dao.clearPopups(); dao.insertPopups(backup.popups) }

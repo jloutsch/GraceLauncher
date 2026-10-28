@@ -107,6 +107,8 @@ data class LauncherFolder(
     val autoHideApps: Boolean = false,
     /** Same membership/placement storage, rendered inline instead of as a named folder. */
     val isAppStack: Boolean = false,
+    /** A stack (isAppStack is also set) holding only widgets, shown one at a time. */
+    val isWidgetStack: Boolean = false,
 ) {
     val key: String get() = "folder:$id"
 

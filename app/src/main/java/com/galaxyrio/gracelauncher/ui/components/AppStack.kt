@@ -46,6 +46,11 @@ internal fun AppStack(
     expanded: Boolean? = null, onExpandedChange: ((Boolean) -> Unit)? = null,
     iconSize: Dp = 40.dp, onWallpaper: Boolean = true,
 ) {
+    // Every surface that places a stack (home, drawer, folders, Widget Screen) shows widget stacks here too.
+    if (stack.isWidgetStack) {
+        WidgetStack(stack, uiState, onEdit, modifier, enabled = enabled, onWallpaper = onWallpaper, fillHeight = gridManaged)
+        return
+    }
     val inputEnabled = enabled && LocalLauncherInputEnabled.current
     val appearance = LocalLauncherAppearance.current
     val displayedIconSize = iconSize * (appearance.iconSize / 100f)

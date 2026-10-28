@@ -531,9 +531,11 @@ private fun FolderPlacementChoice(title: String, checked: Boolean, modifier: Mod
 }
 
 @Composable
-internal fun DeleteFolderDialog(name: String, onDismiss: () -> Unit, appStack: Boolean = false, onDelete: () -> Unit) {
-    AlertDialog(onDismissRequest = onDismiss, shape = RoundedCornerShape(40.dp), title = { Text(stringResource(if (appStack) R.string.app_stack_delete else R.string.settings_folder_delete)) },
-        text = { Text(stringResource(if (appStack) R.string.app_stack_delete_confirmation else R.string.settings_folder_delete_confirmation, name)) },
+internal fun DeleteFolderDialog(name: String, onDismiss: () -> Unit, appStack: Boolean = false, widgetStack: Boolean = false, onDelete: () -> Unit) {
+    AlertDialog(onDismissRequest = onDismiss, shape = RoundedCornerShape(40.dp), title = { Text(stringResource(
+        if (widgetStack) R.string.widget_stack_delete else if (appStack) R.string.app_stack_delete else R.string.settings_folder_delete)) },
+        text = { Text(stringResource(if (widgetStack) R.string.widget_stack_delete_confirmation
+            else if (appStack) R.string.app_stack_delete_confirmation else R.string.settings_folder_delete_confirmation, name)) },
         confirmButton = { TextButton(onClick = onDelete, modifier = Modifier.testTag("folder_confirm_delete")) {
             Text(stringResource(R.string.settings_delete), color = MaterialTheme.colorScheme.error)
         } }, dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })
