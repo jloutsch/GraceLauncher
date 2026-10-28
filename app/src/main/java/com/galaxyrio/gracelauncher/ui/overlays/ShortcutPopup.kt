@@ -34,6 +34,9 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.dismiss
 import androidx.compose.ui.semantics.contentDescription
@@ -58,6 +61,8 @@ import com.galaxyrio.gracelauncher.ui.components.AppStack
 import com.galaxyrio.gracelauncher.ui.components.LauncherIcon
 import com.galaxyrio.gracelauncher.ui.components.LauncherSymbol
 import com.galaxyrio.gracelauncher.ui.components.LocalListAppearance
+import com.galaxyrio.gracelauncher.ui.components.LocalPopupGestureSettings
+import com.galaxyrio.gracelauncher.ui.components.detectPopupDragGestures
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.theme.effectiveDisplay
 import kotlin.math.roundToInt
@@ -286,9 +291,32 @@ fun ShortcutPopup(
                         val itemDisplay = itemApp.effectiveDisplay(LocalLauncherAppearance.current)
                         val hiddenIcon = itemDisplay.style == IconDisplayStyle.Hidden
                         val notification = uiState.ownNotificationsFor(itemApp, expanded = true).firstOrNull()
+                        // Swipe right opens an app's own shortcuts, as it does on home and in the app list.
+                        // Shortcuts and folders have no pop-up of their own to open.
+                        val openOwnPopup = onOpenAppPopup?.takeIf {
+                            uiState.settings.shortcutsFolders.enabled && itemApp.shortcut == null && itemApp.folderId == null
+                        }
+                        val popupGestures = LocalPopupGestureSettings.current
+                        val shortcutsLabel = stringResource(R.string.app_shortcuts)
+                        val swipeEnabled = openOwnPopup != null && !reveal.dragging && reveal.expanded
                         Row(
                             Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag(if (isFolder) "folder_app:${itemApp.key}" else "shortcut:${itemApp.shortcut?.id ?: itemApp.key}")
-                                .semantics { if (!showNames && !hiddenIcon) contentDescription = itemApp.label }
+                                .semantics {
+                                    if (!showNames && !hiddenIcon) contentDescription = itemApp.label
+                                    if (openOwnPopup != null) customActions = listOf(CustomAccessibilityAction(shortcutsLabel) {
+                                        openOwnPopup(itemApp, iconBounds); true
+                                    })
+                                }
+                                .pointerInput(itemApp.key, swipeEnabled, popupGestures.popupSwipeDistanceDp, popupGestures.popupSwipeAngleDegrees) {
+                                    if (swipeEnabled) detectPopupDragGestures(
+                                        extraDistance = popupGestures.popupSwipeDistanceDp.coerceIn(0, 48).dp.toPx(),
+                                        maxAngleDegrees = popupGestures.popupSwipeAngleDegrees.coerceIn(10, 90),
+                                        leftEnabled = false,
+                                        // Opening replaces this folder panel, which ends the gesture.
+                                        onDragStart = { openOwnPopup?.invoke(itemApp, iconBounds) },
+                                        onDragEnd = {}, onDragCancel = {},
+                                    ) { change, _ -> change.consume() }
+                                }
                                 .clip(RoundedCornerShape(16.dp))
                                 .combinedClickable(enabled = !reveal.dragging && reveal.expanded, onLongClick = { onDetails(itemApp) }, onClick = {
                                     onLaunchItem(itemApp, iconBounds)

@@ -28,12 +28,16 @@ import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeRight
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.galaxyrio.gracelauncher.data.FolderPlacement
 import com.galaxyrio.gracelauncher.data.LauncherApp
 import com.galaxyrio.gracelauncher.data.LauncherFolder
+import com.galaxyrio.gracelauncher.data.LauncherSettings
+import com.galaxyrio.gracelauncher.data.ShortcutsFoldersSettings
+import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.components.FolderRow
 import com.galaxyrio.gracelauncher.ui.overlays.FolderPopup
 import com.galaxyrio.gracelauncher.ui.overlays.ShortcutRevealState
@@ -117,6 +121,29 @@ class FolderComponentsTest {
         compose.onNodeWithTag("folder:${folder.id}").performTouchInput { longClick() }
         compose.runOnIdle { assertTrue(longPressed) }
         compose.onNodeWithTag("folder_popup").assertDoesNotExist()
+    }
+
+    @Test
+    fun swipingRightOnAFolderAppOpensItsPopupOnlyWhilePopupsAreEnabled() {
+        val opened = mutableListOf<String>()
+        var popupsEnabled by mutableStateOf(true)
+        compose.setContent {
+            GraceLauncherTheme(dynamicColor = false) {
+                FolderPopup(
+                    folder = folder, apps = listOf(browser, mail), anchor = Rect(0f, 0f, 10f, 10f),
+                    onDismiss = {}, onLaunchApp = { _, _ -> }, onEdit = null,
+                    reveal = remember { ShortcutRevealState(animationsEnabled = false) },
+                    uiState = LauncherUiState(apps = listOf(browser, mail), folders = listOf(folder),
+                        settings = LauncherSettings(shortcutsFolders = ShortcutsFoldersSettings(enabled = popupsEnabled))),
+                    onOpenAppPopup = { app, _ -> opened += app.key },
+                )
+            }
+        }
+        compose.onNodeWithTag("folder_app:${mail.key}").performTouchInput { swipeRight() }
+        compose.runOnIdle { assertEquals(listOf(mail.key), opened) }
+        compose.runOnIdle { popupsEnabled = false }
+        compose.onNodeWithTag("folder_app:${mail.key}").performTouchInput { swipeRight() }
+        compose.runOnIdle { assertEquals("Turning pop-ups off also turns off the folder swipe", listOf(mail.key), opened) }
     }
 
     private fun showFolder(
