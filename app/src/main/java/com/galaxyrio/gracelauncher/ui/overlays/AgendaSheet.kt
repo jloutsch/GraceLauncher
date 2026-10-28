@@ -116,7 +116,9 @@ fun AgendaSheet(uiState: LauncherUiState, actions: LauncherActions, onRequestCal
                 }
                 if (date == today) {
                     if (weather != null) item(key = "today_weather") {
-                        HourlyWeather(weather, now)
+                        val weatherApp = uiState.settings.weatherAppKey?.let { key -> uiState.allApps.firstOrNull { it.key == key } }
+                        HourlyWeather(weather, now, onClick = weatherApp?.let { { actions.openWeatherApp() } },
+                            onClickLabel = weatherApp?.let { stringResource(R.string.weather_open_app, it.label) })
                         WeatherSourceNote(weather, now, actions.openBreezyWeather)
                     }
                     else if (weatherEnabled && uiState.weather.status != WeatherStatus.Loading) item(key = "weather_unavailable") {

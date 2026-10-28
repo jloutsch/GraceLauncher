@@ -34,7 +34,8 @@ import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.weather.WeatherAttribution
 
 @Composable
-internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit, onAppearance: () -> Unit = {}) {
+internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit,
+    onWeatherApp: () -> Unit = {}, onAppearance: () -> Unit = {}) {
     val settings = uiState.settings
     val weather = uiState.weather
     val status = if (settings.weatherEnabled) weather.status else WeatherStatus.Disabled
@@ -131,19 +132,27 @@ internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions,
                 }
             }
             item { SettingsHeading(stringResource(R.string.weather_settings_display)) }
+            val offset = if (weather.locations.isEmpty()) 0 else 1
             if (weather.locations.isNotEmpty()) item {
                 SettingsActionItem(
                     stringResource(R.string.weather_settings_location), locationName,
-                    0, 2, "weather_location",
+                    0, offset + 2, "weather_location",
                 ) { dialog = "location" }
             }
             item {
                 SettingsActionItem(
                     stringResource(R.string.weather_settings_forecast_days),
                     pluralStringResource(R.plurals.weather_settings_days_value, settings.weatherForecastDays, settings.weatherForecastDays),
-                    if (weather.locations.isEmpty()) 0 else 1, if (weather.locations.isEmpty()) 1 else 2,
-                    "weather_forecast_days",
+                    offset, offset + 2, "weather_forecast_days",
                 ) { dialog = "days" }
+            }
+            item {
+                val app = settings.weatherAppKey?.let { key -> uiState.allApps.firstOrNull { it.key == key } }
+                SettingsActionItem(
+                    stringResource(R.string.weather_settings_app),
+                    app?.label ?: stringResource(if (settings.weatherAppKey == null) R.string.settings_none else R.string.weather_settings_app_missing),
+                    offset + 1, offset + 2, "weather_app", onClick = onWeatherApp,
+                )
             }
             if (settings.weatherEnabled && weather.snapshot != null) {
                 item { SettingsHeading(stringResource(R.string.weather_settings_attribution)) }
@@ -202,5 +211,16 @@ private fun <T> WeatherChoiceDialog(
         },
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) } },
+    )
+}
+
+/** The app the hourly forecast opens. Any installed app can be chosen; weather apps have no common category. */
+@Composable
+internal fun WeatherAppSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit) {
+    AppSelectionSettings(
+        uiState, actions, onBack, title = stringResource(R.string.weather_settings_app), tag = "weather_app",
+        selectedKey = uiState.settings.weatherAppKey, showDefault = true, defaultLabel = stringResource(R.string.settings_none),
+        description = stringResource(R.string.weather_settings_app_description),
+        onSelect = { key -> actions.updateSettings { it.copy(weatherAppKey = key) } },
     )
 }

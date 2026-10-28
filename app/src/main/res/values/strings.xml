@@ -572,6 +572,10 @@
     <string name="weather_settings_location">Location</string>
     <string name="weather_settings_first_location">First location in Breezy Weather</string>
     <string name="weather_settings_forecast_days">Forecast days</string>
+    <string name="weather_settings_app">Weather app</string>
+    <string name="weather_settings_app_description">Tap the hourly forecast in your agenda to open this app.</string>
+    <string name="weather_settings_app_missing">Selected app is unavailable</string>
+    <string name="weather_open_app">Open %1$s</string>
     <plurals name="weather_settings_days_value">
         <item quantity="one">%1$d day</item>
         <item quantity="other">%1$d days</item>
