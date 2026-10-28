@@ -159,10 +159,12 @@ class LauncherItemsRepository(private val database: LauncherDatabase) {
             requireExistingFolder(key)
             if (key == HomeContentKey) LauncherSettingsRepository(database).migrateLegacyHomeWidget()
             val previous = dao.popup(key)?.let { PopupItem.decode(it.itemsJson) } ?: defaults
-            val stack = key.takeIf { it.startsWith("folder:") }?.removePrefix("folder:")
-                ?.let { database.settingsDao().folder(it) }?.isAppStack == true
+            val folder = key.takeIf { it.startsWith("folder:") }?.removePrefix("folder:")
+                ?.let { database.settingsDao().folder(it) }
+            val stack = folder?.isAppStack == true
+            // App stacks hold apps and shortcuts; widget stacks hold widgets only.
             val next = transform(previous).distinctBy { it.key }.filter {
-                (!stack || (it.widget == null && !it.key.startsWith("folder:"))) &&
+                (!stack || if (folder?.isWidgetStack == true) it.widget != null else (it.widget == null && !it.key.startsWith("folder:"))) &&
                     (key == WidgetScreenKey || (it.key != PrivateSpaceFolderKey && it.key != WorkProfileFolderKey))
             }
             dao.savePopup(AppPopupEntity(key, PopupItem.encode(next)))

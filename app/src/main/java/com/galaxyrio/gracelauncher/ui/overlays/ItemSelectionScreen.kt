@@ -160,6 +160,7 @@ internal fun PopupEditorScreen(owner: LauncherApp, uiState: LauncherUiState, act
     header: (@Composable () -> Unit)? = null, widgetScreen: Boolean = false) {
     val isFolder = owner.folderId != null || widgetScreen
     val isStack = uiState.folders.any { it.id == owner.folderId && it.isAppStack }
+    val isWidgetStack = uiState.folders.any { it.id == owner.folderId && it.isWidgetStack }
     var retry by remember { mutableIntStateOf(0) }
     val result by produceState(if (isFolder) ShortcutResult(ShortcutStatus.Ready) else actions.cachedShortcuts(owner) ?: ShortcutResult(ShortcutStatus.Loading),
         owner, uiState.hasShortcutAccess, retry, uiState.itemRevision, uiState.settings) { if (!isFolder) value = actions.shortcuts(owner) }
@@ -201,17 +202,19 @@ internal fun PopupEditorScreen(owner: LauncherApp, uiState: LauncherUiState, act
         return
     }
     ItemSelectionScreen(
-        title = if (widgetScreen) stringResource(R.string.widget_screen_edit) else if (isStack) stringResource(R.string.app_stack_edit) else stringResource(R.string.edit_app_popup, owner.label),
+        title = if (widgetScreen) stringResource(R.string.widget_screen_edit) else if (isWidgetStack) stringResource(R.string.widget_stack_edit)
+            else if (isStack) stringResource(R.string.app_stack_edit) else stringResource(R.string.edit_app_popup, owner.label),
         tag = if (widgetScreen) "widget_screen_editor" else "popup_editor", selected = selected,
-        emptyMessage = if (isStack) stringResource(R.string.app_stack_empty) else null,
-        apps = uiState.allApps.filterNot { it.key == owner.key }, enabled = ready,
+        emptyMessage = if (isWidgetStack) stringResource(R.string.widget_stack_empty) else if (isStack) stringResource(R.string.app_stack_empty) else null,
+        apps = if (isWidgetStack) emptyList() else uiState.allApps.filterNot { it.key == owner.key }, enabled = ready,
+        showApps = !isWidgetStack,
         shortcuts = shortcuts.takeUnless { isFolder }, shortcutTitle = stringResource(R.string.popup_app_shortcuts, owner.label),
         header = header,
         shortcutStatus = result.status, onRetry = { retry++ }, onRequestAccess = actions.requestDefaultHome,
-        onAddWidget = if (isStack) null else ({ actions.addPopupWidget(owner, shortcuts) }),
+        onAddWidget = if (isStack && !isWidgetStack) null else ({ actions.addPopupWidget(owner, shortcuts) }),
         onAddFolder = if (!isStack) ({ choosingGroup = false }) else null,
         onAddStack = if (!isStack) ({ choosingGroup = true }) else null,
-        onAddShortcut = { choosingShortcut = true },
+        onAddShortcut = if (isWidgetStack) null else ({ choosingShortcut = true }),
         appGroupChoices = if (widgetScreen) profileGroupChoices(uiState, entries.map { it.key }.toSet()) else emptyList(),
         onToggle = { app -> actions.updatePopup(owner, shortcuts) { current ->
             if (current.any { it.key == app.key }) current.filterNot { it.key == app.key } else current + PopupItem(app.key)
@@ -257,6 +260,7 @@ private fun ItemSelectionScreen(
     reorderOnly: Boolean = false,
     loading: Boolean = false,
     emptyMessage: String? = null,
+    showApps: Boolean = true,
 ) {
     val selectedKeys = selected.map { it.key }
     val selectedEntries = selected.associateBy { it.key }
@@ -289,7 +293,7 @@ private fun ItemSelectionScreen(
             modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding(),
             state = list, listTag = "${tag}_list", searchTag = "${tag}_search", itemTagPrefix = "favorite_all",
             enabled = enabled && reorder.draggingKey == null, userScrollEnabled = reorder.draggingKey == null,
-            showApps = !reorderOnly,
+            showApps = !reorderOnly && showApps,
         ) {
             if (header != null) item(key = "editor_header", contentType = "header") { header() }
             item(key = "selected_header", contentType = "header") { SelectionHeading(stringResource(R.string.favorites_selected), "${tag}_selected") }

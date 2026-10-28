@@ -34,6 +34,7 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
                     appListAtBottom = entry.appListAtBottom,
                     autoHideApps = entry.autoHideApps,
                     isAppStack = entry.isAppStack,
+                    isWidgetStack = entry.isWidgetStack,
                 )
             },
         )
@@ -129,7 +130,8 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
         require(name.isNotEmpty()) { "A folder name must not be blank" }
         val keys = folder.appKeys.filter(String::isNotBlank).distinct()
         database.withTransaction {
-            dao.upsertFolder(LauncherFolderEntity(folder.id, name, folder.placement.name, folder.appListAtBottom, folder.autoHideApps, folder.isAppStack))
+            dao.upsertFolder(LauncherFolderEntity(folder.id, name, folder.placement.name, folder.appListAtBottom, folder.autoHideApps, folder.isAppStack,
+                folder.isWidgetStack))
             val itemsDao = database.itemsDao()
             val previous = itemsDao.popup(folder.key)?.let { PopupItem.decode(it.itemsJson) }.orEmpty()
             // Membership callers must not discard widgets or move them to the end.
