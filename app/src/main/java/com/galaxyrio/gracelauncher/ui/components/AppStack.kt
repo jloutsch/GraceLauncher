@@ -45,12 +45,14 @@ internal fun AppStack(
     modifier: Modifier = Modifier, enabled: Boolean = true, gridManaged: Boolean = false,
     expanded: Boolean? = null, onExpandedChange: ((Boolean) -> Unit)? = null,
     iconSize: Dp = 40.dp, onWallpaper: Boolean = true,
+    /** Contents for a stack that is not stored as a folder; null reads the folder's saved items. */
+    contents: List<LauncherApp>? = null,
 ) {
     val inputEnabled = enabled && LocalLauncherInputEnabled.current
     val appearance = LocalLauncherAppearance.current
     val displayedIconSize = iconSize * (appearance.iconSize / 100f)
     val symbolColor = if (onWallpaper) appearance.text else LocalContentColor.current
-    val apps = uiState.popupItems(uiState.folderItem(stack), emptyList()).mapNotNull { entry ->
+    val apps = contents ?: uiState.popupItems(uiState.folderItem(stack), emptyList()).mapNotNull { entry ->
         if (entry.widget != null) null else uiState.findItem(entry.key)?.takeIf { it.folderId == null }
     }
     var localExpanded by rememberSaveable(stack.id) { mutableStateOf(false) }
