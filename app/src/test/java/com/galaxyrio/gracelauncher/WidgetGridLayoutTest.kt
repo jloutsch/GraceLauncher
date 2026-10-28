@@ -56,6 +56,18 @@ class WidgetGridLayoutTest {
         assertFits(narrower, 2)
     }
 
+    @Test fun resizedWidgetStacksKeepTheirSizeWhileAppStacksUseTheirComputedSize() {
+        val entries = listOf(PopupItem("folder:widgets", grid = WidgetGridPlacement(0, 0, 3, 4)),
+            PopupItem("folder:apps", grid = WidgetGridPlacement(0, 4, 4, 3)))
+        val sizes = mapOf("folder:widgets" to WidgetGridSize(4, 2), "folder:apps" to WidgetGridSize(4, 1))
+        val restored = restoreWidgetGrid(entries, 4, sizes, resizable = setOf("folder:widgets"))
+        assertEquals(WidgetGridSize(3, 4), restored.first { it.key == "folder:widgets" }.size)
+        assertEquals(WidgetGridSize(4, 1), restored.first { it.key == "folder:apps" }.size)
+        val added = restoreWidgetGrid(listOf(PopupItem("folder:new")), 4, mapOf("folder:new" to WidgetGridSize(4, 2)), setOf("folder:new"))
+        assertEquals(WidgetGridSize(4, 2), added.single().size)
+        assertFits(restored, 4)
+    }
+
     @Test fun movingAFullWidthWidgetUpSurvivesCompactionAndReload() {
         val original = listOf(cell("above", 0, 0, 4, 3), cell("moving", 0, 3, 4, 4), cell("below", 0, 7, 4, 3))
         val moved = compactWidgetRows(moveWidgetGrid(original, cell("moving", 0, 0, 4, 4), 4))

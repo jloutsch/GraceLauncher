@@ -79,19 +79,24 @@ internal fun WidgetScreen(
     }
     val byKey = entries.associateBy { it.key }
     val stacks = uiState.folders.filter { it.isAppStack && it.key in byKey }.associateBy { it.key }
+    // Widget stacks size and resize like widgets; app stacks grow with their rows of icons.
+    val widgetStackKeys = stacks.filterValues { it.isWidgetStack }.keys
+    val appStacks = stacks.filterKeys { it !in widgetStackKeys }
     val currentStackKeys by rememberUpdatedState(stacks.keys)
+    val currentAppStackKeys by rememberUpdatedState(appStacks.keys)
     var expandedStacks by rememberSaveable { mutableStateOf(emptyList<String>()) }
-    val widgetKeys = entries.filter { it.widget != null }.map { it.key }.toSet()
+    val nativeWidgetKeys = entries.filter { it.widget != null }.map { it.key }.toSet()
+    val widgetKeys = nativeWidgetKeys + widgetStackKeys
     val inputEnabled = enabled && !uiState.isLoadingSettings && !uiState.settingsLoadFailed
     val editable = inputEnabled && !uiState.settings.widgetScreen.editingLocked
     val currentInputEnabled by rememberUpdatedState(inputEnabled)
     val currentEditable by rememberUpdatedState(editable)
     val currentEditingChange by rememberUpdatedState(onEditingChange)
     val currentEdit by rememberUpdatedState(onEdit)
-    val currentWidgetKeys by rememberUpdatedState(widgetKeys)
+    val currentNativeWidgetKeys by rememberUpdatedState(nativeWidgetKeys)
     val persist by rememberUpdatedState<(List<WidgetGridCell>, String?) -> Unit>({ cells, removed ->
         actions.updatePopup(owner, emptyList()) { current ->
-            val positions = collapseWidgetStacks(cells, currentStackKeys).associateBy { it.key }
+            val positions = collapseWidgetStacks(cells, currentAppStackKeys).associateBy { it.key }
             current.filterNot { it.key == removed }.map { entry ->
                 positions[entry.key]?.let { entry.copy(grid = it.placement()) } ?: entry
             }.sortedWith(compareBy({ it.grid?.row ?: Int.MAX_VALUE }, { it.grid?.column ?: Int.MAX_VALUE }))
@@ -165,16 +170,17 @@ internal fun WidgetScreen(
                 entry.key to widgetGridSpec(info, columns, widthPx, heightPx,
                     gapPx + (padding?.left ?: 0) + (padding?.right ?: 0),
                     gapPx + (padding?.top ?: 0) + (padding?.bottom ?: 0))
-            }
+            } + widgetStackKeys.associateWith { WidgetGridSize(columns, 2) to WidgetResizeLimits(1, columns, 1, 20, true, true) }
         }
         val stackIconSize = 40f * appearance.iconSize / 100f
         val stackColumns = appStackColumns((maxWidth - side * 2 - gap).value, stackIconSize)
-        val stackRows = stacks.mapValues { (key, stack) ->
+        val stackRows = appStacks.mapValues { (key, stack) ->
             val count = uiState.popupItems(uiState.folderItem(stack), emptyList()).count { it.widget == null && uiState.findItem(it.key) != null }
             ceil((appStackHeight(appStackRows(count, stackColumns, key in expandedStacks), stackIconSize) + gap.value) / cellHeight.value).toInt().coerceAtLeast(1)
         }
         val baseCells = remember(entries, columns, specs, stacks.keys) {
-            restoreWidgetGrid(entries, columns, specs.mapValues { it.value.first } + stacks.keys.associateWith { WidgetGridSize(columns, 1) })
+            restoreWidgetGrid(entries, columns, specs.mapValues { it.value.first } + appStacks.keys.associateWith { WidgetGridSize(columns, 1) },
+                resizable = widgetStackKeys)
         }
         val resolved = remember(baseCells, stackRows) { expandWidgetStacks(baseCells, stackRows) }
         LaunchedEffect(resolved, entries, uiState.isLoadingSettings, uiState.settingsLoadFailed) {
@@ -203,7 +209,7 @@ internal fun WidgetScreen(
             // Keep this node enabled during a held drag. Consumed pointer changes stop scrolling;
             // toggling/removing gesture modifiers here would cancel the same pointer stream.
             .scrollable(grid.scrolling, Orientation.Vertical, enabled = enabled)
-            .widgetGridInput(grid, { currentInputEnabled }, { currentEditable }, { currentWidgetKeys }, { currentStackKeys }, { launch(it) },
+            .widgetGridInput(grid, { currentInputEnabled }, { currentEditable }, { currentNativeWidgetKeys }, { currentStackKeys }, { launch(it) },
                 { key, point -> currentStart(key, point) }, { currentEdit() })
             .semantics {
                 verticalScrollAxisRange = ScrollAxisRange({ grid.scroll }, { grid.maxScroll })
@@ -237,7 +243,7 @@ internal fun WidgetScreen(
                 val width = cellWidth * cell.size.columns
                 val stackHeight by animateDpAsState(cellHeight * cell.size.rows,
                     MaterialTheme.motionScheme.defaultSpatialSpec(), label = "stackGridHeight")
-                val height = if (cell.key in stacks) stackHeight else cellHeight * cell.size.rows
+                val height = if (cell.key in appStacks) stackHeight else cellHeight * cell.size.rows
                 val top = position.y - grid.scroll
                 val destinationTop = destination.y - grid.scroll
                 fun inViewport(y: Float) = y + cell.size.rows * heightPx >= -heightPx && y <= viewportPx + heightPx
@@ -260,7 +266,7 @@ internal fun WidgetScreen(
                                 add(CustomAccessibilityAction(previousLabel) { grid.moveBy(cell.key, -1); true })
                                 add(CustomAccessibilityAction(nextLabel) { grid.moveBy(cell.key, 1); true })
                                 add(CustomAccessibilityAction(removeLabel) { grid.remove(cell.key); true })
-                                if (entry.widget != null) add(CustomAccessibilityAction(resizeLabel) { grid.selectWidget(cell.key); true })
+                                if (cell.key in widgetKeys) add(CustomAccessibilityAction(resizeLabel) { grid.selectWidget(cell.key); true })
                                 if (app != null) add(CustomAccessibilityAction(infoLabel) { onAppDetails(app); true })
                             }
                         }) {
@@ -293,7 +299,7 @@ internal fun WidgetScreen(
                                     maxLines = 2, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
                             }
                         }
-                        if (editable && selected && entry.widget != null) {
+                        if (editable && selected && cell.key in widgetKeys) {
                             // Hit-test above the native view; the stable viewport owns the next held drag.
                             Box(Modifier.matchParentSize().pointerInput(Unit) {
                                 awaitPointerEventScope { while (true) awaitPointerEvent() }
