@@ -1,6 +1,7 @@
 package com.galaxyrio.gracelauncher.data
 
 import androidx.room.withTransaction
+import com.galaxyrio.gracelauncher.data.media.HeadphoneAppsSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -50,6 +51,7 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
             dismissResistance = settings.dismissResistance.coerceIn(0, 90),
             dismissThresholdDp = settings.dismissThresholdDp.coerceIn(24, 160),
             mediaAppKey = settings.mediaAppKey,
+            headphoneAppsJson = settings.headphoneApps.encode(),
             graceButtonJson = settings.graceButton.encode(),
             calendarAgenda = settings.calendarAgenda,
             showBatteryPercentage = settings.showBatteryPercentage,
@@ -202,6 +204,7 @@ private fun LauncherSettingsEntity.toSettings() = LauncherSettings(
     dismissResistance = dismissResistance.coerceIn(0, 90),
     dismissThresholdDp = dismissThresholdDp.coerceIn(24, 160),
     mediaAppKey = mediaAppKey,
+    headphoneApps = HeadphoneAppsSettings.decode(headphoneAppsJson),
     graceButton = GraceButtonSettings.decode(graceButtonJson),
     calendarAgenda = calendarAgenda,
     showBatteryPercentage = showBatteryPercentage,

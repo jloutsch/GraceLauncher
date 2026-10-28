@@ -1,5 +1,6 @@
 package com.galaxyrio.gracelauncher.data
 
+import com.galaxyrio.gracelauncher.data.media.HeadphoneAppsSettings
 import com.materialkolor.PaletteStyle
 
 enum class ThemeMode { System, Light, Dark }
@@ -30,6 +31,7 @@ data class LauncherSettings(
     val dismissResistance: Int = 75,
     val dismissThresholdDp: Int = 72,
     val mediaAppKey: String? = null,
+    val headphoneApps: HeadphoneAppsSettings = HeadphoneAppsSettings(),
     val weatherEnabled: Boolean = false,
     val weatherForecastDays: Int = 7,
     val weatherLocationId: String? = null,

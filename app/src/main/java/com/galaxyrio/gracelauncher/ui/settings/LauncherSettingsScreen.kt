@@ -81,7 +81,7 @@ internal enum class SettingsPage {
     GraceButtonAppearance, GraceButtonPosition, AgendaAppearance, SearchAppearance, MediaPlayerAppearance,
     WidgetScreen, WidgetScreenEditor, Homepage, AppList, FeedScreen, StatusScreen, DigitalWellbeing, TabletsFoldables,
     Wallpaper, WallpaperDesigner,
-    AppCategories, CategoryEditor,
+    AppCategories, CategoryEditor, HeadphoneApps,
 }
 
 /** Navigation owns each page's saved state and seekable predictive-back transition. */
@@ -218,7 +218,9 @@ fun LauncherSettingsScreen(
                     SettingsPage.ShortcutsFolders -> ShortcutsFoldersSettingsScreen(uiState, actions, back)
                     SettingsPage.WidgetScreen -> WidgetScreenSettingsPage(uiState, actions, back) { navigate(SettingsPage.WidgetScreenEditor) }
                     SettingsPage.WidgetScreenEditor -> com.galaxyrio.gracelauncher.ui.overlays.WidgetScreenEditor(uiState, actions, back)
-                    SettingsPage.MediaPlayer -> MediaPlayerSettings(uiState, actions, back) { navigate(SettingsPage.MediaPlayerAppearance) }
+                    SettingsPage.MediaPlayer -> MediaPlayerSettings(uiState, actions, back,
+                        onHeadphoneApps = { navigate(SettingsPage.HeadphoneApps) }) { navigate(SettingsPage.MediaPlayerAppearance) }
+                    SettingsPage.HeadphoneApps -> HeadphoneAppsSettingsScreen(uiState, actions, back)
                     SettingsPage.GraceButton, SettingsPage.Gestures -> GraceButtonSettingsScreen(uiState, actions, back,
                         home = page == SettingsPage.Gestures, onAppearance = { navigate(SettingsPage.GraceButtonAppearance) }) { gesture ->
                         if (isCurrent()) navController.navigate("${SettingsPage.GraceAction.name}/${gesture.name}?home=${page == SettingsPage.Gestures}") { launchSingleTop = true }
