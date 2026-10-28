@@ -19,6 +19,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.galaxyrio.gracelauncher.data.LauncherDatabase
 import com.galaxyrio.gracelauncher.data.backup.AutoBackupRunner
+import com.galaxyrio.gracelauncher.data.backup.BackupController
+import com.galaxyrio.gracelauncher.data.backup.BackupTask
 import com.galaxyrio.gracelauncher.data.backup.WidgetRestoreRepository
 import com.galaxyrio.gracelauncher.platform.LauncherAppTransitions
 import com.galaxyrio.gracelauncher.ui.LauncherAppTheme
@@ -36,8 +38,15 @@ class MainActivity : ComponentActivity() {
     private val appTransitions by lazy { LauncherAppTransitions(this, lifecycleScope) }
     private var widgetRestoreInFlight = false
     private var autoBackupInFlight = false
+    // Placeholders whose setup failed with an error; retried by the next MainActivity instance, not on every resume.
+    private val skippedRestores = mutableSetOf<Int>()
     // The result arrives just before the next onResume, once WidgetSetupActivity has resolved its placeholder.
-    private val widgetRestore = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { widgetRestoreInFlight = false }
+    private val widgetRestore = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == WidgetSetupActivity.RESULT_RESTORE_SKIPPED)
+            result.data?.extras?.takeIf { it.containsKey(WidgetSetupActivity.EXTRA_RESTORE_PLACEHOLDER) }
+                ?.let { skippedRestores += it.getInt(WidgetSetupActivity.EXTRA_RESTORE_PLACEHOLDER) }
+        widgetRestoreInFlight = false
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -54,6 +63,14 @@ class MainActivity : ComponentActivity() {
             }
         }
         appTransitions.onHomeIntent(intent)
+        lifecycleScope.launch {
+            // Importing from the settings page inside home never pauses this activity, so onResume alone would not start restore.
+            var previous: BackupTask? = null
+            BackupController.state.collect { current ->
+                if (previous is BackupTask.Imported && current == null) restoreNextWidget()
+                previous = current
+            }
+        }
     }
 
     override fun onResume() {
@@ -69,8 +86,10 @@ class MainActivity : ComponentActivity() {
         if (widgetRestoreInFlight) return
         widgetRestoreInFlight = true
         lifecycleScope.launch {
-            val next = try { WidgetRestoreRepository(LauncherDatabase.getInstance(this@MainActivity)).pending().firstOrNull() }
-                catch (error: Exception) {
+            val next = try {
+                    WidgetRestoreRepository(LauncherDatabase.getInstance(this@MainActivity)).pending()
+                        .firstOrNull { it.placeholderId !in skippedRestores }
+                } catch (error: Exception) {
                     if (error is CancellationException) throw error
                     Log.e("GraceWidgetSetup", "restore queue read failed", error); null
                 }

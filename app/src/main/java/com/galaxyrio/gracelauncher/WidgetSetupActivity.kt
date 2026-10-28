@@ -299,7 +299,16 @@ class WidgetSetupActivity : ComponentActivity() {
     private fun fail(message: Int, error: Throwable? = null) {
         Log.e(TAG, "failed stage=$stage id=$pendingId provider=$expectedProvider existing=$configuringExisting", error)
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-        cancelSetup()
+        // An error is not a refusal: keep the imported slot so a later home start can retry it.
+        if (restorePlaceholder != null) skipRestore() else cancelSetup()
+    }
+
+    private fun skipRestore() {
+        if (pendingId >= 0) runCatching { host.deleteAppWidgetId(pendingId) }
+        host.untrackPendingId(pendingId)
+        pendingId = -1
+        setResult(RESULT_RESTORE_SKIPPED, Intent().putExtra(EXTRA_RESTORE_PLACEHOLDER, restorePlaceholder))
+        finish()
     }
 
     private fun cancelSetup() {
@@ -344,6 +353,7 @@ class WidgetSetupActivity : ComponentActivity() {
         const val EXTRA_CONFIGURE_ID = "configureWidgetId"
         const val EXTRA_RESTORE_PLACEHOLDER = "restorePlaceholderId"
         const val EXTRA_RESTORE_OWNER = "restoreOwner"
+        const val RESULT_RESTORE_SKIPPED = Activity.RESULT_FIRST_USER
         private const val REQUEST_BIND = 4001
         private const val REQUEST_CONFIGURE = 4002
     }
