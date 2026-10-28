@@ -28,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -357,6 +358,10 @@ internal fun FolderSettings(
     })
 }
 
+/** Below the minimum, the slider means "Automatic": each widget keeps its own default height. */
+private const val MinWidgetStackHeight = 48f
+private const val MaxWidgetStackHeight = 640f
+
 @Composable
 internal fun FolderEditorSettings(folderId: String?, uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit,
     onEditIcon: (LauncherApp) -> Unit = {}) {
@@ -374,21 +379,33 @@ internal fun FolderEditorSettings(folderId: String?, uiState: LauncherUiState, a
     var placement by rememberSaveable(folder.id) { mutableStateOf(false) }
     var confirmDelete by rememberSaveable(folder.id) { mutableStateOf(false) }
     val widgets = folder.isWidgetStack
-    // Widget stacks hold no apps, so there is nothing for auto-hide to act on.
-    val rows = if (widgets) 2 else 3
+    // Widget stacks show one widget at a time, so one height serves every widget in it.
+    val storedHeight = uiState.popups[folder.key].orEmpty().maxOfOrNull { it.widget?.widgetHeightDp ?: 0 } ?: 0
+    var stackHeight by remember(storedHeight) { mutableFloatStateOf(storedHeight.toFloat()) }
     PopupEditorScreen(app, uiState, actions, onBack, header = {
         Column(Modifier.padding(top = 16.dp)) {
-            SettingsActionItem(folder.name, stringResource(if (widgets) R.string.widget_stack_name else if (folder.isAppStack) R.string.app_stack_name else R.string.settings_folder_name), 0, rows, "folder_name",
+            SettingsActionItem(folder.name, stringResource(if (widgets) R.string.widget_stack_name else if (folder.isAppStack) R.string.app_stack_name else R.string.settings_folder_name), 0, 3, "folder_name",
                 leading = { if (widgets) LauncherIcon(LauncherSymbol.Widgets) else if (folder.isAppStack) LauncherIcon(LauncherSymbol.Apps)
                     else AppIcon(app, Modifier.clickable(onClickLabel = stringResource(R.string.icon_designer_title)) { onEditIcon(app) }, size = 36.dp) }) { rename = true }
             Spacer(Modifier.height(ListItemDefaults.SegmentedGap))
             SettingsActionItem(stringResource(if (widgets) R.string.widget_stack_placement else if (folder.isAppStack) R.string.app_stack_placement else R.string.settings_folder_placement),
-                folder.placement.label(), 1, rows, "folder_placement",
+                folder.placement.label(), 1, 3, "folder_placement",
                 leading = { LauncherIcon(LauncherSymbol.Folder) }) { placement = true }
-            if (!widgets) {
-                Spacer(Modifier.height(ListItemDefaults.SegmentedGap))
-                SettingsToggleItem(stringResource(R.string.settings_folder_auto_hide), stringResource(R.string.settings_folder_auto_hide_summary),
-                    folder.autoHideApps, 2, 3, "folder_auto_hide") { actions.setFolderAutoHide(folder.id, it) }
+            Spacer(Modifier.height(ListItemDefaults.SegmentedGap))
+            // Widget stacks hold no apps, so there is nothing for auto-hide to act on.
+            if (!widgets) SettingsToggleItem(stringResource(R.string.settings_folder_auto_hide), stringResource(R.string.settings_folder_auto_hide_summary),
+                folder.autoHideApps, 2, 3, "folder_auto_hide") { actions.setFolderAutoHide(folder.id, it) }
+            else DesignerSegment(2, 3, "widget_stack_height_item") {
+                DesignerSlider(stringResource(R.string.widget_stack_height), stackHeight, 0f, 0f..MaxWidgetStackHeight,
+                    LocalSettingsStorageState.current.canEdit && uiState.popups[folder.key].orEmpty().any { it.widget != null },
+                    "widget_stack_height", suffix = " dp",
+                    valueText = if (stackHeight < MinWidgetStackHeight) stringResource(R.string.text_auto) else null,
+                    onFinished = { value ->
+                        val height = if (value < MinWidgetStackHeight) 0 else value.toInt()
+                        actions.updatePopup(app, emptyList()) { items ->
+                            items.map { item -> item.widget?.let { item.copy(widget = it.copy(widgetHeightDp = height)) } ?: item }
+                        }
+                    }) { stackHeight = it }
             }
             TextButton(onClick = { confirmDelete = true }, enabled = LocalSettingsStorageState.current.canEdit, modifier = Modifier.testTag("folder_delete")) {
                 Text(stringResource(if (widgets) R.string.widget_stack_delete else if (folder.isAppStack) R.string.app_stack_delete else R.string.settings_folder_delete), color = MaterialTheme.colorScheme.error)

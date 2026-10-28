@@ -406,7 +406,7 @@ private fun ItemSelectionScreen(
                         { choice.entry.app?.let(onToggle) })
                 }
             }
-            if (!reorderOnly) item(key = "all_header", contentType = "header") {
+            if (!reorderOnly && showApps) item(key = "all_header", contentType = "header") {
                 SelectionHeading(stringResource(R.string.favorites_all_apps), "${tag}_all_apps")
             }
         }

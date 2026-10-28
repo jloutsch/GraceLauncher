@@ -818,6 +818,7 @@
     <string name="widget_stack_delete">Delete widget stack</string>
     <string name="widget_stack_delete_confirmation">Delete “%1$s”? The widgets inside it will be removed.</string>
     <string name="widget_stack_empty">Add widgets below. Drag them to set the swipe order.</string>
+    <string name="widget_stack_height">Stack height</string>
     <string name="lab_popup">Pop up</string>
     <string name="lab_popup_distance">Extra swipe distance</string>
     <string name="lab_popup_distance_summary">Extra distance to swipe right before opening an app or folder pop-up. Higher values make it harder to trigger.</string>
