@@ -102,8 +102,12 @@ internal fun HeadphoneAppsSettingsScreen(uiState: LauncherUiState, actions: Laun
             item { SettingsFeatureBanner(stringResource(R.string.headphone_apps_enable), choice.enabled, "headphone_apps_enabled") { enabled ->
                 actions.updateSettings { it.copy(headphoneApps = it.headphoneApps.copy(enabled = enabled)) }
             } }
+            item { SettingsToggleItem(stringResource(R.string.headphone_apps_as_stack), stringResource(R.string.headphone_apps_as_stack_summary),
+                choice.asAppStack, 0, 1, "headphone_apps_as_stack") { value ->
+                actions.updateSettings { it.copy(headphoneApps = it.headphoneApps.copy(asAppStack = value)) }
+            } }
             item {
-                Text(stringResource(R.string.headphone_apps_description), Modifier.padding(horizontal = 8.dp),
+                Text(stringResource(R.string.headphone_apps_description), Modifier.padding(horizontal = 8.dp, vertical = 20.dp),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             item {

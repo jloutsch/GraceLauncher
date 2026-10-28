@@ -16,11 +16,14 @@ import org.json.JSONObject
 data class HeadphoneAppsSettings(
     val enabled: Boolean = false,
     val appKeys: List<String> = emptyList(),
+    /** Show the apps as one horizontal App Stack instead of a list of app rows. */
+    val asAppStack: Boolean = false,
 ) {
     fun toggle(key: String): HeadphoneAppsSettings =
         copy(appKeys = if (key in appKeys) appKeys - key else appKeys + key)
 
-    fun encode(): String = JSONObject().put("enabled", enabled).put("apps", JSONArray(appKeys.distinct())).toString()
+    fun encode(): String = JSONObject().put("enabled", enabled).put("apps", JSONArray(appKeys.distinct()))
+        .put("asAppStack", asAppStack).toString()
 
     companion object {
         fun decode(value: String?): HeadphoneAppsSettings = runCatching {
@@ -28,7 +31,8 @@ data class HeadphoneAppsSettings(
             val apps = json.optJSONArray("apps")
             HeadphoneAppsSettings(json.optBoolean("enabled", false),
                 if (apps == null) emptyList() else (0 until apps.length())
-                    .mapNotNull { (apps.opt(it) as? String)?.takeIf(String::isNotBlank) }.distinct())
+                    .mapNotNull { (apps.opt(it) as? String)?.takeIf(String::isNotBlank) }.distinct(),
+                json.optBoolean("asAppStack", false))
         }.getOrDefault(HeadphoneAppsSettings())
     }
 }

@@ -365,10 +365,10 @@ fun HomeScreen(
                                     if (id == IdleMediaSessionId) { idleMediaDismissed = true; true }
                                     else onDismissMedia(id, revision).also { if (it) idleMediaDismissed = true }
                                 })
-                            // Launch before dismissing so the icon is still there to animate from.
-                            if (headphoneApps.isNotEmpty()) HomeHeadphoneApps(headphoneApps,
-                                onLaunch = { app -> onLaunchApp(app); actions.dismissHeadphoneApps() },
-                                onDismiss = actions.dismissHeadphoneApps)
+                            // Every launch path opens the app before dismissing, so its icon is still there to animate from.
+                            if (headphoneApps.isNotEmpty()) HomeHeadphoneApps(headphoneApps, uiState,
+                                onLaunch = onLaunchApp, onDetails = onAppDetails, onShortcuts = onAppShortcuts,
+                                onDismiss = actions.dismissHeadphoneApps, rowGestures = rowGestures)
                         } }
                         widget != null -> PopupWidgetItem(widget, selected = selectedWidget == entry.key,
                             enabled = inputEnabled, editable = !homeLayout.editingLocked, haptics = uiState.settings.allowHapticFeedback,
