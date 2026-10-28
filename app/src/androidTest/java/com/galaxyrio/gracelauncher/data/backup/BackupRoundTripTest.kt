@@ -81,6 +81,32 @@ class BackupRoundTripTest {
     }
 
     @Test
+    fun widgetStackSurvivesBackupAndRestoresInSwipeOrder() = runBlocking {
+        val settings = LauncherSettingsRepository(database)
+        settings.saveFolder(LauncherFolder("ws", "Stack", emptyList(), FolderPlacement.Favorites, isAppStack = true, isWidgetStack = true))
+        val items = LauncherItemsRepository(database)
+        items.updatePopup("folder:ws", emptyList()) {
+            listOf(PopupItem("a/a.Main"), PopupItem("widget:52", HomeLayout(widgetId = 52, widgetProvider = "v/v.Provider")),
+                PopupItem("folder:f9"), PopupItem("widget:51", HomeLayout(widgetId = 51, widgetProvider = "w/w.Provider")))
+        }
+        val stored = PopupItem.decode(database.itemsDao().popup("folder:ws")!!.itemsJson)
+        assertEquals("apps and folders are dropped from widget stacks", listOf("widget:52", "widget:51"), stored.map { it.key })
+        val backup = export()
+        wipe()
+
+        importer().import(backup.inputStream(), allApps, setOf("w/w.Provider", "v/v.Provider")) as ImportResult.Success
+
+        val folder = database.backupDao().allFolders().single()
+        assertTrue(folder.isAppStack && folder.isWidgetStack)
+        val restore = WidgetRestoreRepository(database)
+        assertEquals(listOf("v/v.Provider", "w/w.Provider"), restore.pending().map { it.provider })
+        assertTrue(restore.pending().all { it.ownerKey == "folder:ws" })
+        restore.pending().forEachIndexed { index, pending -> restore.resolve(pending.placeholderId, 200 + index) }
+        assertEquals(listOf("widget:200", "widget:201"), PopupItem.decode(database.itemsDao().popup("folder:ws")!!.itemsJson).map { it.key })
+        assertEquals("deleting the stack hands back its widget IDs to free", listOf(200, 201), settings.deleteFolder("ws"))
+    }
+
+    @Test
     fun roundTripRestoresEveryTable() = runBlocking {
         seed()
         val seeded = state()
