@@ -185,19 +185,21 @@ internal fun ImportResultDialog(result: ImportResult, onDismiss: () -> Unit) {
 
 @Composable
 private fun ImportSummaryText(summary: ImportSummary) {
+    // summary.widgets counts every widget in the backup, including those left out for a missing provider.
+    val widgets = (summary.widgets - summary.widgetsMissingProvider.size).coerceAtLeast(0)
     val restored = listOfNotNull(
         pluralStringResource(R.plurals.backup_summary_folders, summary.folders, summary.folders),
         pluralStringResource(R.plurals.backup_summary_apps, summary.apps, summary.apps),
         pluralStringResource(R.plurals.backup_summary_favorites, summary.favorites, summary.favorites),
-        pluralStringResource(R.plurals.backup_summary_widgets, summary.widgets, summary.widgets),
+        pluralStringResource(R.plurals.backup_summary_widgets, widgets, widgets),
         if (summary.settingsRestored) stringResource(R.string.backup_summary_settings) else null,
     ).joinToString(", ")
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Text(stringResource(R.string.backup_summary_restored, restored))
         if (summary.notInstalled.isNotEmpty())
             Text(stringResource(R.string.backup_summary_not_installed, summary.notInstalled.joinToString(", ")))
-        if (summary.widgets > 0) Column {
-            Text(stringResource(R.string.backup_summary_widgets_setup, summary.widgets))
+        if (widgets > 0) Column {
+            Text(stringResource(R.string.backup_summary_widgets_setup, widgets))
             Text(stringResource(R.string.backup_summary_widgets_hint), style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

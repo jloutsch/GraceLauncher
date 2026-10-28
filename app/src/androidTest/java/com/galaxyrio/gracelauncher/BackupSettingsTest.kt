@@ -134,10 +134,21 @@ class BackupSettingsTest {
                 ImportResultDialog(ImportResult.Success(ImportSummary(5, 50, 13, 6, true, listOf("Simple MBTA", "Transit Now"), listOf("GeauxWeather"))), onDismiss = {})
             }
         }
-        compose.onNodeWithText("Restored 5 folders, 50 apps, 13 favorites, 6 widgets, all settings.").assertIsDisplayed()
+        compose.onNodeWithText("Restored 5 folders, 50 apps, 13 favorites, 5 widgets, all settings.").assertIsDisplayed()
         compose.onNodeWithText("Not installed yet (will appear once installed): Simple MBTA, Transit Now").assertIsDisplayed()
-        compose.onNodeWithText("Widgets that need setup: 6").assertIsDisplayed()
+        compose.onNodeWithText("Widgets that need setup: 5").assertIsDisplayed()
         compose.onNodeWithText("They appear one at a time on the home screen").assertIsDisplayed()
+        compose.onNodeWithText("Widgets left out (app not installed): GeauxWeather").assertIsDisplayed()
+    }
+
+    @Test fun summaryHidesSetupLineWhenEveryWidgetIsLeftOut() {
+        compose.setContent {
+            GraceLauncherTheme(dynamicColor = false) {
+                ImportResultDialog(ImportResult.Success(ImportSummary(0, 0, 0, 1, false, emptyList(), listOf("GeauxWeather"))), onDismiss = {})
+            }
+        }
+        compose.onNodeWithText("Restored 0 folders, 0 apps, 0 favorites, 0 widgets.").assertIsDisplayed()
+        compose.onNodeWithText("Widgets that need setup", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Widgets left out (app not installed): GeauxWeather").assertIsDisplayed()
     }
 
