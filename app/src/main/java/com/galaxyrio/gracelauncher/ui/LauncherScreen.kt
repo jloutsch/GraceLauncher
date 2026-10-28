@@ -356,6 +356,7 @@ fun LauncherRoute(
             openSystemApp(Intent(Intent.ACTION_VIEW, "https://github.com/breezy-weather/breezy-weather/releases".toUri()))
         },
         dismissMedia = viewModel::dismissMedia,
+        dismissHeadphoneApps = viewModel::dismissHeadphoneApps,
         dismissNotification = viewModel::dismissNotification,
         openNotification = { key, revision ->
             viewModel.openNotification(key, revision).also { opened ->

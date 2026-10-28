@@ -162,6 +162,7 @@ fun HomeScreen(
         title = stringResource(R.string.media_idle_title), artist = stringResource(R.string.media_idle_summary),
         playing = false, canToggle = true, canPrevious = false, canNext = false,
     ) else null
+    val headphoneApps = uiState.headphoneApps
     val listState = rememberLazyListState()
     val homeLayout = uiState.settings.homeLayout
     var topOffset by remember(homeLayout.topOffsetDp) { mutableFloatStateOf(homeLayout.topOffsetDp) }
@@ -355,7 +356,7 @@ fun HomeScreen(
                         // disappearing in one measure pass. Following rows flow into the gap.
                         grace == GraceWidget.Media -> Box(Modifier.fillMaxWidth().animateContentSize(
                             animationSpec = spring(dampingRatio = 1f, stiffness = 400f),
-                        )) {
+                        )) { Column(Modifier.fillMaxWidth()) {
                             if (media != null) HomeMediaPlayer(media, onMediaCommand,
                                 keepWhilePlaying = uiState.settings.mediaKeepWhilePlaying,
                                 dismissResistance = uiState.settings.dismissResistance,
@@ -364,7 +365,11 @@ fun HomeScreen(
                                     if (id == IdleMediaSessionId) { idleMediaDismissed = true; true }
                                     else onDismissMedia(id, revision).also { if (it) idleMediaDismissed = true }
                                 })
-                        }
+                            // Launch before dismissing so the icon is still there to animate from.
+                            if (headphoneApps.isNotEmpty()) HomeHeadphoneApps(headphoneApps,
+                                onLaunch = { app -> onLaunchApp(app); actions.dismissHeadphoneApps() },
+                                onDismiss = actions.dismissHeadphoneApps)
+                        } }
                         widget != null -> PopupWidgetItem(widget, selected = selectedWidget == entry.key,
                             enabled = inputEnabled, editable = !homeLayout.editingLocked, haptics = uiState.settings.allowHapticFeedback,
                             horizontalInset = 8.dp,

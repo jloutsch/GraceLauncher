@@ -277,7 +277,7 @@ private fun BackupContents.remapped(serials: Map<Long, Long>): BackupContents {
                 listAppearanceJson = json(it.listAppearanceJson), privateSpaceJson = json(it.privateSpaceJson),
                 workProfileJson = json(it.workProfileJson), homeGesturesJson = json(it.homeGesturesJson), searchJson = json(it.searchJson),
                 shortcutsFoldersJson = json(it.shortcutsFoldersJson), digitalWellbeingJson = json(it.digitalWellbeingJson),
-                widgetScreenJson = json(it.widgetScreenJson))
+                widgetScreenJson = json(it.widgetScreenJson), headphoneAppsJson = json(it.headphoneAppsJson))
         },
         hiddenApps = hiddenApps.map { HiddenAppEntity(key(it.appKey)) },
         itemIcons = itemIcons.map { it.copy(itemKey = key(it.itemKey)) },
