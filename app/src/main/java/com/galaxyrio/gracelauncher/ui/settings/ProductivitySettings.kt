@@ -273,6 +273,8 @@ internal fun FolderSettings(
     selectionChangesFavorites: Boolean = true,
     newPlacement: FolderPlacement = FolderPlacement.Favorites,
     excludedIds: Set<String> = emptySet(),
+    /** Pickers add a group created here to the surface being edited, before its editor opens. */
+    onCreated: ((String) -> Unit)? = null,
     onEdit: (String) -> Unit,
 ) {
     val folders = uiState.folders.filter { it.isAppStack == appStacks && it.id !in excludedIds }
@@ -285,6 +287,7 @@ internal fun FolderSettings(
         val id = openingId ?: return@LaunchedEffect
         if (uiState.folders.any { it.id == id }) {
             openingId = null
+            onCreated?.invoke(id)
             onEdit(id)
         } else if (uiState.settingsSaveFailed) openingId = null
     }

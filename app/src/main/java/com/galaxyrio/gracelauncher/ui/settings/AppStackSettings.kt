@@ -20,6 +20,8 @@ internal fun AppGroupPickerScreen(state: LauncherUiState, actions: LauncherActio
         excludedIds = groupPickerExcludedIds(ownerKey, state.folders, state.popups),
         selectedIds = state.folders.filter { it.key in selectedKeys }.map { it.id }.toSet(),
         onToggle = { id -> state.folders.firstOrNull { it.id == id }?.let { onToggle(state.folderItem(it)) } },
+        // Placement None keeps a new group off home and the app list; membership puts it here instead.
+        onCreated = { id -> state.folders.firstOrNull { it.id == id }?.let { onToggle(state.folderItem(it)) } },
         onEdit = { editingId = it })
 }
 
