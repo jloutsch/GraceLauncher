@@ -82,7 +82,7 @@ internal enum class SettingsPage {
     MediaPlayer, GraceButton, GraceAction, GraceApp, GraceShortcut, GraceFolder, Gestures, WorkProfile, WorkProfileEditor,
     LabGraceButton, LabGesture, LabPopup, LabAccessibility, LabDismiss, Fonts, ListAppearance, Alphabet, ShortcutsFolders, AppStacks,
     GraceButtonAppearance, GraceButtonPosition, CalendarAppearance, WeatherAppearance, MediaPlayerAppearance,
-    WidgetScreen, WidgetScreenEditor, Homepage, DigitalWellbeing, Backup,
+    WidgetScreen, WidgetScreenEditor, Homepage, DigitalWellbeing, Backup, WeatherApp,
 }
 
 /** Navigation owns each page's saved state and seekable predictive-back transition. */
@@ -275,7 +275,9 @@ fun LauncherSettingsScreen(
                                 }
                             })
                     }
-                    SettingsPage.Weather -> WeatherSettings(uiState, actions, back) { navigate(SettingsPage.WeatherAppearance) }
+                    SettingsPage.Weather -> WeatherSettings(uiState, actions, back,
+                        onWeatherApp = { navigate(SettingsPage.WeatherApp) }) { navigate(SettingsPage.WeatherAppearance) }
+                    SettingsPage.WeatherApp -> WeatherAppSettings(uiState, actions, back)
                     SettingsPage.Themes -> ThemeSettings(uiState, actions, back,
                         onClockStyle = { navigate(SettingsPage.ClockStyle) }, onIconPacks = { navigate(SettingsPage.IconPacks) },
                         onFonts = { navigate(SettingsPage.Fonts) }, onListAppearance = { navigate(SettingsPage.ListAppearance) },

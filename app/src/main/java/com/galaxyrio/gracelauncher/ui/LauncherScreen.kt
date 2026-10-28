@@ -439,6 +439,10 @@ fun LauncherRoute(
                 .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, System.currentTimeMillis())
                 .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, System.currentTimeMillis() + 3_600_000))
         },
+        openWeatherApp = {
+            val app = uiState.settings.weatherAppKey?.let { key -> uiState.allApps.firstOrNull { it.key == key } }
+            if (app != null) launchApp(app, null) else Toast.makeText(context, R.string.app_unavailable, Toast.LENGTH_SHORT).show()
+        },
         openEvent = {
             openSystemApp(Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, it.id))
                 .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, it.startsAt.toEpochMilli())
