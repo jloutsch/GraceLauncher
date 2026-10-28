@@ -34,6 +34,7 @@ import androidx.compose.ui.test.performScrollToIndex
 import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
@@ -193,6 +194,24 @@ class WeatherUiTest {
                 }
             }
         }
+    }
+
+    @Test fun hourlyForecastOpensTheChosenWeatherAppOnTapButNotOnScroll() {
+        var opens = 0
+        state = state.copy(settings = state.settings.copy(weatherAppKey = apps.first().key))
+        compose.setContent {
+            GraceLauncherTheme(dynamicColor = false) {
+                Surface { AgendaSheet(state, LauncherActions(openWeatherApp = { opens++ }), onRequestCalendar = {}) }
+            }
+        }
+        compose.onNodeWithTag("weather_hourly").performTouchInput { swipeLeft() }
+        compose.runOnIdle { assertEquals("Scrolling the forecast must not open the app", 0, opens) }
+        compose.onNodeWithTag("weather_hourly").performClick()
+        compose.runOnIdle { assertEquals(1, opens) }
+        compose.runOnIdle { state = state.copy(settings = state.settings.copy(weatherAppKey = "gone/gone.Activity")) }
+        compose.onNodeWithTag("weather_hourly").assertHasNoClickAction()
+        compose.runOnIdle { state = state.copy(settings = state.settings.copy(weatherAppKey = null)) }
+        compose.onNodeWithTag("weather_hourly").assertHasNoClickAction()
     }
 
     @Test fun unavailableWeatherOffersAnActionThatMatchesTheConnectionProblem() {
