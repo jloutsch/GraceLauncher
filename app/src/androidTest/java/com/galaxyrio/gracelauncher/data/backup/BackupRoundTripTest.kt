@@ -107,6 +107,18 @@ class BackupRoundTripTest {
     }
 
     @Test
+    fun aWidgetStackNotMarkedAsAStackIsImportedAsOne() = runBlocking {
+        LauncherSettingsRepository(database).saveFolder(
+            LauncherFolder("ws", "Stack", emptyList(), FolderPlacement.Favorites, isAppStack = true, isWidgetStack = true))
+        val backup = mutateDatabase(export()) { it.execSQL("UPDATE folders SET isAppStack = 0") }
+        wipe()
+
+        importer().import(backup.inputStream(), allApps, emptySet()) as ImportResult.Success
+
+        assertTrue(database.backupDao().allFolders().single().isAppStack)
+    }
+
+    @Test
     fun roundTripRestoresEveryTable() = runBlocking {
         seed()
         val seeded = state()
