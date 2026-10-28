@@ -835,8 +835,10 @@
     <string name="media_keep_while_playing_summary">Swipes spring back instead of dismissing the player during playback</string>
     <string name="headphone_apps_title">Apps for headphones</string>
     <string name="headphone_apps_enable">Show apps when headphones connect</string>
-    <string name="headphone_apps_description">When Bluetooth, wired or USB headphones connect, your chosen apps appear under the media player. The list goes away when audio starts playing, when you open one of the apps, or when you close it.</string>
+    <string name="headphone_apps_description">When Bluetooth, wired or USB headphones connect, your chosen apps appear as a list under the media player. The list goes away when audio starts playing, when you open one of the apps, or when you close it.</string>
     <string name="headphone_apps_off">Off</string>
+    <string name="headphone_apps_as_stack">Show as App Stack</string>
+    <string name="headphone_apps_as_stack_summary">One horizontal row of icons instead of a list of apps</string>
     <plurals name="headphone_apps_count">
         <item quantity="one">%1$d app</item>
         <item quantity="other">%1$d apps</item>
