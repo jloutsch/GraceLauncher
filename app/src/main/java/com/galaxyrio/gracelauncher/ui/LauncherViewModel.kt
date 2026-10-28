@@ -66,6 +66,8 @@ import com.galaxyrio.gracelauncher.platform.PrivateSpaceController
 import com.galaxyrio.gracelauncher.platform.PrivateSpaceState
 import com.galaxyrio.gracelauncher.platform.DefaultHome
 import com.galaxyrio.gracelauncher.platform.BreezyWeatherUpdates
+import com.galaxyrio.gracelauncher.data.media.HeadphoneMonitor
+import com.galaxyrio.gracelauncher.data.media.HeadphoneState
 import com.galaxyrio.gracelauncher.data.media.MediaCommand
 import com.galaxyrio.gracelauncher.data.media.MediaSessionRepository
 import com.galaxyrio.gracelauncher.data.media.MediaSnapshot
@@ -140,6 +142,9 @@ data class LauncherUiState(
     val workProfiles: List<WorkProfile> = emptyList(),
     val workFolderApp: LauncherApp? = null,
     val shownShortcutKeys: Set<String> = emptySet(),
+    val headphones: HeadphoneState = HeadphoneState(),
+    /** The headphone connection the user last dismissed, launched from or started playback on. */
+    val headphoneAppsHandled: Long = 0,
 ) {
     val folderHiddenAppKeys: Set<String> = com.galaxyrio.gracelauncher.data.hiddenAppsFromFolders(folders)
     val effectiveHiddenAppKeys: Set<String> = hiddenAppKeys + folderHiddenAppKeys
@@ -238,6 +243,16 @@ data class LauncherUiState(
             settings.mediaPlayer && media.hasAccess && !isLoadingSettings && !settingsLoadFailed
         }
 
+    /** Offered once per headphone connection, until playback starts or the user acts on it. */
+    val headphoneApps: List<LauncherApp>
+        get() {
+            val choice = settings.headphoneApps
+            if (!settings.mediaPlayer || !choice.enabled || choice.appKeys.isEmpty() || isLoadingSettings || settingsLoadFailed ||
+                !headphones.connected || headphones.connections <= headphoneAppsHandled) return emptyList()
+            val available = allApps.associateBy(LauncherApp::key)
+            return choice.appKeys.mapNotNull(available::get)
+        }
+
     /** Hide Apps affects only the alphabetical app list, not other launcher surfaces. */
     val appListApps: List<LauncherApp>
         get() = if (isLoadingSettings || settingsLoadFailed) emptyList()
@@ -301,6 +316,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private var itemsSnapshot = LauncherItemsSnapshot()
     private var itemsReady = false
     private val mediaRepository = MediaSessionRepository(application)
+    private val headphoneMonitor = HeadphoneMonitor(application)
     private val weatherRepository = BreezyWeatherRepository(application)
     private val settingsWriteMutex = Mutex()
 
@@ -392,7 +408,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             appNotifications.state.collect { notifications -> _uiState.update { it.copy(notifications = notifications) } }
         }
         viewModelScope.launch {
-            mediaRepository.state.collect { media -> _uiState.update { it.copy(media = media) } }
+            mediaRepository.state.collect { media -> _uiState.update {
+                it.copy(media = media, headphoneAppsHandled = if (media.nowPlaying?.playing == true) it.headphones.connections else it.headphoneAppsHandled)
+            } }
+        }
+        headphoneMonitor.start()
+        viewModelScope.launch {
+            // Already-playing audio simply moves to the headphones; there is nothing to pick.
+            headphoneMonitor.state.collect { headphones -> _uiState.update {
+                it.copy(headphones = headphones, headphoneAppsHandled = if (it.media.nowPlaying?.playing == true) headphones.connections else it.headphoneAppsHandled)
+            } }
         }
         ContextCompat.registerReceiver(application, dateReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_DATE_CHANGED)
@@ -828,6 +853,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         getApplication<Application>().unregisterReceiver(dateReceiver)
         shortcutRepository.close()
         mediaRepository.close()
+        headphoneMonitor.close()
     }
 
     fun controlMedia(sessionId: String, command: MediaCommand): Boolean = mediaRepository.command(sessionId, command)
@@ -836,6 +862,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (_uiState.value.settings.mediaKeepWhilePlaying && mediaRepository.state.value.nowPlaying?.playing == true) return false
         return mediaRepository.dismiss(sessionId, revision)
     }
+    fun dismissHeadphoneApps() = _uiState.update { it.copy(headphoneAppsHandled = it.headphones.connections) }
     fun dismissNotification(key: String, revision: Long): Boolean = appNotifications.dismiss(key, revision)
     fun openNotification(key: String, revision: Long): Boolean = appNotifications.open(getApplication(), key, revision)
 

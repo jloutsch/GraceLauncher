@@ -2,24 +2,33 @@ package com.galaxyrio.gracelauncher.ui.settings
 
 import android.content.Intent
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
+import com.galaxyrio.gracelauncher.ui.components.AppSelectionList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 @Composable
-internal fun MediaPlayerSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit, onAppearance: () -> Unit = {}) {
+internal fun MediaPlayerSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit,
+    onHeadphoneApps: () -> Unit = {}, onAppearance: () -> Unit = {}) {
     val context = LocalContext.current
     val settings = uiState.settings
     var requestAccess by rememberSaveable { mutableStateOf(false) }
@@ -52,6 +61,14 @@ internal fun MediaPlayerSettings(uiState: LauncherUiState, actions: LauncherActi
                 settings.mediaAlwaysVisible, 1, 2, "media_always_visible") { value ->
                 actions.updateSettings { it.copy(mediaAlwaysVisible = value) }
             } }
+            item {
+                val headphones = settings.headphoneApps
+                Spacer(Modifier.height(12.dp))
+                SettingsActionItem(stringResource(R.string.headphone_apps_title),
+                    if (headphones.enabled) pluralStringResource(R.plurals.headphone_apps_count, headphones.appKeys.size, headphones.appKeys.size)
+                    else stringResource(R.string.headphone_apps_off),
+                    0, 1, "media_headphone_apps", onClick = onHeadphoneApps)
+            }
             if (!uiState.media.hasAccess) item {
                 Spacer(Modifier.height(12.dp))
                 SettingsActionItem(stringResource(R.string.media_allow_controls), stringResource(R.string.media_access_required),
@@ -65,4 +82,39 @@ internal fun MediaPlayerSettings(uiState: LauncherUiState, actions: LauncherActi
         text = { Text(stringResource(R.string.media_access_explanation)) },
         confirmButton = { TextButton(onClick = { requestAccess = false; actions.requestMediaAccess() }) { Text(stringResource(R.string.media_open_settings)) } },
         dismissButton = { TextButton(onClick = { requestAccess = false }) { Text(stringResource(R.string.settings_cancel)) } })
+}
+
+@Composable
+internal fun HeadphoneAppsSettingsScreen(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit) {
+    val choice = uiState.settings.headphoneApps
+    val queryState = rememberTextFieldState()
+    val ownPackage = LocalContext.current.packageName
+    val apps = remember(uiState.allApps, ownPackage) { uiState.allApps.filter { it.packageName != ownPackage && it.shortcut == null } }
+    val ready = !uiState.isLoadingApps && !uiState.appLoadFailed
+    SettingsScaffold(stringResource(R.string.headphone_apps_title), "settings_headphone_apps_page", onBack) { padding ->
+        AppSelectionList(
+            apps = if (ready) apps else emptyList(), selectedKeys = choice.appKeys.toSet(), query = queryState,
+            onSelect = { app -> actions.updateSettings { it.copy(headphoneApps = it.headphoneApps.toggle(app.key)) } },
+            modifier = Modifier.padding(padding).consumeWindowInsets(padding).imePadding(),
+            searchTag = "headphone_apps_query", itemTagPrefix = "headphone_app",
+            enabled = LocalSettingsStorageState.current.canEdit && ready,
+        ) {
+            item { SettingsFeatureBanner(stringResource(R.string.headphone_apps_enable), choice.enabled, "headphone_apps_enabled") { enabled ->
+                actions.updateSettings { it.copy(headphoneApps = it.headphoneApps.copy(enabled = enabled)) }
+            } }
+            item { SettingsToggleItem(stringResource(R.string.headphone_apps_as_stack), stringResource(R.string.headphone_apps_as_stack_summary),
+                choice.asAppStack, 0, 1, "headphone_apps_as_stack") { value ->
+                actions.updateSettings { it.copy(headphoneApps = it.headphoneApps.copy(asAppStack = value)) }
+            } }
+            item {
+                Text(stringResource(R.string.headphone_apps_description), Modifier.padding(horizontal = 8.dp, vertical = 20.dp),
+                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            item {
+                Text(pluralStringResource(R.plurals.settings_select_count, choice.appKeys.size, choice.appKeys.size),
+                    Modifier.padding(horizontal = 8.dp, vertical = 16.dp).testTag("headphone_apps_count"),
+                    style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+    }
 }

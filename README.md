@@ -32,7 +32,7 @@
 - **Explore more customization** — use Material You and dynamic colors, choose light or dark themes, and control background blur strength.
 - **Customize app shortcuts and widgets** — edit app shortcut popups with your choice of apps and shortcuts, place widgets inside them, or add and resize a widget on the home screen.
 - **Keep your day in view** — read notifications on the home screen and check an integrated calendar agenda with weather forecasts.
-- **Control your music** — manage active media playback directly from the home screen.
+- **Control your music** — manage active media playback directly from the home screen, and pick apps to show when headphones connect.
 - **Stay private** — no advertising, tracking, or network permission; launcher data stays on your device.
 
 Built with Kotlin, Jetpack Compose, and Material You. The list-based layout takes inspiration from [Niagara Launcher](https://niagaralauncher.app/).
