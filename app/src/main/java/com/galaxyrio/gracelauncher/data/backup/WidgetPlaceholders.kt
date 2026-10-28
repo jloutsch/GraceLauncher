@@ -14,14 +14,16 @@ data class PendingWidget(val ownerKey: String, val placeholderId: Int, val provi
 private fun widgetKey(id: Int) = "widget:$id"
 
 fun WidgetLayout.toPlaceholders(): WidgetLayout {
-    var next = (popups.values.flatten().mapNotNull { it.widget?.widgetId }.filter(::isWidgetPlaceholder).minOrNull()
-        ?: (FIRST_PLACEHOLDER_ID + 1)) - 1
+    // Skip used IDs instead of counting down from the lowest one: a hand-made file can hold Int.MIN_VALUE.
+    val used = popups.values.flatten().mapNotNull { it.widget?.widgetId }.filter(::isWidgetPlaceholder).toMutableSet()
+    var free = FIRST_PLACEHOLDER_ID
+    fun nextFree(): Int { while (free in used) free--; return free.also { used += it } }
     val renamed = mutableMapOf<String, String>()
     val remapped = popups.toSortedMap().mapValues { (_, items) ->
         items.map { item ->
             val widget = item.widget
             if (widget == null || widget.widgetId < 0) item else {
-                val id = next--
+                val id = nextFree()
                 renamed.putIfAbsent(item.key, widgetKey(id))
                 item.copy(key = widgetKey(id), widget = widget.copy(widgetId = id))
             }

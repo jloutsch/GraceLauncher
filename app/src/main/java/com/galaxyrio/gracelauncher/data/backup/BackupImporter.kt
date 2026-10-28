@@ -42,9 +42,12 @@ data class ImportSummary(
     val settingsRestored: Boolean,
     val notInstalled: List<String>,
     val widgetsMissingProvider: List<String>,
+    val leftOut: List<String> = emptyList(),
 )
 
 private const val SafetyFile = "backup-safety.zip"
+// No user has a negative serial, so keys moved here match no profile on this phone instead of a wrong one.
+private const val NoProfile = -1L
 private val DatabaseSections = setOf(BackupSection.Settings, BackupSection.HiddenApps, BackupSection.Folders,
     BackupSection.ItemIcons, BackupSection.SavedShortcuts, BackupSection.Popups)
 
@@ -107,6 +110,11 @@ class BackupImporter(
         val preferences = if (PreferenceSections.keys.none { it in sections }) emptyMap() else parse {
             val json = JSONObject(File(dir, BackupArchive.PREFERENCES).readText())
             PreferenceSections.filterKeys { it in sections }.values.associateWith { decodePreferences(json.getJSONObject(it)) }
+        }
+        preferences.forEach { (name, values) ->
+            PreferenceTypes[name].orEmpty().forEach { (key, type) ->
+                if (values[key]?.let(type::isInstance) == false) throw Rejection(BackupProblem.NotABackup)
+            }
         }
         val labels = File(dir, BackupArchive.LABELS).takeIf { it.isFile }?.let { file ->
             parse { JSONObject(file.readText()).let { o -> o.keys().asSequence().associateWith { o.getString(it) } } }
@@ -204,15 +212,25 @@ class BackupImporter(
         val referenced = favorites + popups.toSortedMap().values.flatten().filter { it.widget == null }.map { it.key }
         val needSetup = database.backupDao().allPopups().flatMap { PopupItem.decode(it.itemsJson) }.mapNotNull { it.widget }
             .filter { isWidgetPlaceholder(it.widgetId) && it.widgetProvider !in installedProviders }
+        // A saved shortcut reappears once its app is installed in the same profile; package match survives activity renames.
+        val missingShortcuts = if (BackupSection.SavedShortcuts !in sections) emptyList() else backup.savedShortcuts.filter { s ->
+            val profile = s.itemKey.substringBefore("shortcut:")
+            installedAppKeys.none { it.startsWith(profile) && it.startsWith("profile:") == profile.isNotEmpty() && packageOf(it) == s.packageName }
+        }
+        val shortcutLabels = missingShortcuts.associate { it.itemKey to it.label }
+        val (leftOut, notInstalled) = (missingAppKeys(referenced, installedAppKeys) + shortcutLabels.keys)
+            .partition { it.startsWith("profile:$NoProfile:") }
+        fun name(key: String) = backup.labels[key] ?: shortcutLabels[key] ?: packageOf(key)
         return ImportSummary(counts.folders, counts.apps, counts.favorites, counts.widgets, BackupSection.Settings in sections,
-            missingAppKeys(referenced, installedAppKeys).map { backup.labels[it] ?: packageOf(it) },
-            needSetup.map { w -> w.widgetProvider?.let(backup.labels::get) ?: w.widgetLabel ?: w.widgetProvider?.substringBefore('/').orEmpty() })
+            notInstalled.map(::name),
+            needSetup.map { w -> w.widgetProvider?.let(backup.labels::get) ?: w.widgetLabel ?: w.widgetProvider?.substringBefore('/').orEmpty() },
+            leftOut.map(::name))
     }
 
     private fun profileSerials(profiles: List<BackupProfile>): Map<Long, Long> {
         val local = deviceProfiles(context)
         return profiles.mapNotNull { saved ->
-            local.firstOrNull { it.type == saved.type }?.serial?.takeIf { it != saved.serial }?.let { saved.serial to it }
+            (local.firstOrNull { it.type == saved.type }?.serial ?: NoProfile).takeIf { it != saved.serial }?.let { saved.serial to it }
         }.toMap()
     }
 
@@ -274,6 +292,7 @@ private fun BackupContents.remapped(serials: Map<Long, Long>): BackupContents {
                 }
             }
         },
+        labels = labels.mapKeys { (name, _) -> key(name) },
     )
 }
 

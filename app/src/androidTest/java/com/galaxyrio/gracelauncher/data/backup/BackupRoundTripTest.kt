@@ -3,6 +3,7 @@ package com.galaxyrio.gracelauncher.data.backup
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.SharedPreferences
+import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.room.testing.MigrationTestHelper
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -39,6 +40,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
@@ -310,6 +312,222 @@ class BackupRoundTripTest {
         assertEquals(listOf("profile:11:a/a.Main", "b/b.Main"), items.map { it.key })
         val unchanged = """{"x":1.0,"k":"profile:12:a/a.Main"}"""
         assertEquals(unchanged, remapValue(unchanged, serials))
+    }
+
+    @Test
+    fun hostileEntryNamesRejectedWithoutWritingOutside() = runBlocking {
+        seed()
+        val valid = entries(export())
+        val before = state()
+        listOf("../escape.txt", "data/../../escape.txt", "/escape.txt", "..\\escape.txt", "fonts/../../escape.txt").forEach { name ->
+            val hostile = zip(*(valid + (name to "x".toByteArray())).toTypedArray())
+            assertTrue(name, importer().import(hostile.inputStream(), allApps, emptySet()) is ImportResult.Rejected)
+        }
+        assertEquals(before, state())
+        assertFalse(root.walkTopDown().any { it.name == "escape.txt" })
+        assertFalse(File(root.parentFile, "escape.txt").exists())
+        assertNoImportLeftovers()
+    }
+
+    @Test
+    fun compressionBombRejected() = runBlocking {
+        seed()
+        val valid = entries(export())
+        val before = state()
+        val bomb = ByteArrayOutputStream().also { out ->
+            ZipOutputStream(out).use { zip ->
+                valid.forEach { (name, data) -> zip.putNextEntry(ZipEntry(name)); zip.write(data); zip.closeEntry() }
+                zip.putNextEntry(ZipEntry("fonts/big.ttf"))
+                val chunk = ByteArray(1 shl 20)
+                repeat(300) { zip.write(chunk) }
+                zip.closeEntry()
+            }
+        }.toByteArray()
+
+        assertEquals(ImportResult.Rejected(BackupProblem.TooLarge), importer().import(bomb.inputStream(), allApps, emptySet()))
+        assertEquals(before, state())
+        assertNoImportLeftovers()
+    }
+
+    @Test
+    fun brokenOrForeignDatabaseRejected() = runBlocking {
+        seed()
+        val valid = export()
+        val before = state()
+        val header = "SQLite format 3\u0000".toByteArray()
+        val foreign = sqliteFile { db -> db.execSQL("CREATE TABLE notes (body TEXT)"); db.version = LauncherDatabase.SCHEMA_VERSION }
+        listOf(Random(3).nextBytes(8192), header + Random(4).nextBytes(8192), ByteArray(0), foreign).forEach { db ->
+            val hostile = replace(valid, BackupArchive.DATABASE, db)
+            assertEquals(ImportResult.Rejected(BackupProblem.NotABackup), importer().import(hostile.inputStream(), allApps, emptySet()))
+        }
+        assertEquals(before, state())
+        assertNoImportLeftovers()
+    }
+
+    @Test
+    fun databaseNewerThanManifestRejected() = runBlocking {
+        seed()
+        val valid = export()
+        val before = state()
+        val newer = mutateDatabase(valid) { it.version = LauncherDatabase.SCHEMA_VERSION + 5 }
+
+        val result = importer().import(newer.inputStream(), allApps, emptySet())
+
+        assertEquals(ImportResult.Rejected(BackupProblem.NewerSchema(LauncherDatabase.SCHEMA_VERSION + 5)), result)
+        assertEquals(before, state())
+    }
+
+    @Test
+    fun missingOrMalformedPreferencesRejected() = runBlocking {
+        seed()
+        val valid = export()
+        val before = state()
+        val inputs = listOf(
+            zip(*entries(valid).filterNot { it.first == BackupArchive.PREFERENCES }.toTypedArray()),
+            replace(valid, BackupArchive.PREFERENCES, "[]".toByteArray()),
+            replace(valid, BackupArchive.PREFERENCES, """{"grace_launcher_preferences":{"k":{"type":"blob","value":1}},"launcher_appearance":{}}""".toByteArray()),
+            replace(valid, BackupArchive.MANIFEST, "{".toByteArray()),
+        )
+        inputs.forEach { bytes ->
+            assertEquals(ImportResult.Rejected(BackupProblem.NotABackup), importer().import(bytes.inputStream(), allApps, emptySet()))
+        }
+        assertEquals(before, state())
+    }
+
+    @Test
+    fun garbageStoredJsonDoesNotBreakTheLauncher() = runBlocking {
+        seed()
+        val hostile = mutateDatabase(export()) { db ->
+            db.execSQL("UPDATE launcher_settings SET homeLayoutJson = 'garbage', clockStyleJson = '{{', listAppearanceJson = '[1,'")
+            db.execSQL("UPDATE app_popups SET itemsJson = '{{'")
+            db.execSQL("UPDATE folders SET placement = 'Bogus'")
+            db.execSQL("UPDATE item_icons SET iconJson = 'nope'")
+        }
+        val before = state()
+
+        val result = importer().import(hostile.inputStream(), allApps, emptySet())
+
+        if (result is ImportResult.Success) {
+            withTimeout(10_000) { LauncherSettingsRepository(database).snapshots.first() }
+            withTimeout(10_000) { LauncherItemsRepository(database).snapshots.first() }
+            WidgetRestoreRepository(database).pending()
+        } else {
+            assertTrue(result.toString(), result is ImportResult.Failed && result.restored)
+            assertEquals(before, state())
+        }
+        Unit
+    }
+
+    @Test
+    fun reimportingABackupTakenMidRestoreKeepsOnePlaceholderPerWidget() = runBlocking {
+        seed()
+        assertTrue(importer().import(export().inputStream(), allApps, setOf("w/w.Provider")) is ImportResult.Success)
+        val midRestore = export()
+        assertTrue(importer().import(midRestore.inputStream(), allApps, setOf("w/w.Provider")) is ImportResult.Success)
+
+        val pending = WidgetRestoreRepository(database).pending()
+        assertEquals(1, pending.size)
+        assertEquals(pending.map { it.placeholderId }.distinct(), pending.map { it.placeholderId })
+        val ids = database.backupDao().allPopups().flatMap { PopupItem.decode(it.itemsJson) }.mapNotNull { it.widget?.widgetId }
+        assertTrue(ids.all(::isWidgetPlaceholder))
+        val layout = HomeLayout.decode(database.backupDao().allSettings().single().homeLayoutJson)
+        assertEquals(listOf(GraceWidget.Clock.key, "widget:${pending.single().placeholderId}"), layout.homeOrder)
+    }
+
+    @Test
+    fun manyTinyEntriesFinishAndCleanUp() = runBlocking {
+        seed()
+        val valid = entries(export())
+        val many = zip(*(valid + (0 until 20_000).map { "icons/i$it.png" to ByteArray(0) }).toTypedArray())
+
+        val result = withTimeout(120_000) { importer().import(many.inputStream(), allApps, emptySet()) }
+
+        assertTrue(result.toString(), result is ImportResult.Success)
+        assertNoImportLeftovers()
+    }
+
+    @Test
+    fun wrongPreferenceTypeIsRejectedBeforeItCanCrashTheLauncher() = runBlocking {
+        seed()
+        val before = state()
+        val hostile = replace(export(), BackupArchive.PREFERENCES,
+            """{"grace_launcher_preferences":{},"launcher_appearance":{"text_mode":{"type":"boolean","value":true}}}""".toByteArray())
+
+        // A Success here would leave LauncherPreferences.textMode throwing ClassCastException on every start.
+        assertEquals(ImportResult.Rejected(BackupProblem.NotABackup), importer().import(hostile.inputStream(), allApps, emptySet()))
+        assertEquals(before, state())
+    }
+
+    @Test
+    fun backupCutOffBeforeFontsIsRejected() = runBlocking {
+        seed()
+        val valid = entries(export())
+        assertTrue(valid.any { it.first.startsWith(BackupArchive.FONTS_DIR) })
+        val before = state()
+        // Every complete entry before fonts/, with no central directory: what a cut at that entry boundary leaves.
+        val cut = ByteArrayOutputStream().also { out ->
+            val zip = ZipOutputStream(out)
+            valid.takeWhile { !it.first.startsWith(BackupArchive.FONTS_DIR) && !it.first.startsWith(BackupArchive.ICONS_DIR) }
+                .forEach { (name, data) -> zip.putNextEntry(ZipEntry(name)); zip.write(data); zip.closeEntry() }
+            zip.flush()
+        }.toByteArray()
+
+        val result = importer().import(cut.inputStream(), allApps, emptySet())
+
+        assertTrue("truncated backup gave $result; fonts now ${files("clock_fonts")}", result is ImportResult.Rejected)
+        assertEquals(before, state())
+    }
+
+    @Test
+    fun appsFromAProfileThisPhoneLacksAreLeftOutNotMovedToAnotherProfile() = runBlocking {
+        seed()
+        database.itemsDao().savePopup(AppPopupEntity("folder:f1", PopupItem.encode(listOf(PopupItem("profile:10:x/x.Main")))))
+        // Before Android 15 every local profile reports "work", so a "private" profile never matches.
+        val backup = rezip(export()) { it.copy(profiles = listOf(BackupProfile(10, "private"))) }
+
+        val summary = (importer().import(backup.inputStream(), allApps + "profile:10:x/x.Main", emptySet()) as ImportResult.Success).summary
+
+        assertEquals(listOf("x"), summary.leftOut)
+        assertFalse(summary.notInstalled.contains("x"))
+        val folder = PopupItem.decode(database.backupDao().allPopups().single { it.ownerKey == "folder:f1" }.itemsJson)
+        assertEquals(listOf("profile:-1:x/x.Main"), folder.map { it.key })
+    }
+
+    @Test
+    fun savedShortcutOfAMissingAppIsListed() = runBlocking {
+        seed()
+        val summary = (importer().import(export().inputStream(), allApps - "a/a.Main", emptySet()) as ImportResult.Success).summary
+        assertTrue(summary.notInstalled.toString(), "Shortcut" in summary.notInstalled)
+    }
+
+    private fun assertNoImportLeftovers() =
+        assertEquals(emptyList<String>(), context.cacheDir.listFiles().orEmpty().map { it.name }.filter { it.startsWith("backup-import-") })
+
+    private fun entries(bytes: ByteArray): List<Pair<String, ByteArray>> = buildList {
+        ZipInputStream(bytes.inputStream()).use { input ->
+            while (true) { val entry = input.nextEntry ?: break; add(entry.name to input.readBytes()) }
+        }
+    }
+
+    private fun replace(bytes: ByteArray, name: String, data: ByteArray) =
+        zip(*entries(bytes).map { if (it.first == name) name to data else it }.toTypedArray())
+
+    private fun sqliteFile(block: (SQLiteDatabase) -> Unit): ByteArray {
+        val file = File(root, "hostile-${UUID.randomUUID()}.db")
+        SQLiteDatabase.openOrCreateDatabase(file, null).use(block)
+        return file.readBytes().also { file.delete() }
+    }
+
+    private fun mutateDatabase(bytes: ByteArray, block: (SQLiteDatabase) -> Unit): ByteArray {
+        val file = File(root, "hostile-${UUID.randomUUID()}.db").apply { parentFile?.mkdirs() }
+        file.writeBytes(entries(bytes).single { it.first == BackupArchive.DATABASE }.second)
+        SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
+            block(db)
+            db.rawQuery("PRAGMA wal_checkpoint(TRUNCATE)", null).use { it.moveToFirst() }
+        }
+        return replace(bytes, BackupArchive.DATABASE, file.readBytes()).also {
+            listOf("", "-wal", "-shm", "-journal").forEach { suffix -> File(file.path + suffix).delete() }
+        }
     }
 
     private fun importer() = BackupImporter(context, database, databaseFile)

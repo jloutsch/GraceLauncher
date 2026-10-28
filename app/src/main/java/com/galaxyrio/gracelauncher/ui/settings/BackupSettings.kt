@@ -205,6 +205,8 @@ private fun ImportSummaryText(summary: ImportSummary) {
         }
         if (summary.widgetsMissingProvider.isNotEmpty())
             Text(stringResource(R.string.backup_summary_widgets_missing, summary.widgetsMissingProvider.joinToString(", ")))
+        if (summary.leftOut.isNotEmpty())
+            Text(stringResource(R.string.backup_summary_left_out, summary.leftOut.joinToString(", ")))
     }
 }
 

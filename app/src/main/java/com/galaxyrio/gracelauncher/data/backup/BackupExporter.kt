@@ -21,7 +21,12 @@ import org.json.JSONObject
 
 internal const val AppearanceFile = "launcher_appearance"
 internal val PreferenceSections = mapOf(BackupSection.Favorites to FavoritesStore.FILE_NAME, BackupSection.Appearance to AppearanceFile)
-internal val FileSections = mapOf(BackupSection.Fonts to ("clock_fonts" to BackupArchive.FONTS_DIR),
+/** Keys the app reads with a typed getter; a stored value of another type would throw on every start. */
+internal val PreferenceTypes: Map<String, Map<String, Class<*>>> = mapOf(
+    FavoritesStore.FILE_NAME to mapOf(FavoritesStore.KEY_ORDER to String::class.java, FavoritesStore.KEY_FAVORITES to Set::class.java),
+    AppearanceFile to mapOf("text_mode" to String::class.java, "themed_icons" to Boolean::class.javaObjectType),
+)
+internal val FileSections =mapOf(BackupSection.Fonts to ("clock_fonts" to BackupArchive.FONTS_DIR),
     BackupSection.Icons to ("item_icons" to BackupArchive.ICONS_DIR))
 
 class BackupExporter(
@@ -63,13 +68,14 @@ class BackupExporter(
             countsOf(dao.allFolders().size, popups, favorites), deviceProfiles(context))
         val zip = ZipOutputStream(output)
         fun entry(name: String, write: (OutputStream) -> Unit) { zip.putNextEntry(ZipEntry(name)); write(zip); zip.closeEntry() }
-        entry(BackupArchive.MANIFEST) { it.write(manifest.encode().toByteArray()) }
         entry(BackupArchive.DATABASE) { out -> databaseFile.inputStream().use { it.copyTo(out) } }
         entry(BackupArchive.PREFERENCES) { it.write(preferences.toString().toByteArray()) }
         entry(BackupArchive.LABELS) { it.write(JSONObject(labels.toSortedMap()).toString().toByteArray()) }
         FileSections.values.forEach { (dir, prefix) ->
             files(File(context.filesDir, dir)).forEach { (name, file) -> entry(prefix + name) { out -> file.inputStream().use { it.copyTo(out) } } }
         }
+        // Last, so a file cut off at any entry boundary has no manifest and is refused instead of wiping later sections.
+        entry(BackupArchive.MANIFEST) { it.write(manifest.encode().toByteArray()) }
         zip.finish()
         output.flush()
         manifest

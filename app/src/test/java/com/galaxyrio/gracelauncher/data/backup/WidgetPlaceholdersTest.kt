@@ -23,6 +23,11 @@ class WidgetPlaceholdersTest {
         listOf("grace:calendar", "widget:41"),
     )
 
+    @Test fun lowestIntWidgetIdStillYieldsPlaceholders() {
+        val result = WidgetLayout(mapOf(HomeContentKey to listOf(widget(Int.MIN_VALUE), widget(5))), null).toPlaceholders()
+        assertTrue(result.popups.getValue(HomeContentKey).mapNotNull { it.widget?.widgetId }.all(::isWidgetPlaceholder))
+    }
+
     @Test fun assignsPlaceholdersAcrossAllOwners() {
         val result = layout().toPlaceholders()
         val widgets = result.popups.values.flatten().mapNotNull { it.widget }

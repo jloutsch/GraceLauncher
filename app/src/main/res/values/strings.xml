@@ -330,6 +330,7 @@
     <string name="backup_summary_widgets_setup">Widgets that need setup: %1$d</string>
     <string name="backup_summary_widgets_hint">They appear one at a time on the home screen</string>
     <string name="backup_summary_widgets_missing">Widgets left out (app not installed): %1$s</string>
+    <string name="backup_summary_left_out">Left out (work profile or private space not on this phone): %1$s</string>
     <string name="backup_import_failed_title">Import failed</string>
     <string name="backup_import_failed_restored">Import failed. Your setup was not changed.</string>
     <string name="backup_import_failed_unrestored">Import failed and your previous setup could not be fully restored. Import an earlier backup to recover.</string>

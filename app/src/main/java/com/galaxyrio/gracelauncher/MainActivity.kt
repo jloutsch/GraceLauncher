@@ -67,6 +67,8 @@ class MainActivity : ComponentActivity() {
             // Importing from the settings page inside home never pauses this activity, so onResume alone would not start restore.
             var previous: BackupTask? = null
             BackupController.state.collect { current ->
+                // Each import numbers placeholders from -2 again, so earlier skips no longer name the same widgets.
+                if (current is BackupTask.Imported) skippedRestores.clear()
                 if (previous is BackupTask.Imported && current == null) restoreNextWidget()
                 previous = current
             }
