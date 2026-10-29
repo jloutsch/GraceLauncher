@@ -288,7 +288,7 @@ class LauncherSettingsIntegrationTest {
         compose.onNodeWithTag("folder:${folder.id}").assertIsDisplayed()
 
         compose.onNodeWithTag("folder:${folder.id}").performTouchInput { longClick() }
-        compose.onNodeWithTag("advanced").performClick()
+        // Folder editing sits in the main long-press menu, not under Advanced.
         compose.onNodeWithTag("edit_popup").performClick()
         compose.onNodeWithTag("folder_placement").performClick()
         compose.onNodeWithTag("folder_placement:Favorites").performClick()

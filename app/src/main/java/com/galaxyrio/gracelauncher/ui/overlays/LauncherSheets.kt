@@ -322,6 +322,11 @@ private fun AppDetailsSheet(app: LauncherApp, actions: LauncherActions, onChange
         }
         val owner = popupOwner?.let { uiState.findItem(it.key) ?: it } ?: app
         val privateRestricted = app.isPrivateSpace && !uiState.settings.privateSpace.exposesApps
+        val editPopup = @Composable {
+            DetailsAction(LauncherSymbol.Outbound, stringResource(R.string.edit_app_popup, owner.label), "edit_popup") {
+                onChange(owner.folderId?.let { LauncherOverlay.FolderSettings(it) } ?: LauncherOverlay.EditPopup(owner, fromAppList))
+            }
+        }
         if (isRecent) {
             DetailsAction(LauncherSymbol.VisibilityOff, stringResource(R.string.hide_recently_installed), "hide_recently_installed") {
                 actions.updateSettings { it.copy(listAppearance = it.listAppearance.copy(showRecentlyInstalled = false)) }
@@ -334,6 +339,8 @@ private fun AppDetailsSheet(app: LauncherApp, actions: LauncherActions, onChange
                     iconColumnWidth = DetailsIconColumnWidth, iconTextSpacing = DetailsIconTextSpacing,
                     trailing = { Switch(shown, onCheckedChange = null) }) { actions.showShortcutInAppList(app, !shown) }
             }
+            // Folders are edited often enough to skip Advanced.
+            if (folder != null && !privateRestricted) editPopup()
             if (!privateRestricted) DetailsAction(LauncherSymbol.Home, stringResource(R.string.edit_homepage), "edit_favorites") {
                 onChange(LauncherOverlay.Homepage(initialAppKey = app.key.takeIf { fromAppList && folder == null }))
             }
@@ -354,9 +361,7 @@ private fun AppDetailsSheet(app: LauncherApp, actions: LauncherActions, onChange
             Column {
                 DetailsAction(LauncherSymbol.Edit, renameTitle) { rename = true }
                 DetailsAction(LauncherSymbol.DesignServices, stringResource(R.string.icon_designer_title)) { onChange(LauncherOverlay.IconDesigner(app, popupOwner, returnTo, fromAppList)) }
-                if (!isRecent && !privateRestricted) DetailsAction(LauncherSymbol.Outbound, stringResource(R.string.edit_app_popup, owner.label), "edit_popup") {
-                    onChange(owner.folderId?.let { LauncherOverlay.FolderSettings(it) } ?: LauncherOverlay.EditPopup(owner, fromAppList))
-                }
+                if (folder == null && !privateRestricted) editPopup()
                 if (folder == null) {
                     DetailsAction(LauncherSymbol.VisibilityOff, stringResource(R.string.hide_app), "app_details_hide") {
                         actions.hideApp(app); onChange(null)
