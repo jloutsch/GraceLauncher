@@ -22,6 +22,14 @@ class BackupKeysTest {
         ).forEach { assertFalse(it, isAppKey(it)) }
     }
 
+    @Test fun renamedAppsFollowTheOnlyActivityLeftInTheirPackageAndProfile() {
+        val installed = listOf("d/d.New", "two/two.A", "two/two.B", "profile:10:d/d.Work", "kept/kept.Main")
+        val saved = listOf("d/d.Old", "two/two.Old", "profile:10:d/d.Old", "profile:11:d/d.Old", "gone/gone.Main",
+            "kept/kept.Main", "folder:x", "d/d.Old")
+        // Several activities, another profile, or an uninstalled package stay as they were rather than guessing.
+        assertEquals(mapOf("d/d.Old" to "d/d.New", "profile:10:d/d.Old" to "profile:10:d/d.Work"), renamedAppKeys(saved, installed))
+    }
+
     @Test fun profileSerialRemapped() {
         val serials = mapOf(10L to 13L)
         assertEquals("profile:13:p/p.M", remapProfileKey("profile:10:p/p.M", serials))

@@ -341,6 +341,37 @@ class BackupRoundTripTest {
     }
 
     @Test
+    fun renamedAppKeepsItsPlacesEverywhere() = runBlocking {
+        seed()
+        assertTrue(importer().renameApps(mapOf("a/a.Main" to "a/a.New")))
+
+        val dao = database.backupDao()
+        assertEquals(listOf("a/a.New", "b/b.Main"), PopupItem.decode(database.itemsDao().popup("folder:f1")!!.itemsJson).map { it.key })
+        val order = JSONArray(prefs(FavoritesFile).getString("favorite_component_order", null))
+        assertEquals(listOf("a/a.New", "folder:f1"), List(order.length()) { order.getString(it) })
+        assertEquals(setOf("a/a.New", "folder:f1"), prefs(FavoritesFile).getStringSet("favorite_components", null))
+        assertEquals("Alpha", prefs(AppearanceFile).getString("label:a/a.New", null))
+        assertFalse(prefs(AppearanceFile).contains("label:a/a.Main"))
+        assertEquals("Dark", prefs(AppearanceFile).getString("text_mode", null))
+        assertEquals(listOf("a/a.New"), dao.allItemIcons().map { it.itemKey })
+        assertEquals(listOf("d/d.Main"), dao.allHiddenApps().map { it.appKey })
+        assertEquals(mapOf("icon.png" to "icon"), files("item_icons"))
+        assertEquals("widget IDs stay real", listOf("widget:41"),
+            PopupItem.decode(database.itemsDao().popup(HomeContentKey)!!.itemsJson).map { it.key })
+    }
+
+    @Test
+    fun renamesReplaceWholeKeysOnly() {
+        val renames = mapOf("a/a.Old" to "a/a.New")
+        assertEquals("a/a.New", renameValue("a/a.Old", renames))
+        assertEquals("label:a/a.New", renameValue("label:a/a.Old", renames))
+        assertEquals("another profile's copy is a different app", "profile:10:a/a.Old", renameValue("profile:10:a/a.Old", renames))
+        assertEquals("a/a.Older", renameValue("a/a.Older", renames))
+        val items = PopupItem.decode(renameValue(PopupItem.encode(listOf(PopupItem("a/a.Old"), PopupItem("b/b.Main"))), renames))
+        assertEquals(listOf("a/a.New", "b/b.Main"), items.map { it.key })
+    }
+
+    @Test
     fun profileKeysRemapInsideJson() {
         val serials = mapOf(10L to 11L)
         assertEquals("profile:11:a/a.Main", remapValue("profile:10:a/a.Main", serials))
