@@ -199,7 +199,7 @@
     <string name="favorites_shortcuts_app_group">Shortcuts &amp; app group</string>
     <string name="favorites_add_shortcut">Add shortcut</string>
     <string name="favorites_add_folder">Add folder</string>
-    <string name="favorites_add_app_stack">Add app stack</string>
+    <string name="favorites_add_app_stack">Add app or widget stack</string>
     <string name="favorites_empty">Choose apps, shortcuts, or folders below to add them to your home screen.</string>
     <string name="favorites_reorder">Reorder %1$s</string>
     <string name="favorites_move_up">Move up</string>
