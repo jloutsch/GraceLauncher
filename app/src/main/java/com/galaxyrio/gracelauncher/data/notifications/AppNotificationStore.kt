@@ -107,13 +107,13 @@ internal class AppNotificationStore {
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim().orEmpty()
         val body = when {
             messages.isNotEmpty() -> messages.joinToString("\n") { message ->
-                val sender = message.person?.name?.toString()?.trim().orEmpty()
-                val text = message.text?.toString().orEmpty()
-                if (sender.isEmpty()) text else "$sender: $text"
+                messageLine(title, message.person?.name?.toString()?.trim().orEmpty(), message.text?.toString().orEmpty())
             }
-            !extras.getCharSequence(Notification.EXTRA_BIG_TEXT).isNullOrBlank() -> extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString()
-            !extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES).isNullOrEmpty() -> extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)!!.joinToString("\n")
-            else -> extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty()
+            !extras.getCharSequence(Notification.EXTRA_BIG_TEXT).isNullOrBlank() ->
+                withoutTitleSender(title, extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString())
+            !extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES).isNullOrEmpty() ->
+                withoutTitleSender(title, extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)!!.joinToString("\n"))
+            else -> withoutTitleSender(title, extras.getCharSequence(Notification.EXTRA_TEXT)?.toString().orEmpty())
         }.trim()
         if (title.isBlank() && body.isBlank()) return null
         Entry(
@@ -129,3 +129,19 @@ internal class AppNotificationStore {
 }
 
 internal val appNotifications = AppNotificationStore()
+
+/**
+ * The title already names a one-to-one conversation, so its sender is not repeated on each line
+ * ("Britney Bell" / "no can you bring", not "Britney Bell: no can you bring"). Other senders in a
+ * group conversation keep their names.
+ */
+internal fun messageLine(title: String, sender: String, text: String): String =
+    if (sender.isEmpty() || sender.equals(title.trim(), ignoreCase = true)) text else "$sender: $text"
+
+/** Apps without MessagingStyle often write "Name: message" under a title that is that same name. */
+internal fun withoutTitleSender(title: String, body: String): String {
+    val prefix = title.trim().takeIf { it.isNotEmpty() }?.let { "$it:" } ?: return body
+    return body.lines().joinToString("\n") { line ->
+        if (line.trimStart().startsWith(prefix, ignoreCase = true)) line.trimStart().substring(prefix.length).trimStart() else line
+    }
+}
