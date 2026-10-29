@@ -20,6 +20,8 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.galaxyrio.gracelauncher.data.AppRepository
+import com.galaxyrio.gracelauncher.data.backup.BackupImporter
+import com.galaxyrio.gracelauncher.data.backup.renamedAppKeys
 import com.galaxyrio.gracelauncher.data.backup.widgetIdsToDelete
 import com.galaxyrio.gracelauncher.data.backup.withoutWidgetPlaceholders
 import com.galaxyrio.gracelauncher.data.LauncherAppCache
@@ -490,6 +492,23 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private fun catalogInputs() = CatalogInputs(Configuration(getApplication<Application>().resources.configuration),
         LocalDate.now(), preferences.renames(), preferences.themedIcons, shortcutRepository.hasAccess())
 
+    private var renamingApps: Job? = null
+
+    /** Some apps rename their launcher activity in every update; move their saved places to the new name. */
+    private fun followRenamedApps(installed: List<String>, favorites: List<String>) {
+        if (renamingApps?.isActive == true) return
+        val state = _uiState.value
+        val saved = favorites + state.hiddenAppKeys + state.popups.flatMap { (owner, items) -> items.map { it.key } + owner } +
+            listOfNotNull(state.settings.mediaAppKey, state.settings.clockAppKey, state.settings.weatherAppKey) +
+            state.settings.headphoneApps.appKeys
+        val renames = renamedAppKeys(saved, installed)
+        if (renames.isEmpty()) return
+        renamingApps = viewModelScope.launch {
+            if (BackupImporter(getApplication()).renameApps(renames)) refreshApps()
+            else Log.w("GraceApps", "could not follow renamed apps: ${renames.keys}")
+        }
+    }
+
     /** Explicit changes/retries invalidate the catalog; ordinary resumes only check its inputs. */
     fun refreshApps() {
         // Explicit package/pack refreshes can change artwork without changing its saved identity.
@@ -637,6 +656,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     // Retry incomplete sections on the next resume, without spinning here.
                     if (incomplete) return@launch
                     catalogRefresh.complete(request, request.inputs)
+                    followRenamedApps(apps.map { it.key }, favorites)
                     // Publish first; PNG encoding and disk I/O run on Dispatchers.IO.
                     appCache.save(cacheKey, displayedApps + shortcuts + folderApps + graceButtonApp)
                     shortcutRepository.prefetch(_uiState.value.favoriteApps)

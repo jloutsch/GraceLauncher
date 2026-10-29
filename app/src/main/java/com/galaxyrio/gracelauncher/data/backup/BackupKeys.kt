@@ -23,6 +23,17 @@ fun isAppKey(key: String): Boolean {
 fun missingAppKeys(referenced: Iterable<String>, installed: Set<String>): List<String> =
     referenced.filter { isAppKey(it) && it !in installed }.distinct()
 
+/**
+ * Saved app keys whose activity is gone, mapped to the only launcher activity left in the same package and profile.
+ * Some apps rename their launcher activity in every update; packages with several activities are left alone.
+ */
+fun renamedAppKeys(saved: Iterable<String>, installed: Collection<String>): Map<String, String> {
+    // "profile:7:com.example/Main" -> "profile:7:com.example"
+    val byPackage = installed.filter(::isAppKey).groupBy { it.substringBefore('/') }
+    return missingAppKeys(saved, installed.toSet())
+        .mapNotNull { key -> byPackage[key.substringBefore('/')]?.singleOrNull()?.let { key to it } }.toMap()
+}
+
 fun remapProfileKey(key: String, serials: Map<Long, Long>): String {
     val (serial, rest) = splitProfileKey(key) ?: return key
     val mapped = serials[serial] ?: return key
