@@ -107,9 +107,7 @@ internal class AppNotificationStore {
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim().orEmpty()
         val body = when {
             messages.isNotEmpty() -> messages.joinToString("\n") { message ->
-                val sender = message.person?.name?.toString()?.trim().orEmpty()
-                val text = message.text?.toString().orEmpty()
-                if (sender.isEmpty()) text else "$sender: $text"
+                messageLine(message.person?.name?.toString()?.trim().orEmpty(), message.text?.toString().orEmpty(), title)
             }
             !extras.getCharSequence(Notification.EXTRA_BIG_TEXT).isNullOrBlank() -> extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString()
             !extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES).isNullOrEmpty() -> extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)!!.joinToString("\n")
@@ -129,3 +127,7 @@ internal class AppNotificationStore {
 }
 
 internal val appNotifications = AppNotificationStore()
+
+/** A one-to-one chat's title is already the sender's name, so its lines show only the message. */
+internal fun messageLine(sender: String, text: String, title: String): String =
+    if (sender.isEmpty() || sender == title) text else "$sender: $text"
