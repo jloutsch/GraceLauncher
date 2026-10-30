@@ -37,7 +37,7 @@ data class HeadphoneAppsSettings(
     }
 }
 
-/** Personal listening outputs only: speakers, cars, TVs and hearing aids never trigger the list. */
+/** Personal listening outputs; speakers, TVs and hearing aids never count. A car stereo that uses Bluetooth A2DP does. */
 internal fun isHeadphoneOutput(type: Int): Boolean = when (type) {
     AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLE_HEADSET,
     AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES,
@@ -45,37 +45,23 @@ internal fun isHeadphoneOutput(type: Int): Boolean = when (type) {
     else -> false
 }
 
-/** [connections] counts new headphone connections; it never counts outputs present at registration. */
-data class HeadphoneState(val connected: Boolean = false, val connections: Long = 0)
+/** Read from the current outputs on every start and change, so a restart with headphones in still shows them. */
+data class HeadphoneState(val connected: Boolean = false)
 
 @MainThread
 internal class HeadphoneMonitor(context: Context) {
     private val audio = context.getSystemService(AudioManager::class.java)
     private val _state = MutableStateFlow(HeadphoneState())
     val state = _state.asStateFlow()
-    // Registration replays every current output through onAudioDevicesAdded. Remember
-    // those so restarting the launcher with headphones already in does not count them.
-    private val known = mutableSetOf<Int>()
     private var registered = false
     private val callback = object : AudioDeviceCallback() {
-        override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>) {
-            val fresh = added.filter { it.isSink && isHeadphoneOutput(it.type) && known.add(it.id) }
-            _state.value = HeadphoneState(connected = connectedNow(),
-                connections = _state.value.connections + if (fresh.isEmpty()) 0 else 1)
-        }
-
-        override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>) {
-            removed.forEach { known.remove(it.id) }
-            _state.value = _state.value.copy(connected = connectedNow())
-        }
+        override fun onAudioDevicesAdded(added: Array<out AudioDeviceInfo>) { _state.value = HeadphoneState(connectedNow()) }
+        override fun onAudioDevicesRemoved(removed: Array<out AudioDeviceInfo>) { _state.value = HeadphoneState(connectedNow()) }
     }
 
     fun start() {
         if (registered || audio == null) return
-        val current = runCatching { audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS) }.getOrDefault(emptyArray())
-            .filter { isHeadphoneOutput(it.type) }
-        known += current.map { it.id }
-        _state.value = _state.value.copy(connected = current.isNotEmpty())
+        _state.value = HeadphoneState(connectedNow())
         audio.registerAudioDeviceCallback(callback, Handler(Looper.getMainLooper()))
         registered = true
     }
@@ -84,7 +70,6 @@ internal class HeadphoneMonitor(context: Context) {
         if (!registered) return
         runCatching { audio?.unregisterAudioDeviceCallback(callback) }
         registered = false
-        known.clear()
     }
 
     private fun connectedNow(): Boolean = runCatching {
