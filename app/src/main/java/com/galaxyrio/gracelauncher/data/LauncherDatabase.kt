@@ -94,6 +94,9 @@ abstract class LauncherSettingsDao {
     @Query("SELECT appKey FROM hidden_apps ORDER BY appKey")
     abstract fun observeHiddenApps(): Flow<List<String>>
 
+    @Query("SELECT appKey FROM hidden_apps ORDER BY appKey")
+    abstract suspend fun readHiddenApps(): List<String>
+
     @Query("SELECT * FROM folders ORDER BY name COLLATE NOCASE, id")
     abstract fun observeFolders(): Flow<List<LauncherFolderEntity>>
 

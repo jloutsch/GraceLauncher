@@ -54,6 +54,7 @@ import com.galaxyrio.gracelauncher.data.LauncherItemsRepository
 import com.galaxyrio.gracelauncher.data.LauncherItemsSnapshot
 import com.galaxyrio.gracelauncher.data.PrivateSpaceFolderId
 import com.galaxyrio.gracelauncher.data.RecentlyInstalledFolderId
+import com.galaxyrio.gracelauncher.data.renamedAppKeys
 import com.galaxyrio.gracelauncher.data.PrivateSpaceFolderKey
 import com.galaxyrio.gracelauncher.data.PrivateSpaceDefaultName
 import com.galaxyrio.gracelauncher.data.PrivateSpaceDisplay
@@ -477,6 +478,33 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         LocalDate.now(), preferences.renames(), preferences.themedIcons, shortcutRepository.hasAccess(), appProfiles,
         appRepository.revision.value, iconPacks.cacheRevision())
 
+    private var renamingApps: Job? = null
+
+    /** Some apps rename their launcher activity in every update; move their saved places to the new name. */
+    private fun followRenamedApps(installed: List<String>, favorites: List<String>) {
+        if (renamingApps?.isActive == true) return
+        val state = _uiState.value
+        val saved = favorites + state.hiddenAppKeys + state.popups.flatMap { (owner, items) -> items.map { it.key } + owner } +
+            state.settings.appCategories.orEmpty().flatMap { it.itemKeys } +
+            listOfNotNull(state.settings.mediaAppKey, state.settings.clockAppKey)
+        val renames = renamedAppKeys(saved, installed)
+        if (renames.isEmpty()) return
+        renamingApps = viewModelScope.launch {
+            settingsWriteMutex.withLock {
+                try {
+                    settingsRepository.renameApps(renames)
+                    favoritesStore.renameApps(renames)
+                    preferences.renameApps(renames)
+                } catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    Log.w("LauncherViewModel", "Unable to follow renamed apps: ${renames.keys}", error)
+                    return@launch
+                }
+            }
+            refreshApps()
+        }
+    }
+
     /** Explicit changes/retries invalidate the catalog; ordinary resumes only check its inputs. */
     fun refreshApps() {
         // Explicit package/pack refreshes can change artwork without changing its saved identity.
@@ -752,7 +780,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     // Optional profile failures are retried by the shared repository. Successful
                     // personal/public rows still become a valid UI revision and disk preview.
                     catalogRefresh.complete(request, request.inputs)
-                    val entries = displayedApps + shortcuts + folderApps + privateFolderApp + workFolderApp + graceButtonApp
+                    if (catalog.complete) followRenamedApps(apps.map { it.key }, legacyFavorites)
+                    val entries =displayedApps + shortcuts + folderApps + privateFolderApp + workFolderApp + graceButtonApp
                     LauncherCatalogMemory.publish(LauncherCatalogMemory.Snapshot(cacheKey, entryKeys,
                         inputs.repositoryRevision, inputs.iconPackRevision, inputs.profiles, inputs.day, inputs.shortcutAccess, entries, status,
                         catalog.complete && packsComplete))

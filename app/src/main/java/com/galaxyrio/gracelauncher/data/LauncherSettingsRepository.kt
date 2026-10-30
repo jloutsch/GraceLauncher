@@ -192,6 +192,33 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
         }))
         widgets
     }
+
+    /** Moves saved references to apps whose launcher activity an update renamed ([renamedAppKeys]). */
+    suspend fun renameApps(renames: Map<String, String>) = database.withTransaction {
+        fun key(value: String) = renameValue(value, renames)
+        fun json(value: String?) = value?.let(::key)
+        dao.readSettings()?.let {
+            dao.saveSettings(it.copy(iconDesignJson = json(it.iconDesignJson), mediaAppKey = json(it.mediaAppKey),
+                graceButtonJson = json(it.graceButtonJson), clockAppKey = json(it.clockAppKey), clockStyleJson = json(it.clockStyleJson),
+                homeLayoutJson = json(it.homeLayoutJson), listAppearanceJson = json(it.listAppearanceJson),
+                privateSpaceJson = json(it.privateSpaceJson), workProfileJson = json(it.workProfileJson),
+                homeGesturesJson = json(it.homeGesturesJson), searchJson = json(it.searchJson),
+                shortcutsFoldersJson = json(it.shortcutsFoldersJson), digitalWellbeingJson = json(it.digitalWellbeingJson),
+                widgetScreenJson = json(it.widgetScreenJson), appCategoriesJson = json(it.appCategoriesJson)))
+        }
+        dao.replaceHiddenApps(dao.readHiddenApps().map(::key).distinct().map(::HiddenAppEntity))
+        val items = database.itemsDao()
+        items.readIcons().filter { key(it.itemKey) != it.itemKey }.forEach {
+            items.resetIcon(it.itemKey)
+            items.saveIcon(it.copy(itemKey = key(it.itemKey)))
+        }
+        items.readPopups().forEach { popup ->
+            val renamed = AppPopupEntity(key(popup.ownerKey), key(popup.itemsJson))
+            if (renamed == popup) return@forEach
+            if (renamed.ownerKey != popup.ownerKey) items.deletePopup(popup.ownerKey)
+            items.savePopup(renamed)
+        }
+    }
 }
 
 private fun LauncherSettingsEntity.toSettings() = LauncherSettings(

@@ -29,6 +29,18 @@ class LauncherPreferences(context: Context) {
         if (category.isNullOrBlank()) remove("category:$key") else putString("category:$key", category.trim())
     }
 
+    /** Custom names and categories follow an app whose launcher activity an update renamed. */
+    fun renameApps(renames: Map<String, String>) = preferences.edit {
+        preferences.all.forEach { (key, value) ->
+            val prefix = listOf("label:", "category:").firstOrNull(key::startsWith) ?: return@forEach
+            val renamed = renames[key.removePrefix(prefix)] ?: return@forEach
+            if (value is String) {
+                remove(key)
+                putString(prefix + renamed, value)
+            }
+        }
+    }
+
     private fun values(prefix: String): Map<String, String> = preferences.all.mapNotNull { (key, value) ->
         if (key.startsWith(prefix) && value is String) key.removePrefix(prefix) to value else null
     }.toMap()
