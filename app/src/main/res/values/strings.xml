@@ -812,6 +812,7 @@
     <string name="app_stack_delete_confirmation">Delete “%1$s”? The apps inside will stay installed.</string>
     <string name="app_stack_expand">Expand app stack</string>
     <string name="app_stack_collapse">Collapse app stack</string>
+    <string name="app_stack_position">Page %1$d of %2$d</string>
     <string name="app_stack_empty">Choose apps or shortcuts below.</string>
     <string name="widget_stack_create">Create widget stack</string>
     <string name="widget_stack_create_summary">Several widgets in one space. Swipe to switch between them</string>

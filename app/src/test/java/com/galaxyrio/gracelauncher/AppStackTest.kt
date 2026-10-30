@@ -9,19 +9,10 @@ class AppStackTest {
     private fun cell(key: String, row: Int, columns: Int = 4, rows: Int = 1) =
         WidgetGridCell(key, 0, row, WidgetGridSize(columns, rows))
 
-    @Test fun overflowReservesTheLastCellForAnAlignedToggle() {
-        assertEquals(1, appStackRows(0, 4, true))
-        assertEquals(1, appStackRows(4, 4, true))
-        assertEquals(1, appStackRows(5, 4, false))
-        assertEquals(2, appStackRows(5, 4, true))
-        assertEquals(2, appStackRows(7, 4, true))
-        assertEquals(3, appStackRows(8, 4, true))
-    }
-
     @Test fun compactSurfaceTracksActualIconSizeWithoutWideLeadingCells() {
-        assertEquals(56f, appStackHeight(1, 40f), 0.001f)
-        assertEquals(76f, appStackHeight(1, 60f), 0.001f)
-        assertEquals(104f, appStackHeight(2, 40f), 0.001f)
+        assertEquals(56f, appStackHeight(40f), 0.001f)
+        assertEquals(76f, appStackHeight(60f), 0.001f)
+        assertEquals("more pages add the dots, never another row", 70f, appStackHeight(40f, paged = true), 0.001f)
         assertEquals(5, appStackColumns(280f, 40f))
         assertEquals(4, appStackColumns(280f, 48f))
         assertEquals(8f, AppStackInset, 0.001f)

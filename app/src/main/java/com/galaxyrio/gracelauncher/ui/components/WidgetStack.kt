@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.HomeLayout
 import com.galaxyrio.gracelauncher.data.LauncherFolder
+import com.galaxyrio.gracelauncher.data.StackDotsHeight
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.widgets.HomeWidget
@@ -28,7 +30,7 @@ import com.galaxyrio.gracelauncher.ui.widgets.rememberHostedWidget
 
 /** Enough pages that nobody reaches either end, so a swipe never falls through to the home pager. */
 private const val WrapCycles = 1000
-private val IndicatorHeight = 14.dp
+private val IndicatorHeight = StackDotsHeight.dp
 
 /** Pager index of the first widget nearest the middle of the wrapping range. */
 internal fun widgetStackStartPage(count: Int): Int =
@@ -94,16 +96,21 @@ internal fun WidgetStack(
                     enabled = inputEnabled, hapticsEnabled = uiState.settings.allowHapticFeedback, onLongPress = onEdit, viewCache = viewCache)
                 else Spacer(Modifier.fillMaxWidth().height(height.dp))
             }
-            if (count > 1) Row(Modifier.fillMaxWidth().height(indicator).clearAndSetSemantics {
-                    contentDescription = position; liveRegion = LiveRegionMode.Polite
-                },
-                horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-                val current = pager.currentPage % count
-                repeat(count) { index ->
-                    Box(Modifier.padding(horizontal = 3.dp).size(6.dp).clip(CircleShape)
-                        .background(symbolColor.copy(alpha = if (index == current) 0.9f else 0.35f)))
-                }
-            }
+            if (count > 1) StackPageDots(count, pager.currentPage % count, position, symbolColor)
+        }
+    }
+}
+
+/** Page dots under a widget or app stack; read out as one position, e.g. "Widget 2 of 3". */
+@Composable
+internal fun StackPageDots(count: Int, current: Int, position: String, color: Color) {
+    Row(Modifier.fillMaxWidth().height(IndicatorHeight).clearAndSetSemantics {
+            contentDescription = position; liveRegion = LiveRegionMode.Polite
+        },
+        horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        repeat(count) { index ->
+            Box(Modifier.padding(horizontal = 3.dp).size(6.dp).clip(CircleShape)
+                .background(color.copy(alpha = if (index == current) 0.9f else 0.35f)))
         }
     }
 }

@@ -2,20 +2,16 @@ package com.galaxyrio.gracelauncher.data
 
 internal const val AppStackInset = 8f
 private const val AppStackColumnGap = 12f
-internal const val AppStackRowGap = 8f
+/** Page dots under a stack with more than one page. */
+internal const val StackDotsHeight = 14f
 
 /** Shared by the inline surface and widget-grid footprint, in density-independent units. */
 internal fun appStackColumns(width: Float, iconSize: Float): Int =
     ((width - AppStackInset * 2 + AppStackColumnGap) / (iconSize + AppStackColumnGap)).toInt().coerceAtLeast(2)
 
-internal fun appStackHeight(rows: Int, iconSize: Float): Float =
-    AppStackInset * 2 + iconSize + (rows.coerceAtLeast(1) - 1) * (iconSize + AppStackRowGap)
-
-/** Reserve the last slot for the toggle only when a stack overflows one row. */
-internal fun appStackRows(count: Int, columns: Int, expanded: Boolean): Int {
-    val width = columns.coerceAtLeast(2)
-    return if (!expanded || count <= width) 1 else (count + width) / width
-}
+/** One row of icons; apps beyond it go on further pages, which add the page dots below. */
+internal fun appStackHeight(iconSize: Float, paged: Boolean = false): Float =
+    AppStackInset * 2 + iconSize + if (paged) StackDotsHeight else 0f
 
 /** Full-width stacks insert temporary rows; never persist these expansion-only coordinates. */
 internal fun expandWidgetStacks(cells: List<WidgetGridCell>, rows: Map<String, Int>): List<WidgetGridCell> = cells.map { cell ->

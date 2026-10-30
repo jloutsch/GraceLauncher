@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,7 +83,6 @@ internal fun WidgetScreen(
     val appStacks = stacks.filterKeys { it !in widgetStackKeys }
     val currentStackKeys by rememberUpdatedState(stacks.keys)
     val currentAppStackKeys by rememberUpdatedState(appStacks.keys)
-    var expandedStacks by rememberSaveable { mutableStateOf(emptyList<String>()) }
     val nativeWidgetKeys = entries.filter { it.widget != null }.map { it.key }.toSet()
     val widgetKeys = nativeWidgetKeys + widgetStackKeys
     val inputEnabled = enabled && !uiState.isLoadingSettings && !uiState.settingsLoadFailed
@@ -174,9 +172,9 @@ internal fun WidgetScreen(
         }
         val stackIconSize = 40f * appearance.iconSize / 100f
         val stackColumns = appStackColumns((maxWidth - side * 2 - gap).value, stackIconSize)
-        val stackRows = appStacks.mapValues { (key, stack) ->
+        val stackRows = appStacks.mapValues { (_, stack) ->
             val count = uiState.popupItems(uiState.folderItem(stack), emptyList()).count { it.widget == null && uiState.findItem(it.key) != null }
-            ceil((appStackHeight(appStackRows(count, stackColumns, key in expandedStacks), stackIconSize) + gap.value) / cellHeight.value).toInt().coerceAtLeast(1)
+            ceil((appStackHeight(stackIconSize, paged = count > stackColumns) + gap.value) / cellHeight.value).toInt().coerceAtLeast(1)
         }
         val baseCells = remember(entries, columns, specs, stacks.keys) {
             restoreWidgetGrid(entries, columns, specs.mapValues { it.value.first } + appStacks.keys.associateWith { WidgetGridSize(columns, 1) },
@@ -277,8 +275,6 @@ internal fun WidgetScreen(
                                 onLaunch = { item, bounds -> actions.launchAppAt?.invoke(item, bounds) ?: onLaunchApp(item) },
                                 onDetails = onAppDetails, onEdit = { onAppDetails(uiState.folderItem(stack)) },
                                 enabled = enabled && !grid.busy, gridManaged = true,
-                                expanded = cell.key in expandedStacks,
-                                onExpandedChange = { open -> expandedStacks = if (open) expandedStacks + cell.key else expandedStacks - cell.key },
                                 modifier = Modifier.fillMaxWidth())
                             else if (entry.widget != null && hosted != null) {
                                 HomeWidget(entry.widget, hosted, (height - gap).value.roundToInt(),
