@@ -145,8 +145,6 @@ data class LauncherUiState(
     val workFolderApp: LauncherApp? = null,
     val shownShortcutKeys: Set<String> = emptySet(),
     val headphones: HeadphoneState = HeadphoneState(),
-    /** The headphone connection the user last dismissed, launched from or started playback on. */
-    val headphoneAppsHandled: Long = 0,
 ) {
     val folderHiddenAppKeys: Set<String> = com.galaxyrio.gracelauncher.data.hiddenAppsFromFolders(folders)
     val effectiveHiddenAppKeys: Set<String> = hiddenAppKeys + folderHiddenAppKeys
@@ -245,12 +243,12 @@ data class LauncherUiState(
             settings.mediaPlayer && media.hasAccess && !isLoadingSettings && !settingsLoadFailed
         }
 
-    /** Offered once per headphone connection, until playback starts or the user acts on it. */
+    /** Shown for as long as headphones are connected, like the media player shows while media is available. */
     val headphoneApps: List<LauncherApp>
         get() {
             val choice = settings.headphoneApps
             if (!settings.mediaPlayer || !choice.enabled || choice.appKeys.isEmpty() || isLoadingSettings || settingsLoadFailed ||
-                !headphones.connected || headphones.connections <= headphoneAppsHandled) return emptyList()
+                !headphones.connected) return emptyList()
             val available = allApps.associateBy(LauncherApp::key)
             return choice.appKeys.mapNotNull(available::get)
         }
@@ -410,16 +408,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             appNotifications.state.collect { notifications -> _uiState.update { it.copy(notifications = notifications) } }
         }
         viewModelScope.launch {
-            mediaRepository.state.collect { media -> _uiState.update {
-                it.copy(media = media, headphoneAppsHandled = if (media.nowPlaying?.playing == true) it.headphones.connections else it.headphoneAppsHandled)
-            } }
+            mediaRepository.state.collect { media -> _uiState.update { it.copy(media = media) } }
         }
         headphoneMonitor.start()
         viewModelScope.launch {
-            // Already-playing audio simply moves to the headphones; there is nothing to pick.
-            headphoneMonitor.state.collect { headphones -> _uiState.update {
-                it.copy(headphones = headphones, headphoneAppsHandled = if (it.media.nowPlaying?.playing == true) headphones.connections else it.headphoneAppsHandled)
-            } }
+            headphoneMonitor.state.collect { headphones -> _uiState.update { it.copy(headphones = headphones) } }
         }
         ContextCompat.registerReceiver(application, dateReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_DATE_CHANGED)
@@ -882,7 +875,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (_uiState.value.settings.mediaKeepWhilePlaying && mediaRepository.state.value.nowPlaying?.playing == true) return false
         return mediaRepository.dismiss(sessionId, revision)
     }
-    fun dismissHeadphoneApps() = _uiState.update { it.copy(headphoneAppsHandled = it.headphones.connections) }
     fun dismissNotification(key: String, revision: Long): Boolean = appNotifications.dismiss(key, revision)
     fun openNotification(key: String, revision: Long): Boolean = appNotifications.open(getApplication(), key, revision)
 

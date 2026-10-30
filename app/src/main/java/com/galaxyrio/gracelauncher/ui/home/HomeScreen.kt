@@ -368,7 +368,7 @@ fun HomeScreen(
                             // Every launch path opens the app before dismissing, so its icon is still there to animate from.
                             if (headphoneApps.isNotEmpty()) HomeHeadphoneApps(headphoneApps, uiState,
                                 onLaunch = onLaunchApp, onDetails = onAppDetails, onShortcuts = onAppShortcuts,
-                                onDismiss = actions.dismissHeadphoneApps, rowGestures = rowGestures)
+                                rowGestures = rowGestures)
                         } }
                         widget != null -> PopupWidgetItem(widget, selected = selectedWidget == entry.key,
                             enabled = inputEnabled, editable = !homeLayout.editingLocked, haptics = uiState.settings.allowHapticFeedback,
