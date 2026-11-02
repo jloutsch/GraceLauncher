@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.2.2
+
+### Bug fixes
+
+- Fixed bugs that prevented some widgets from being added or edited.
+- Fixed stuttering caused by reloading apps when returning to the home screen.
+- Attempted to fix cloned apps not appearing (untested).
+
+### Improvements
+
+- Reorganized Settings and reserved entry points for future features.
+- Added centralized font color management, allowing different text colors for different UI elements.
+- Added App Categories to show selected apps on the home screen or in the app list under specific conditions.
+- Added color customization for clock widgets.
+- Added customization options for more UI details.
+
 ## 1.2.1
 
 - Icon Designer now applies global changes to options that have not been explicitly customized for an individual icon. For example, an icon with a custom symbol still inherits global color changes while keeping its symbol.

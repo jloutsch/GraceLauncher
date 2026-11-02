@@ -45,6 +45,10 @@ class AlphabetSettingsTest {
             assertEquals(enabled, saved.alphabet.freeMovement)
             assertEquals(saved, ListAppearance.decode(saved.encode()))
         }
+        for (home in listOf(null, false, true)) for (appList in listOf(false, true)) {
+            val saved = ListAppearance(alphabet = AlphabetAppearance(showOnHome = home, showInAppList = appList))
+            assertEquals(saved, ListAppearance.decode(saved.encode()))
+        }
         IconShape.entries.forEach { shape ->
             val alphabet = AlphabetAppearance(fontId = "imported.ttf", fontColor = IconColor(0xFF34ABCD.toInt()),
                 fontSize = 24, indicatorShape = shape, pebbleRoundness = 64, squareCornerRadius = 45,
@@ -111,6 +115,26 @@ class AlphabetSettingsTest {
             assertEquals(90, list.alphabet.bottomPercent)
             assertFalse(list.alphabet.freeMovement)
             assertEquals(IconColor(0xFF34ABCD.toInt()), list.alphabet.fontColor)
+        }
+    }
+
+    @Test fun pageVisibilityAndLeftEdgeControlsAreIndependent() {
+        state = state.copy(settings = state.settings.copy(hideAlphabet = true))
+        showSettings()
+        scrollTo("alphabet_show_in")
+        compose.onNodeWithTag("alphabet_show_home").assertIsOff().performClick()
+        compose.onNodeWithTag("alphabet_show_app_list").assertIsOn().performClick()
+        compose.runOnIdle {
+            assertEquals(true, state.settings.listAppearance.alphabet.showOnHome)
+            assertFalse(state.settings.listAppearance.alphabet.showInAppList)
+            assertTrue(state.settings.listAppearance.leftAlphabet)
+        }
+        scrollTo("list_left_alphabet")
+        compose.onNodeWithTag("list_left_alphabet").performClick()
+        compose.runOnIdle {
+            assertFalse(state.settings.listAppearance.leftAlphabet)
+            assertEquals(true, state.settings.listAppearance.alphabet.showOnHome)
+            assertFalse(state.settings.listAppearance.alphabet.showInAppList)
         }
     }
 

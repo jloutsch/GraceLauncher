@@ -20,6 +20,7 @@ import android.provider.Settings
 import android.widget.Toast
 import androidx.core.content.ContextCompat
 import com.galaxyrio.gracelauncher.R
+import com.galaxyrio.gracelauncher.data.LauncherProfiles
 import com.galaxyrio.gracelauncher.data.ProfileSettings
 import com.galaxyrio.gracelauncher.data.PrivateSpaceDisplay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -103,14 +104,22 @@ class PrivateSpaceController private constructor(private val context: Context) {
 
     fun refresh() {
         if (Build.VERSION.SDK_INT < 35) return
-        val user = if (DefaultHome.isDefault(context)) runCatching {
-            launcherApps.profiles.firstOrNull {
-                launcherApps.getLauncherUserInfo(it)?.userType == UserManager.USER_TYPE_PROFILE_PRIVATE
+        val profile = if (DefaultHome.isDefault(context)) runCatching {
+            launcherApps.profiles.firstNotNullOfOrNull { user ->
+                // An OEM profile's metadata failure must not prevent finding Private Space.
+                val info = runCatching { launcherApps.getLauncherUserInfo(user) }.getOrNull()
+                if (info?.userType != UserManager.USER_TYPE_PROFILE_PRIVATE) return@firstNotNullOfOrNull null
+                val serial = runCatching { users.getSerialNumberForUser(user) }.getOrNull()?.takeIf { it >= 0 }
+                    ?: runCatching { info.userSerialNumber.toLong() }.getOrNull()?.takeIf { it >= 0 }
+                    ?: return@firstNotNullOfOrNull null
+                LauncherProfiles.rememberPrivateProfile(serial)
+                user to serial
             }
         }.getOrNull() else null
+        val user = profile?.first
         val locked = user == null || runCatching { users.isQuietModeEnabled(user) || !users.isUserUnlocked(user) }.getOrDefault(true)
         val previous = _state.value
-        _state.value = previous.copy(user = user, serial = user?.let(users::getSerialNumberForUser) ?: -1,
+        _state.value = previous.copy(user = user, serial = profile?.second ?: -1,
             locked = locked, accessible = !locked && (settings.exposesApps || (previous.accessible && previous.user == user)),
             lockVersion = previous.lockVersion + if ((locked && !previous.locked) || previous.user != user) 1 else 0)
         val request = pending

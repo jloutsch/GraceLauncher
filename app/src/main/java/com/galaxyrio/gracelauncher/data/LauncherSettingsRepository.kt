@@ -1,15 +1,14 @@
 package com.galaxyrio.gracelauncher.data
 
 import androidx.room.withTransaction
-import com.galaxyrio.gracelauncher.data.media.HeadphoneAppsSettings
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.json.JSONArray
 
 /**
- * New launcher data lives in Room; legacy favorites, renames, categories and
- * appearance preferences remain in their existing stores without being reset.
+ * Launcher settings and app categories live in Room. Legacy favorites migrate
+ * once; profile pins, renames and appearance preferences keep their existing stores.
  * All reads are observable Room queries and every write is a suspending DAO
  * operation, so no database access blocks the main thread.
  */
@@ -23,8 +22,9 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
         database.itemsDao().popups(),
     ) { settings, hiddenApps, folders, popups ->
         val contents = popups.associate { it.ownerKey to PopupItem.decode(it.itemsJson) }
+        val loaded = settings?.toSettings() ?: LauncherSettings()
         LauncherStorageSnapshot(
-            settings = settings?.toSettings() ?: LauncherSettings(),
+            settings = loaded,
             hiddenAppKeys = hiddenApps.toSet(),
             folders = folders.map { entry ->
                 LauncherFolder(
@@ -35,7 +35,7 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
                     appListAtBottom = entry.appListAtBottom,
                     autoHideApps = entry.autoHideApps,
                     isAppStack = entry.isAppStack,
-                    isWidgetStack = entry.isWidgetStack,
+                    isWidgetStack = entry.id in loaded.widgetStackFolderIds,
                 )
             },
         )
@@ -52,7 +52,6 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
             dismissResistance = settings.dismissResistance.coerceIn(0, 90),
             dismissThresholdDp = settings.dismissThresholdDp.coerceIn(24, 160),
             mediaAppKey = settings.mediaAppKey,
-            headphoneAppsJson = settings.headphoneApps.encode(),
             graceButtonJson = settings.graceButton.encode(),
             calendarAgenda = settings.calendarAgenda,
             showBatteryPercentage = settings.showBatteryPercentage,
@@ -70,9 +69,8 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
             weatherEnabled = settings.weatherEnabled,
             weatherForecastDays = settings.weatherForecastDays.coerceIn(1, 14),
             weatherLocationId = settings.weatherLocationId,
-            weatherAppKey = settings.weatherAppKey,
             clockAppKey = settings.clockAppKey,
-            clockStyleJson = settings.clockStyle.encode(),
+            clockStyleJson = settings.clockStyle.encode().withField(WeatherAppKeyField, settings.weatherAppKey),
             homeLayoutJson = settings.homeLayout.encode(),
             hideStatusBar = settings.hideStatusBar,
             hideAlphabet = settings.hideAlphabet,
@@ -83,15 +81,18 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
             wallpaperBlurRadius = settings.wallpaperBlurRadius.coerceIn(0, 48),
             appFontId = settings.appFontId,
             fontLibraryJson = settings.fontLibrary.encode(),
+            fontColorsJson = settings.fontColors.encode(),
             listAppearanceJson = settings.listAppearance.encode(),
             applyFontToSettings = settings.applyFontToSettings,
             privateSpaceJson = settings.privateSpace.encode(),
             workProfileJson = settings.workProfile.encode(),
             homeGesturesJson = settings.homeGestures.encode(),
             searchJson = settings.search.encode(),
-            shortcutsFoldersJson = settings.shortcutsFolders.encode(),
+            shortcutsFoldersJson = settings.shortcutsFolders.encode()
+                .withField(WidgetStackFoldersField, settings.widgetStackFolderIds.toJsonArrayOrNull()),
             digitalWellbeingJson = settings.digitalWellbeing.encode(),
             widgetScreenJson = settings.widgetScreen.encode(),
+            appCategoriesJson = settings.appCategories?.let(AppCategory::encode),
             preferNonAccessibility = settings.preferNonAccessibility,
         ))
     }
@@ -100,9 +101,21 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
     suspend fun mutateSettings(transform: (LauncherSettings) -> LauncherSettings) {
         database.withTransaction {
             val current = dao.readSettings()?.toSettings() ?: LauncherSettings()
-            updateSettings(synchronizeGraceWidgetOrder(current, transform(current)))
+            updateSettings(synchronizeGraceWidgetOrder(current, synchronizeCategoryPlacement(current, transform(current))))
         }
     }
+
+    suspend fun migrateAppCategories(favorites: List<String>) = database.withTransaction {
+        val current = dao.readSettings()?.toSettings() ?: LauncherSettings()
+        if (current.appCategories == null) updateSettings(migrateHomeCategories(current, favorites))
+    }
+
+    suspend fun mutateAppCategories(favorites: List<String>, transform: (List<AppCategory>) -> List<AppCategory>) =
+        database.withTransaction {
+            val current = migrateHomeCategories(dao.readSettings()?.toSettings() ?: LauncherSettings(), favorites)
+            val categories = transform(requireNotNull(current.appCategories))
+            updateSettings(synchronizeCategoryPlacement(current, current.copy(appCategories = categories)))
+        }
 
     /** Move the old single widget into the mixed home collection without rebinding it. */
     suspend fun migrateLegacyHomeWidget() = database.withTransaction {
@@ -133,8 +146,10 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
         require(name.isNotEmpty()) { "A folder name must not be blank" }
         val keys = folder.appKeys.filter(String::isNotBlank).distinct()
         database.withTransaction {
-            dao.upsertFolder(LauncherFolderEntity(folder.id, name, folder.placement.name, folder.appListAtBottom, folder.autoHideApps, folder.isAppStack,
-                folder.isWidgetStack))
+            dao.upsertFolder(LauncherFolderEntity(folder.id, name, folder.placement.name, folder.appListAtBottom, folder.autoHideApps, folder.isAppStack))
+            val current = dao.readSettings()?.toSettings() ?: LauncherSettings()
+            val stacks = if (folder.isWidgetStack) current.widgetStackFolderIds + folder.id else current.widgetStackFolderIds - folder.id
+            if (stacks != current.widgetStackFolderIds) updateSettings(current.copy(widgetStackFolderIds = stacks))
             val itemsDao = database.itemsDao()
             val previous = itemsDao.popup(folder.key)?.let { PopupItem.decode(it.itemsJson) }.orEmpty()
             // Membership callers must not discard widgets or move them to the end.
@@ -176,6 +191,12 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
         }
         itemsDao.resetIcon(key)
         dao.deleteFolder(id)
+        dao.readSettings()?.toSettings()?.takeIf { id in it.widgetStackFolderIds }
+            ?.let { updateSettings(it.copy(widgetStackFolderIds = it.widgetStackFolderIds - id)) }
+        val settings = dao.readSettings()?.toSettings()
+        if (settings?.appCategories != null) updateSettings(settings.copy(appCategories = settings.appCategories.map {
+            it.copy(itemKeys = it.itemKeys - key)
+        }))
         widgets
     }
 }
@@ -188,7 +209,6 @@ private fun LauncherSettingsEntity.toSettings() = LauncherSettings(
     dismissResistance = dismissResistance.coerceIn(0, 90),
     dismissThresholdDp = dismissThresholdDp.coerceIn(24, 160),
     mediaAppKey = mediaAppKey,
-    headphoneApps = HeadphoneAppsSettings.decode(headphoneAppsJson),
     graceButton = GraceButtonSettings.decode(graceButtonJson),
     calendarAgenda = calendarAgenda,
     showBatteryPercentage = showBatteryPercentage,
@@ -205,9 +225,10 @@ private fun LauncherSettingsEntity.toSettings() = LauncherSettings(
     weatherEnabled = weatherEnabled,
     weatherForecastDays = weatherForecastDays.coerceIn(1, 14),
     weatherLocationId = weatherLocationId,
-    weatherAppKey = weatherAppKey,
+    weatherAppKey = stringField(clockStyleJson, WeatherAppKeyField),
+    widgetStackFolderIds = stringSetField(shortcutsFoldersJson, WidgetStackFoldersField),
     clockAppKey = clockAppKey,
-    clockStyle = ClockStyle.decode(clockStyleJson),
+    clockStyle = ClockStyle.decode(clockStyleJson, legacyShowBattery = showBatteryPercentage),
     homeLayout = HomeLayout.decode(homeLayoutJson),
     hideStatusBar = hideStatusBar,
     hideAlphabet = hideAlphabet,
@@ -218,6 +239,7 @@ private fun LauncherSettingsEntity.toSettings() = LauncherSettings(
     wallpaperBlurRadius = wallpaperBlurRadius.coerceIn(0, 48),
     appFontId = appFontId,
     fontLibrary = FontLibrary.decode(fontLibraryJson, appFontId),
+    fontColors = FontColors.decode(fontColorsJson),
     listAppearance = ListAppearance.decode(listAppearanceJson, hideFavoriteNames),
     applyFontToSettings = applyFontToSettings,
     privateSpace = ProfileSettings.decode(privateSpaceJson),
@@ -227,6 +249,7 @@ private fun LauncherSettingsEntity.toSettings() = LauncherSettings(
     shortcutsFolders = ShortcutsFoldersSettings.decode(shortcutsFoldersJson),
     digitalWellbeing = DigitalWellbeingSettings.decode(digitalWellbeingJson),
     widgetScreen = WidgetScreenSettings.decode(widgetScreenJson),
+    appCategories = AppCategory.decode(appCategoriesJson),
     preferNonAccessibility = preferNonAccessibility,
 )
 

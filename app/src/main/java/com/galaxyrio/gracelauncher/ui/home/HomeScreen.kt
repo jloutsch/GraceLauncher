@@ -80,14 +80,19 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.LauncherApp
+import com.galaxyrio.gracelauncher.data.CategoryIcon
 import com.galaxyrio.gracelauncher.data.LauncherFolder
 import com.galaxyrio.gracelauncher.data.ScheduleEvent
 import com.galaxyrio.gracelauncher.data.ClockStyle
+import com.galaxyrio.gracelauncher.data.ClockColorPart
 import com.galaxyrio.gracelauncher.data.GraceButtonGesture
 import com.galaxyrio.gracelauncher.data.nextVisibleEvent
 import com.galaxyrio.gracelauncher.data.media.MediaCommand
@@ -110,13 +115,12 @@ import com.galaxyrio.gracelauncher.ui.components.stableStatusBarInset
 import com.galaxyrio.gracelauncher.ui.components.eventRemainingText
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.theme.rememberBatteryPercent
+import com.galaxyrio.gracelauncher.ui.theme.resolvedFontColor
 import com.galaxyrio.gracelauncher.ui.weather.HomeWeather
 import com.galaxyrio.gracelauncher.ui.widgets.HomeWidget
 import com.galaxyrio.gracelauncher.ui.widgets.HomeEditHandle
 import com.galaxyrio.gracelauncher.ui.widgets.rememberHostedWidget
-import java.text.SimpleDateFormat
 import java.time.Instant
-import java.util.Date
 import kotlin.math.roundToInt
 
 @Composable
@@ -146,12 +150,17 @@ fun HomeScreen(
     onHomeGesture: (GraceButtonGesture, Offset) -> Unit = { _, _ -> },
     actions: LauncherActions = LauncherActions(),
     onWidgetEditingChange: (Boolean) -> Unit = {},
+    onWeatherClick: () -> Unit = {},
 ) {
     val now by rememberHomeTime()
+    val headphones by rememberHeadphonesConnected()
+    val localTime = now.atZone(java.time.ZoneId.systemDefault()).toLocalTime()
+    val homeContent = uiState.visibleHomeContent(headphones, localTime.hour * 60 + localTime.minute)
     val event = if (uiState.settings.calendarAgenda) nextVisibleEvent(uiState.events, now) else null
-    val entries = uiState.homeItems
+    val entries = homeContent.items
+    val categoryIcons = uiState.appCategories.associate { it.key to it.icon }
     val entriesByKey = entries.associateBy { it.key }
-    val favoriteFolders = uiState.favoriteFolders.associateBy { it.id }
+    val favoriteFolders = (uiState.folders + uiState.favoriteFolders).associateBy { it.id }
     var idleMediaDismissed by rememberSaveable(uiState.settings.mediaAlwaysVisible, uiState.settings.mediaPlayer) { mutableStateOf(false) }
     LaunchedEffect(uiState.homeMedia?.sessionId, uiState.homeMedia?.revision) {
         if (uiState.homeMedia != null) idleMediaDismissed = false
@@ -162,7 +171,6 @@ fun HomeScreen(
         title = stringResource(R.string.media_idle_title), artist = stringResource(R.string.media_idle_summary),
         playing = false, canToggle = true, canPrevious = false, canNext = false,
     ) else null
-    val headphoneApps = uiState.headphoneApps
     val listState = rememberLazyListState()
     val homeLayout = uiState.settings.homeLayout
     var topOffset by remember(homeLayout.topOffsetDp) { mutableFloatStateOf(homeLayout.topOffsetDp) }
@@ -172,7 +180,10 @@ fun HomeScreen(
     val density = LocalDensity.current
     val context = LocalContext.current
     val haptics by rememberUpdatedState(LocalHapticFeedback.current)
-    val saveOrder by rememberUpdatedState(actions.reorderFavorites)
+    val saveOrder by rememberUpdatedState<(List<String>) -> Unit>({ keys ->
+        // A category remains one sortable homepage item even though it renders several rows.
+        actions.reorderFavorites(keys.map { homeContent.owners[it] ?: it }.distinct())
+    })
     val reorder = remember(listState) {
         FavoritesReorderState(listState, entries.map { it.key }, { saveOrder(it) }) {
             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -342,21 +353,19 @@ fun HomeScreen(
                                     }
                                 }
                             })
-                        grace == GraceWidget.Clock -> HomeClockHeader(now, null, onDateClick, onClockClick,
-                            showBattery = false, clockStyle = uiState.settings.clockStyle, weather = null,
-                            showClock = true, showCalendar = false, interactive = inputEnabled, onLongClick = {})
-                        grace == GraceWidget.Calendar -> HomeClockHeader(now, event, onDateClick, onClockClick,
-                            showBattery = uiState.settings.showBatteryPercentage,
+                        grace == GraceWidget.ClockCalendar -> HomeClockHeader(now, event, onDateClick, onClockClick,
+                            showBattery = true,
                             clockStyle = uiState.settings.clockStyle,
                             weather = uiState.weather.snapshot?.current.takeIf { uiState.settings.weatherEnabled &&
                                 !uiState.isLoadingSettings && !uiState.settingsLoadFailed },
-                            showClock = false, showCalendar = true, clockPresent = uiState.settings.clockEnabled,
-                            interactive = inputEnabled, onLongClick = {})
+                            showClock = uiState.settings.clockEnabled, showCalendar = uiState.settings.calendarAgenda,
+                            calendarAboveClock = uiState.settings.calendarAboveClock,
+                            interactive = inputEnabled, onLongClick = {}, onWeatherClick = onWeatherClick)
                         // Keep the slot while empty so its height springs to zero instead of
                         // disappearing in one measure pass. Following rows flow into the gap.
                         grace == GraceWidget.Media -> Box(Modifier.fillMaxWidth().animateContentSize(
                             animationSpec = spring(dampingRatio = 1f, stiffness = 400f),
-                        )) { Column(Modifier.fillMaxWidth()) {
+                        )) {
                             if (media != null) HomeMediaPlayer(media, onMediaCommand,
                                 keepWhilePlaying = uiState.settings.mediaKeepWhilePlaying,
                                 dismissResistance = uiState.settings.dismissResistance,
@@ -365,11 +374,7 @@ fun HomeScreen(
                                     if (id == IdleMediaSessionId) { idleMediaDismissed = true; true }
                                     else onDismissMedia(id, revision).also { if (it) idleMediaDismissed = true }
                                 })
-                            // Every launch path opens the app before dismissing, so its icon is still there to animate from.
-                            if (headphoneApps.isNotEmpty()) HomeHeadphoneApps(headphoneApps, uiState,
-                                onLaunch = onLaunchApp, onDetails = onAppDetails, onShortcuts = onAppShortcuts,
-                                rowGestures = rowGestures)
-                        } }
+                        }
                         widget != null -> PopupWidgetItem(widget, selected = selectedWidget == entry.key,
                             enabled = inputEnabled, editable = !homeLayout.editingLocked, haptics = uiState.settings.allowHapticFeedback,
                             horizontalInset = 8.dp,
@@ -381,6 +386,7 @@ fun HomeScreen(
                                 if (!cancelled && !homeLayout.editingLocked) selectedWidget = entry.key
                             })
                         app != null -> {
+                            val categoryIcon = categoryIcons[homeContent.owners[entry.key]] ?: CategoryIcon.None
                             val folder = app.folderId?.let(favoriteFolders::get)
                             if (folder?.isAppStack == true) AppStack(folder, uiState,
                                 onLaunch = { item, bounds -> rowGestures.onLaunchAt?.invoke(item, bounds) ?: onLaunchApp(item) },
@@ -393,13 +399,15 @@ fun HomeScreen(
                                 onDrag = { bounds, expanded -> onFolderDrag(folder, bounds, expanded) },
                                 onDragEnd = onFolderDragEnd,
                                 onSwipeLeft = rowGestures.onOpenFirst?.let { open -> { bounds -> open(app, bounds) } },
-                                showLabel = uiState.settings.listAppearance.showNames(favorites = true))
+                                showLabel = uiState.settings.listAppearance.showNames(favorites = true),
+                                categoryIcon = categoryIcon)
                             else LauncherAppRow(app, onClick = { onLaunchApp(app) }, onLongClick = { onAppDetails(app) },
                                 usageText = favoriteUsageLabel(app, uiState),
                                 onSwipeRight = { onAppShortcuts(app, it) }, gestures = rowGestures,
                                 highlighted = highlightedAppKey == app.key,
                                 notifications = uiState.notificationPreviewsFor(app),
-                                showLabel = uiState.settings.listAppearance.showNames(favorites = true))
+                                showLabel = uiState.settings.listAppearance.showNames(favorites = true),
+                                categoryIcon = categoryIcon)
                         }
                     }
                 }
@@ -442,22 +450,46 @@ internal fun HomeClockHeader(
     showClock: Boolean = true,
     showCalendar: Boolean = true,
     calendarAboveClock: Boolean = false,
-    clockPresent: Boolean = showClock,
+    onWeatherClick: () -> Unit = {},
 ) {
     val appearance = LocalLauncherAppearance.current
-    val battery = if (showCalendar && showBattery) rememberBatteryPercent() else null
+    val visibility = clockStyle.effectiveVisibility
+    val week = clockStyle.layout.week
+    val clockVisible = showClock && visibility.showClock
+    val weekdayVisible = showCalendar && visibility.showWeekday
+    val dateVisible = showCalendar && visibility.showDate
+    val battery = if (showCalendar && showBattery && visibility.showBattery) rememberBatteryPercent() else null
+    val visibleWeather = weather?.takeIf { visibility.showWeather && it.temperature != null }
+    val colors = ClockColorPart.entries.associateWith { resolvedFontColor(clockStyle.colors[it], onWallpaper = true) }
+    val digitColors = listOf(ClockColorPart.HourTens, ClockColorPart.HourOnes, ClockColorPart.MinuteTens, ClockColorPart.MinuteOnes)
+        .map(colors::getValue)
     val context = LocalContext.current
     val locale = LocalConfiguration.current.locales[0]
-    val clockText = formatHomeClock(now, DateFormat.is24HourFormat(context), locale)
-    val week = clockPresent && clockStyle.layout.week
-    val weekday = SimpleDateFormat("EEE", locale).format(Date.from(now))
-    val datePattern = DateFormat.getBestDateTimePattern(locale, if (week) "MMMd" else "MMMEd")
-    val dateText = SimpleDateFormat(datePattern, locale).format(Date.from(now))
-    val dateDescription = stringResource(if (weather != null) R.string.weather_agenda_action else R.string.date_calendar_action, dateText)
+    val clockText = formatHomeClock(now, DateFormat.is24HourFormat(context), locale, leadingZero = clockStyle.face.showLeadingZero)
+    val weekday = clockCalendarDate(now, locale, true, false,
+        colors.getValue(ClockColorPart.Weekday), colors.getValue(ClockColorPart.Month), colors.getValue(ClockColorPart.Day)).text
+    val dateText = clockCalendarDate(now, locale, weekdayVisible && !week, dateVisible,
+        colors.getValue(ClockColorPart.Weekday), colors.getValue(ClockColorPart.Month), colors.getValue(ClockColorPart.Day))
+    val calendarText = buildAnnotatedString {
+        append(dateText)
+        if (battery != null) {
+            if (length > 0) append("  ")
+            withStyle(SpanStyle(color = colors.getValue(ClockColorPart.Battery))) { append("$battery%") }
+        }
+    }
+    val completeDate = clockCalendarDate(now, locale, true, true,
+        colors.getValue(ClockColorPart.Weekday), colors.getValue(ClockColorPart.Month), colors.getValue(ClockColorPart.Day)).text
+    val dateDescription = stringResource(R.string.date_calendar_action, completeDate)
     val clockDescription = stringResource(R.string.clock_action, clockText)
+    val largeFaceVisible = if (week) weekdayVisible else clockVisible
+    val smallClockVisible = week && clockVisible
+    val agendaVisible = showCalendar && event != null
+    val rowVisible = smallClockVisible || calendarText.isNotEmpty() || visibleWeather != null
+    val calendarContentVisible = rowVisible || agendaVisible
+    val calendarAction = showCalendar && (calendarText.isNotEmpty() || agendaVisible)
 
     val clockContent: @Composable () -> Unit = {
-        if (showClock) ClockFace(
+        if (largeFaceVisible) ClockFace(
             time = if (week) weekday else clockText,
             style = clockStyle,
             modifier = Modifier
@@ -470,18 +502,19 @@ internal fun HomeClockHeader(
                     onLongClick = onLongClick,
                 ) else Modifier)
                 .padding(horizontal = LauncherLayout.ContentInset),
-            color = appearance.text,
+            color = if (week) colors.getValue(ClockColorPart.Weekday) else appearance.text,
+            digitColors = digitColors.takeUnless { week },
         )
     }
     val calendarContent: @Composable () -> Unit = {
         val shape = LauncherLayout.RowShape
-        if (showCalendar || weather?.temperature != null) Surface(
+        if (calendarContentVisible) Surface(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(dateTag)
-                .semantics { contentDescription = dateDescription }
+                .then(if (calendarAction) Modifier.semantics { contentDescription = dateDescription } else Modifier)
                 .clip(shape)
-                .then(if (interactive) Modifier.combinedClickable(
+                .then(if (interactive && calendarAction) Modifier.combinedClickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = ripple(color = appearance.text),
                     role = Role.Button,
@@ -497,11 +530,11 @@ internal fun HomeClockHeader(
                 shadow = appearance.textShadow,
             )
             Column(Modifier.padding(vertical = LauncherLayout.ContentInset)) {
-                Row(Modifier.padding(horizontal = LauncherLayout.ContentInset, vertical = 2.dp)) {
-                    if (showCalendar && week) {
+                if (rowVisible) Row(Modifier.padding(horizontal = LauncherLayout.ContentInset, vertical = 2.dp)) {
+                    if (smallClockVisible) {
                         ClockTimeLabel(
                             time = clockText, style = clockStyle, textStyle = dateStyle,
-                            modifier = Modifier.alignByBaseline()
+                            modifier = Modifier.alignByBaseline().testTag("${clockTag}_time")
                                 .semantics { contentDescription = clockDescription }
                                 .then(if (interactive) Modifier.combinedClickable(
                                     interactionSource = remember { MutableInteractionSource() }, indication = null,
@@ -509,23 +542,26 @@ internal fun HomeClockHeader(
                                     onLongClick = onLongClick,
                                 ) else Modifier),
                             color = appearance.text,
+                            digitColors = digitColors,
                         )
-                        Text(" · ", modifier = Modifier.alignByBaseline(), color = appearance.text, style = dateStyle)
+                        if (calendarText.isNotEmpty()) Text(" · ", modifier = Modifier.alignByBaseline(), color = appearance.text, style = dateStyle)
                     }
-                    if (showCalendar) Text(
-                        text = dateText + (battery?.let { "  $it%" } ?: ""),
+                    if (calendarText.isNotEmpty()) Text(
+                        text = calendarText,
                         modifier = Modifier.weight(1f, fill = false).alignByBaseline().testTag("${dateTag}_text"),
                         color = appearance.text,
                         style = dateStyle,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                     )
-                    if (weather?.temperature != null) {
-                        if (showCalendar) Spacer(Modifier.width(10.dp))
-                        HomeWeather(weather, appearance.text, dateStyle, Modifier.alignByBaseline())
+                    if (visibleWeather != null) {
+                        if (smallClockVisible || calendarText.isNotEmpty()) Spacer(Modifier.width(10.dp))
+                        HomeWeather(visibleWeather, colors.getValue(ClockColorPart.Weather), dateStyle, Modifier.alignByBaseline(),
+                            onClick = onWeatherClick.takeIf { interactive }, onLongClick = onLongClick.takeIf { interactive },
+                            iconColor = appearance.text)
                     }
                 }
-                if (showCalendar && event != null) {
+                if (agendaVisible) {
                     ScheduleLine(event = event, now = now)
                 }
             }
@@ -533,7 +569,7 @@ internal fun HomeClockHeader(
     }
     Column(modifier) {
         if (calendarAboveClock) calendarContent() else clockContent()
-        Spacer(Modifier.height(if (showClock && (showCalendar || weather != null)) 2.dp else 0.dp)
+        Spacer(Modifier.height(if (largeFaceVisible && calendarContentVisible) 2.dp else 0.dp)
             .onGloballyPositioned { onAnchorOffsetChange(it.positionInParent().y.roundToInt()) })
         if (calendarAboveClock) clockContent() else calendarContent()
     }

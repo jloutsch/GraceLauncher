@@ -19,6 +19,17 @@ class AlphabetAppearanceTest {
         assertNull(value.topPercent)
     }
 
+    @Test fun pageVisibilityUsesTheLegacyHomePreferenceUntilExplicitlyChanged() {
+        val defaults = AlphabetAppearance()
+        assertTrue(defaults.showsOnHome(legacyHideAlphabet = false))
+        assertFalse(defaults.showsOnHome(legacyHideAlphabet = true))
+        assertTrue(defaults.showInAppList)
+        assertTrue(defaults.copy(showOnHome = true).showsOnHome(legacyHideAlphabet = true))
+        assertFalse(defaults.copy(showOnHome = false).showsOnHome(legacyHideAlphabet = false))
+        assertFalse(defaults.copy(showInAppList = false).showInAppList)
+        assertTrue(defaults.copy(showInAppList = false).showsOnHome(legacyHideAlphabet = false))
+    }
+
     @Test fun limitsAlwaysDescribeANonEmptyRangeWithinTheScreen() {
         for (top in listOf(-100, 0, 35, 85, 99, 100, 1000)) {
             for (bottom in listOf(-100, 0, 35, 85, 99, 100, 1000)) {

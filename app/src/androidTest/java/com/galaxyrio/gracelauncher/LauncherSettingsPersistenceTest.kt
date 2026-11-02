@@ -7,6 +7,10 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.galaxyrio.gracelauncher.data.FolderPlacement
 import com.galaxyrio.gracelauncher.data.AlphabetAppearance
 import com.galaxyrio.gracelauncher.data.IconColor
+import com.galaxyrio.gracelauncher.data.FontColorEntry
+import com.galaxyrio.gracelauncher.data.FontColors
+import com.galaxyrio.gracelauncher.data.MaterialColorRole
+import com.galaxyrio.gracelauncher.data.WallpaperBrightness
 import com.galaxyrio.gracelauncher.data.IconShape
 import com.galaxyrio.gracelauncher.data.ListAppearance
 import com.galaxyrio.gracelauncher.data.IconDisplaySettings
@@ -68,9 +72,69 @@ class LauncherSettingsPersistenceTest {
                 LauncherDatabase.Migration20To21, LauncherDatabase.Migration21To22,
                 LauncherDatabase.Migration22To23, LauncherDatabase.Migration23To24,
                 LauncherDatabase.Migration24To25, LauncherDatabase.Migration25To26,
-                LauncherDatabase.Migration26To27, LauncherDatabase.Migration27To28, LauncherDatabase.Migration28To29, LauncherDatabase.Migration29To30).build()
+                LauncherDatabase.Migration26To27, LauncherDatabase.Migration27To28,
+                LauncherDatabase.Migration28To29).build()
         database = reopened
         return LauncherSettingsRepository(reopened)
+    }
+
+    @Test
+    fun fontColorsAndComponentReferencesSurviveReopeningAndUnrelatedUpdates() = runBlocking {
+        val repository = openRepository()
+        val colors = FontColors(listOf(
+            FontColorEntry(FontColors.DefaultId, "", IconColor(0xFF123456.toInt())),
+            FontColorEntry(FontColors.ThemeId, "", IconColor(0, materialRole = MaterialColorRole.OnPrimary)),
+            FontColorEntry("custom", "Reading", IconColor(0, materialRole = MaterialColorRole.Secondary)),
+        ), wallpaperBrightness = WallpaperBrightness.Light, wallpaperColorAccess = true).normalized()
+        val reference = IconColor(0, fontColorId = "custom")
+        repository.mutateSettings { it.copy(fontColors = colors, listAppearance = it.listAppearance.copy(fontColor = reference)) }
+        val reopened = openRepository()
+        reopened.mutateSettings { it.copy(showBatteryPercentage = false) }
+        val saved = withTimeout(10_000) { openRepository().snapshots.first().settings }
+        assertEquals(colors, saved.fontColors)
+        assertEquals(reference, saved.listAppearance.fontColor)
+        assertEquals(colors, FontColors.decode(colors.encode()))
+        assertEquals(FontColors(), FontColors.decode(null))
+        assertEquals(FontColors(), FontColors.decode("not json"))
+        assertEquals(FontColors(), FontColors.decode("[null,{},5]"))
+    }
+
+    @Test
+    fun legacyFontColorsGainWallpaperEntryWithoutEnablingWallpaperAccess() {
+        val legacy = """[{"id":"custom","name":"Reading","color":{"argb":-15584170}}]"""
+        val migrated = FontColors.decode(legacy)
+        assertEquals(listOf("default", "theme", "wallpaper", "custom", "primary", "secondary", "tertiary"), migrated.entries.map { it.id })
+        assertEquals(0xFF123456.toInt(), migrated.color("custom")!!.argb)
+        assertEquals(WallpaperBrightness.Auto, migrated.wallpaperBrightness)
+        assertFalse(migrated.wallpaperColorAccess)
+        assertEquals(migrated, FontColors.decode(migrated.encode()))
+        val invalid = FontColors.decode("""{"entries":[],"wallpaperBrightness":5,"wallpaperColorAccess":"invalid"}""")
+        assertEquals(FontColors(), invalid)
+        assertEquals(FontColors(), FontColors.decode("{}"))
+    }
+
+    @Test
+    fun themeFontColorSeedsPreserveOlderNamesValuesOrderAndLaterDeletions() {
+        val legacy = """{"entries":[
+            {"id":"custom","name":"Reading","color":{"argb":-15584170}},
+            {"id":"secondary","name":"My accent","color":{"argb":-5517841}},
+            {"id":"other","name":"Other","color":{"materialRole":"Tertiary"}}
+        ],"wallpaperBrightness":"Dark","wallpaperColorAccess":true}"""
+        val migrated = FontColors.decode(legacy)
+        assertEquals(listOf("default", "theme", "wallpaper", "custom", "secondary", "other", "primary", "tertiary"),
+            migrated.entries.map { it.id })
+        val existing = migrated.entries.first { it.id == FontColors.SecondaryId }
+        assertEquals("My accent", existing.name)
+        assertEquals(0xFFABCDEF.toInt(), existing.color.argb)
+        assertEquals(WallpaperBrightness.Dark, migrated.wallpaperBrightness)
+        assertTrue(migrated.wallpaperColorAccess)
+        val removed = migrated.copy(entries = migrated.entries.filterNot {
+            it.id in setOf(FontColors.PrimaryId, FontColors.SecondaryId, FontColors.TertiaryId)
+        })
+        val encoded = removed.encode()
+        assertEquals(1, JSONObject(encoded).getInt("version"))
+        assertEquals(removed, FontColors.decode(encoded))
+        assertEquals(removed, FontColors.decode(FontColors.decode(encoded).encode()))
     }
 
     @Test

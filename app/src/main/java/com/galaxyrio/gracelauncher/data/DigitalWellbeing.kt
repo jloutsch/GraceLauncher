@@ -52,8 +52,24 @@ data class UsageSnapshot(
     /** Saved opening counts, not durations. Replaced only when the sorting snapshot is due. */
     val ranking: Map<String, Long> = emptyMap(),
     val rankedAt: Long = 0,
+    /** Latest seven-local-day opening counts; independent of the saved drawer ordering. */
+    val openCounts: Map<String, Long> = emptyMap(),
 ) {
     val totalDay: Long = day.values.sum()
+}
+
+internal data class UsageReadPlan(val labels: Boolean, val opens: Boolean, val ranking: Boolean)
+
+/** Category counts still require Digital Wellbeing, independently of labels and drawer sorting. */
+internal fun usageReadPlan(settings: DigitalWellbeingSettings, needOpenCounts: Boolean, forceRanking: Boolean,
+    rankedAt: Long, now: Long, zone: ZoneId): UsageReadPlan {
+    val ranking = settings.enabled && (forceRanking ||
+        (settings.sortApps && usageRefreshDue(rankedAt, now, settings.refresh, zone)))
+    return UsageReadPlan(
+        labels = settings.enabled && settings.showUsage && settings.display.isNotEmpty(),
+        opens = settings.enabled && (needOpenCounts || settings.sortApps || ranking),
+        ranking = ranking,
+    )
 }
 
 internal fun usageRefreshDue(previous: Long, now: Long, frequency: UsageRefresh, zone: ZoneId): Boolean {

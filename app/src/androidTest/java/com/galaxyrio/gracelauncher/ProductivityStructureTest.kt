@@ -55,7 +55,7 @@ class ProductivityStructureTest {
     @Test fun homepageEditorPlacesHeightActionBetweenBannerAndSelected() {
         var adjustments = 0
         show(LauncherActions(moveWidget = { adjustments++ }))
-        setting("settings_edit_homepage").assertTextContains(context.getString(R.string.edit_homepage))
+        setting("settings_edit_homepage").assertTextContains(context.getString(R.string.settings_home_screen))
         compose.onNodeWithTag("settings_move_widget").assertDoesNotExist()
         compose.onNodeWithTag("settings_edit_homepage").performClick()
         compose.onNodeWithText(context.getString(R.string.edit_homepage)).assertIsDisplayed()

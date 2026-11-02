@@ -8,6 +8,18 @@ import org.json.JSONArray
 class FavoritesStore internal constructor(private val preferences: SharedPreferences) {
     constructor(context: Context) : this(context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE))
 
+    /** Preview loading must never choose or persist defaults from an incomplete app list. */
+    fun savedFavorites(): List<String>? {
+        preferences.getString(KEY_ORDER, null)?.let { encoded ->
+            runCatching {
+                val array = JSONArray(encoded)
+                List(array.length()) { array.getString(it) }.filter(String::isNotBlank).distinct()
+            }.getOrNull()?.let { return it }
+        }
+        return if (preferences.contains(KEY_FAVORITES))
+            preferences.getStringSet(KEY_FAVORITES, emptySet()).orEmpty().sorted() else null
+    }
+
     fun favoritesFor(apps: List<LauncherApp>): List<String> {
         preferences.getString(KEY_ORDER, null)?.let { encoded ->
             runCatching {

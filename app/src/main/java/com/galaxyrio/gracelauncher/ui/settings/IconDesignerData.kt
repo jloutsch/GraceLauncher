@@ -31,7 +31,11 @@ import com.galaxyrio.gracelauncher.ui.components.LauncherSymbol
 internal fun IconDesignerData(uiState: LauncherUiState, selectedKeys: Set<String>, enabled: Boolean,
     onSelection: (Set<String>) -> Unit, onEdit: (String) -> Unit, modifier: Modifier = Modifier) {
     val entries = remember(uiState.itemIcons, uiState.allApps, uiState.shortcutApps, uiState.folders, uiState.settings.privateSpace.exposesApps) {
-        uiState.itemIcons.keys.filterNot { it.startsWith("profile:") && !uiState.settings.privateSpace.exposesApps && uiState.findItem(it)?.isWorkProfile != true }
+        uiState.itemIcons.keys.filterNot {
+            // Known clone/other profiles remain available. An unresolved profile key may
+            // belong to a locked private space, so do not reveal its saved customization.
+            it.startsWith("profile:") && !uiState.settings.privateSpace.exposesApps && uiState.findItem(it)?.isPrivateSpace != false
+        }
             .sortedWith(compareBy(LauncherLabelOrder) { uiState.findItem(it)?.label ?: it })
     }
     val selecting = selectedKeys.isNotEmpty()

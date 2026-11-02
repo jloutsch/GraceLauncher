@@ -15,11 +15,18 @@ data class AlphabetAppearance(
     val topPercent: Int? = null,
     val bottomPercent: Int = 85,
     val freeMovement: Boolean = true,
+    /** null preserves the legacy home-screen Hide alphabet preference. */
+    val showOnHome: Boolean? = null,
+    val showInAppList: Boolean = true,
+    val rightTouchWidth: Int = 36,
 ) {
+    fun showsOnHome(legacyHideAlphabet: Boolean): Boolean = showOnHome ?: !legacyHideAlphabet
+
     fun normalized(): AlphabetAppearance {
         val top = topPercent?.coerceIn(0, 99)
         return copy(fontSize = fontSize.coerceIn(10, 28), topPercent = top,
             bottomPercent = bottomPercent.coerceIn((top ?: 0) + 1, 100),
+            rightTouchWidth = rightTouchWidth.coerceIn(28, 56),
             pebbleRoundness = pebbleRoundness.coerceIn(0, 100),
             squareCornerRadius = squareCornerRadius.coerceIn(0, 100),
             cookieSides = cookieSides.takeIf { it in IconDesign.CookieSides } ?: 4)
@@ -42,6 +49,8 @@ data class AlphabetAppearance(
         put("pebbleRoundness", value.pebbleRoundness); put("squareCornerRadius", value.squareCornerRadius)
         put("cookieSides", value.cookieSides); put("topPercent", value.topPercent ?: JSONObject.NULL)
         put("bottomPercent", value.bottomPercent); put("freeMovement", value.freeMovement)
+        put("showOnHome", value.showOnHome ?: JSONObject.NULL); put("showInAppList", value.showInAppList)
+        put("rightTouchWidth", value.rightTouchWidth)
     } }
 
     companion object {
@@ -64,6 +73,9 @@ data class AlphabetAppearance(
                     topPercent = top,
                     bottomPercent = bottom,
                     freeMovement = it.optBoolean("freeMovement", defaults.freeMovement),
+                    showOnHome = if (it.isNull("showOnHome")) null else it.optBoolean("showOnHome", true),
+                    showInAppList = it.optBoolean("showInAppList", defaults.showInAppList),
+                    rightTouchWidth = it.optInt("rightTouchWidth", defaults.rightTouchWidth),
                 ).normalized()
             } ?: defaults
         }

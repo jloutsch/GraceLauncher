@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalResources
 import com.materialkolor.PaletteStyle
 import com.galaxyrio.gracelauncher.data.FontLibrary
+import com.galaxyrio.gracelauncher.data.FontColors
 import com.galaxyrio.gracelauncher.data.launcherThemeSeed
 import com.galaxyrio.gracelauncher.data.launcherColorScheme
 
@@ -66,14 +67,20 @@ fun GraceLauncherTheme(
     dynamicColor: Boolean = true,
     seedColor: Color? = null,
     fontLibrary: FontLibrary = FontLibrary(),
+    fontColors: FontColors = FontColors(),
     amoledMode: Boolean = false,
     paletteStyle: PaletteStyle = PaletteStyle.TonalSpot,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = if (seedColor != null || (dynamicColor && Build.VERSION.SDK_INT >= 31)) {
-        val seed = launcherThemeSeed(LocalResources.current, dynamicColor, seedColor?.toArgb() ?: 0xFF6750A4.toInt())
+    val seed = if (seedColor != null || (dynamicColor && Build.VERSION.SDK_INT >= 31))
+        launcherThemeSeed(LocalResources.current, dynamicColor, seedColor?.toArgb() ?: 0xFF6750A4.toInt()) else null
+    val colorScheme = if (seed != null) {
         remember(seed, darkTheme, paletteStyle) { launcherColorScheme(seed, darkTheme, paletteStyle) }
     } else if (darkTheme) DarkColorScheme else LightColorScheme
+    val wallpaperDark = rememberWallpaperIsDark(fontColors.wallpaperBrightness, fontColors.wallpaperColorAccess)
+    val wallpaperScheme = if (seed != null) {
+        remember(seed, wallpaperDark, paletteStyle) { launcherColorScheme(seed, wallpaperDark, paletteStyle) }
+    } else if (wallpaperDark) DarkColorScheme else LightColorScheme
 
     val trueBlack = darkTheme && amoledMode
     // Keep raised cards and accent colors distinct while making page and sheet
@@ -91,6 +98,8 @@ fun GraceLauncherTheme(
     val typography = remember(family) { launcherTypography(family) }
     CompositionLocalProvider(
         LocalFontLibrary provides fontLibrary,
+        LocalFontColors provides fontColors,
+        LocalWallpaperFontColor provides wallpaperScheme.onSurface,
         LocalLauncherTypography provides typography,
         // Elevation tint must not turn the black sheets back into tinted gray.
         LocalTonalElevationEnabled provides (LocalTonalElevationEnabled.current && !trueBlack),

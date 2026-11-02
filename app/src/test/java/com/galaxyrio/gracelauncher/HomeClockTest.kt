@@ -20,8 +20,8 @@ class HomeClockTest {
         assertEquals("٠٩\n٠٥", clockFaceText("٠٩:٠٥", colon.copy(layout = ClockLayout.TwoLines)))
     }
 
-    private fun clock(time: String, use24Hour: Boolean = true, locale: Locale = Locale.US) =
-        formatHomeClock(Instant.parse("2026-09-27T${time}:00Z"), use24Hour, locale, ZoneOffset.UTC)
+    private fun clock(time: String, use24Hour: Boolean = true, locale: Locale = Locale.US, leadingZero: Boolean = true) =
+        formatHomeClock(Instant.parse("2026-09-27T${time}:00Z"), use24Hour, locale, ZoneOffset.UTC, leadingZero)
 
     @Test fun earlyHoursKeepTheLeadingZeroIn24HourMode() {
         assertEquals("09:05", clock("09:05"))
@@ -29,10 +29,18 @@ class HomeClockTest {
         assertEquals("23:59", clock("23:59"))
     }
 
-    @Test fun twelveHourModeDoesNotGainALeadingZero() {
-        assertEquals("9:05", clock("09:05", false))
+    @Test fun twelveHourModeFollowsTheSameLeadingZeroPreference() {
+        assertEquals("09:05", clock("09:05", false))
         assertEquals("12:07", clock("00:07", false))
-        assertEquals("1:05", clock("13:05", false))
+        assertEquals("01:05", clock("13:05", false))
+        assertEquals("9:05", clock("09:05", false, leadingZero = false))
+        assertEquals("1:05", clock("13:05", false, leadingZero = false))
+    }
+
+    @Test fun disablingLeadingZeroOnlyChangesTheHour() {
+        assertEquals("9:05", clock("09:05", leadingZero = false))
+        assertEquals("0:07", clock("00:07", leadingZero = false))
+        assertEquals("23:09", clock("23:09", leadingZero = false))
     }
 
     @Test fun chineseAndJapaneseUseTwoDigit24HourHoursToo() {
@@ -42,5 +50,6 @@ class HomeClockTest {
 
     @Test fun localizedDigitsRemainLocalized() {
         assertEquals("٠٨:٠٤", clock("08:04", locale = Locale.forLanguageTag("ar-u-nu-arab")))
+        assertEquals("٨:٠٤", clock("08:04", locale = Locale.forLanguageTag("ar-u-nu-arab"), leadingZero = false))
     }
 }

@@ -30,7 +30,7 @@ class LauncherReloadTest {
         override fun getNoBackupFilesDir() = directory
     }
     private val component = ComponentName("test.app", "Main")
-    private val installed = setOf(component)
+    private val priorityKeys = setOf(component.flattenToString())
     private fun icon(color: Int) = Bitmap.createBitmap(32, 32, Bitmap.Config.ARGB_8888)
         .apply { eraseColor(color) }.asImageBitmap()
     private fun app() = LauncherApp(component, "Renamed", icon(Color.RED),
@@ -41,14 +41,14 @@ class LauncherReloadTest {
 
     @After fun cleanUp() { directory.deleteRecursively() }
 
-    @Test fun restartRestoresUniqueRowsAndDropsRemovedActivities() = runBlocking {
+    @Test fun restartRestoresUniqueRowsWithAndWithoutPriorityKeys() = runBlocking {
         val app = app()
         val shortcut = LauncherShortcut("compose/email", app.packageName, "Compose", icon(Color.GREEN), component).asApp(app)
         val folder = LauncherFolder("favorites", "Favorites", listOf(app.key), FolderPlacement.Both).asApp()
         val button = GraceButtonIcon.item(target).copy(icon = icon(Color.BLUE))
         val rows = listOf(app, shortcut, folder, button)
         LauncherAppCache(context).save("key", rows + shortcut)
-        val restored = requireNotNull(LauncherAppCache(context).load("key", installed))
+        val restored = requireNotNull(LauncherAppCache(context).load("key", priorityKeys = priorityKeys))
         assertEquals(rows.map { it.key }, restored.map { it.key })
         assertEquals(app.copy(icon = null, monochromeIcon = null), restored[0].copy(icon = null, monochromeIcon = null))
         assertEquals(Color.RED, restored[0].icon!!.asAndroidBitmap().getPixel(16, 16))
@@ -56,20 +56,20 @@ class LauncherReloadTest {
         assertEquals(Color.GREEN, restored[1].shortcut!!.icon!!.asAndroidBitmap().getPixel(16, 16))
         assertEquals(folder, restored[2])
         assertEquals(Color.BLUE, restored[3].icon!!.asAndroidBitmap().getPixel(16, 16))
-        assertEquals(listOf(folder.key, button.key), LauncherAppCache(context).load("key", emptySet())!!.map { it.key })
+        assertEquals(rows.map { it.key }, LauncherAppCache(context).load("key", priorityKeys = emptySet())!!.map { it.key })
         LauncherAppCache(context).save("key", emptyList())
-        assertEquals(emptyList<LauncherApp>(), LauncherAppCache(context).load("key", installed))
+        assertEquals(emptyList<LauncherApp>(), LauncherAppCache(context).load("key", priorityKeys = priorityKeys))
     }
 
     @Test fun missingMismatchedOrDamagedPreviewFallsBackAndCanBeReplaced() = runBlocking {
         val cache = LauncherAppCache(context)
-        assertNull(cache.load("key", installed))
+        assertNull(cache.load("key", priorityKeys = priorityKeys))
         cache.save("key", listOf(app()))
-        assertNull(cache.load("changed appearance", installed))
+        assertNull(cache.load("changed appearance", priorityKeys = priorityKeys))
         File(directory, "launcher-apps.json").writeText("{truncated")
-        assertNull(cache.load("key", installed))
+        assertNull(cache.load("key", priorityKeys = priorityKeys))
         cache.save("key", listOf(app()))
-        assertNotNull(cache.load("key", installed))
+        assertNotNull(cache.load("key", priorityKeys = priorityKeys))
     }
 
     @Test fun profileAppsAndShortcutsNeverEnterThePersonalPreview() = runBlocking {
@@ -80,7 +80,7 @@ class LauncherReloadTest {
         val shortcut = LauncherShortcut("secret", app.packageName, "Secret", null, component).asApp(privateApp)
         val cache = LauncherAppCache(context)
         cache.save("key", listOf(app, privateApp, workApp, shortcut))
-        assertEquals(listOf(app.key), requireNotNull(cache.load("key", installed)).map { it.key })
+        assertEquals(listOf(app.key), requireNotNull(cache.load("key", priorityKeys = priorityKeys)).map { it.key })
         assertFalse(File(directory, "launcher-apps.json").readText().contains("secret"))
     }
 

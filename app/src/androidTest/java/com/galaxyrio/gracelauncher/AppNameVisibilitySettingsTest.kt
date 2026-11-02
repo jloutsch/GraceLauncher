@@ -20,7 +20,7 @@ import org.junit.Test
 class AppNameVisibilitySettingsTest {
     @get:Rule val compose = createComposeRule()
 
-    @Test fun dialogHasNeitherThenTheIndependentFolderSwitch() {
+    @Test fun inlineButtonsSupportAllNameCombinationsAndTheIndependentFolderSwitch() {
         var state by mutableStateOf(LauncherUiState(isLoadingApps = false))
         compose.setContent {
             GraceLauncherTheme(dynamicColor = false) {
@@ -29,21 +29,33 @@ class AppNameVisibilitySettingsTest {
             }
         }
         compose.onNodeWithTag("list_appearance_controls").performScrollToNode(hasTestTag("list_show_names"))
-        compose.onNodeWithTag("list_show_names").performClick()
+        compose.onNodeWithTag("list_names_home").assertIsOn()
+        compose.onNodeWithTag("list_names_app_list").assertIsOn()
+        compose.runOnIdle { assertEquals(AppNameVisibility.Both, state.settings.listAppearance.names) }
+        compose.onNodeWithTag("list_names_home").performClick().assertIsOff()
+        compose.runOnIdle { assertEquals(AppNameVisibility.AppList, state.settings.listAppearance.names) }
+        compose.onNodeWithTag("list_names_app_list").performClick().assertIsOff()
+        compose.runOnIdle { assertEquals(AppNameVisibility.Neither, state.settings.listAppearance.names) }
         compose.onNodeWithTag("list_names_in_folders").performScrollTo().assertIsOff()
-        val neither = compose.onNodeWithTag("list_names:Neither").fetchSemanticsNode().boundsInRoot
+        val home = compose.onNodeWithTag("list_names_home").fetchSemanticsNode().boundsInRoot
+        val appList = compose.onNodeWithTag("list_names_app_list").fetchSemanticsNode().boundsInRoot
         val toggle = compose.onNodeWithTag("list_names_in_folders").fetchSemanticsNode().boundsInRoot
-        assertTrue(neither.bottom <= toggle.top)
+        assertEquals(home.top, appList.top, 1f)
+        assertTrue(maxOf(home.bottom, appList.bottom) <= toggle.top)
         compose.onNodeWithTag("list_names_in_folders").performClick().assertIsOn()
-        compose.onNodeWithTag("list_names:Neither").performScrollTo().performClick()
         compose.runOnIdle {
             assertEquals(AppNameVisibility.Neither, state.settings.listAppearance.names)
             assertTrue(state.settings.listAppearance.applyNameVisibilityToFolders)
         }
-        compose.onNodeWithTag("list_show_names").performClick()
-        compose.onNodeWithTag("list_names:Neither").assertIsSelected()
+        compose.onNodeWithTag("list_names_home").performScrollTo().performClick().assertIsOn()
+        compose.runOnIdle {
+            assertEquals(AppNameVisibility.Favorites, state.settings.listAppearance.names)
+            assertTrue(state.settings.listAppearance.applyNameVisibilityToFolders)
+        }
+        compose.onNodeWithTag("list_names_app_list").performClick().assertIsOn()
+        compose.runOnIdle { assertEquals(AppNameVisibility.Both, state.settings.listAppearance.names) }
         compose.onNodeWithTag("list_names_in_folders").performScrollTo().performClick().assertIsOff()
-        compose.runOnIdle { assertEquals(AppNameVisibility.Neither, state.settings.listAppearance.names) }
+        compose.runOnIdle { assertEquals(AppNameVisibility.Both, state.settings.listAppearance.names) }
     }
 
     @Test fun homeFolderNamesAreVisibleUntilOptedInAndFollowTheSourceSurface() {
@@ -68,11 +80,15 @@ class AppNameVisibilitySettingsTest {
     }
 
     @Test fun settingsRoundTripAndExistingDataDefaultsToUnaffectedFolderContents() {
-        val settings = ListAppearance(names = AppNameVisibility.Neither, applyNameVisibilityToFolders = true)
+        val settings = ListAppearance(names = AppNameVisibility.Neither, applyNameVisibilityToFolders = true,
+            symbolHorizontalOffset = -7)
         assertEquals(settings, ListAppearance.decode(settings.encode()))
         val legacy = ListAppearance.decode("""{"names":"AppList"}""")
         assertEquals(AppNameVisibility.AppList, legacy.names)
         assertFalse(legacy.applyNameVisibilityToFolders)
         assertTrue(legacy.showNames(favorites = true, insideFolder = true))
+        assertEquals(0, legacy.symbolHorizontalOffset)
+        assertEquals(16, ListAppearance.decode(settings.copy(symbolHorizontalOffset = 40).encode()).symbolHorizontalOffset)
+        assertEquals(-16, ListAppearance.decode("""{"symbolHorizontalOffset":-40}""").symbolHorizontalOffset)
     }
 }

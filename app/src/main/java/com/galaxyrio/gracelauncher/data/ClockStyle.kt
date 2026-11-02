@@ -21,7 +21,22 @@ enum class ClockLayout(
     SacramentoWeek(week = true, presetFont = ClockPresetFont.Sacramento);
 
     val allowsCustomFont: Boolean get() = presetFont == null
+    val baseLayout: ClockLayout get() = when {
+        week -> Week
+        stacked -> TwoLines
+        else -> SingleLine
+    }
 }
+
+data class ClockVisibility(
+    val showClock: Boolean = true,
+    val showWeekday: Boolean = true,
+    val showDate: Boolean = true,
+    val showBattery: Boolean = true,
+    val showWeather: Boolean = true,
+)
+
+enum class ClockColorPart { HourTens, HourOnes, MinuteTens, MinuteOnes, Weekday, Month, Day, Battery, Weather }
 
 data class ClockFaceStyle(
     val fontId: String? = null,
@@ -32,6 +47,7 @@ data class ClockFaceStyle(
     val separateDigits: Boolean = false,
     val hourMinuteSpacing: Int = 12,
     val fontShadow: Int = 0,
+    val showLeadingZero: Boolean = true,
 ) {
     fun maxWeight(layout: ClockLayout) = if (layout.presetFont == null && fontId == null) 700 else 900
 
@@ -51,7 +67,11 @@ data class ClockStyle(
     val singleLine: ClockFaceStyle = defaults(ClockLayout.SingleLine),
     val twoLines: ClockFaceStyle = defaults(ClockLayout.TwoLines),
     val presets: Map<ClockLayout, ClockFaceStyle> = emptyMap(),
+    val visibility: ClockVisibility = ClockVisibility(),
+    val colors: Map<ClockColorPart, IconColor> = emptyMap(),
 ) {
+    val effectiveVisibility: ClockVisibility get() = if (layout.presetFont != null) ClockVisibility() else visibility
+
     val face: ClockFaceStyle get() = when (layout) {
         ClockLayout.SingleLine -> singleLine
         ClockLayout.TwoLines -> twoLines
@@ -72,8 +92,32 @@ data class ClockStyle(
         return copy(singleLine = singleLine.clean(), twoLines = twoLines.clean(), presets = presets.mapValues { it.value.clean() })
     }
 
+    /** Copy the active preset into its editable base slot, keeping every preset draft. */
+    fun applyPresetToBase(applyVisibility: Boolean = true): ClockStyle {
+        val fontId = when (layout.presetFont ?: return this) {
+            ClockPresetFont.Sacramento -> AppFont.Sacramento.id
+            ClockPresetFont.Bokor -> AppFont.Bokor.id
+            ClockPresetFont.Plaster -> AppFont.Plaster.id
+            ClockPresetFont.Monoton -> AppFont.Monoton.id
+            ClockPresetFont.LuckiestGuy -> AppFont.LuckiestGuy.id
+        }
+        return copy(layout = layout.baseLayout,
+            visibility = if (applyVisibility) effectiveVisibility else visibility)
+            .withFace(face.copy(fontId = fontId))
+    }
+
     fun encode(): String = JSONObject().apply {
         put("layout", layout.name)
+        put("visibility", JSONObject().apply {
+            put("showClock", visibility.showClock)
+            put("showWeekday", visibility.showWeekday)
+            put("showDate", visibility.showDate)
+            put("showBattery", visibility.showBattery)
+            put("showWeather", visibility.showWeather)
+        })
+        put("colors", JSONObject().apply {
+            colors.forEach { (part, color) -> put(part.name, color.json()) }
+        })
         fun encodeFace(face: ClockFaceStyle, layout: ClockLayout) = JSONObject().apply {
             val safe = face.normalized(layout)
             put("fontId", safe.fontId ?: JSONObject.NULL)
@@ -84,6 +128,7 @@ data class ClockStyle(
             put("fontShadow", safe.fontShadow)
             put("showColon", safe.showColon)
             put("separateDigits", safe.separateDigits)
+            put("showLeadingZero", safe.showLeadingZero)
         }
         // Preserve the original keys so existing clocks keep their saved appearance.
         put("singleLine", encodeFace(singleLine, ClockLayout.SingleLine))
@@ -105,7 +150,7 @@ data class ClockStyle(
             ClockLayout.Lucky -> ClockFaceStyle(letterSpacing = -6, separateDigits = true)
         }
 
-        fun decode(value: String?): ClockStyle = runCatching {
+        fun decode(value: String?, legacyShowBattery: Boolean = true): ClockStyle = runCatching {
             val json = JSONObject(value ?: "{}")
             fun face(layout: ClockLayout, data: JSONObject?): ClockFaceStyle {
                 val defaults = defaults(layout)
@@ -119,16 +164,29 @@ data class ClockStyle(
                     fontShadow = data.optInt("fontShadow", defaults.fontShadow),
                     showColon = data.optBoolean("showColon", defaults.showColon),
                     separateDigits = data.optBoolean("separateDigits", defaults.separateDigits),
+                    showLeadingZero = data.optBoolean("showLeadingZero", defaults.showLeadingZero),
                 ).normalized(layout)
             }
             val presets = json.optJSONObject("presets")
+            val visibility = json.optJSONObject("visibility")
+            val colors = json.optJSONObject("colors")
             ClockStyle(
                 layout = ClockLayout.entries.firstOrNull { it.name == json.optString("layout") } ?: ClockLayout.SingleLine,
                 singleLine = face(ClockLayout.SingleLine, json.optJSONObject("singleLine")),
                 twoLines = face(ClockLayout.TwoLines, json.optJSONObject("twoLines")),
                 presets = ClockLayout.entries.filter { presets?.has(it.name) == true }
                     .associateWith { face(it, presets?.optJSONObject(it.name)) },
+                visibility = if (visibility == null) ClockVisibility(showBattery = legacyShowBattery) else ClockVisibility(
+                    showClock = visibility.optBoolean("showClock", true),
+                    showWeekday = visibility.optBoolean("showWeekday", true),
+                    showDate = visibility.optBoolean("showDate", true),
+                    showBattery = visibility.optBoolean("showBattery", true),
+                    showWeather = visibility.optBoolean("showWeather", true),
+                ),
+                colors = ClockColorPart.entries.mapNotNull { part ->
+                    IconColor.decode(colors?.optJSONObject(part.name))?.let { part to it }
+                }.toMap(),
             )
-        }.getOrDefault(ClockStyle())
+        }.getOrDefault(ClockStyle(visibility = ClockVisibility(showBattery = legacyShowBattery)))
     }
 }

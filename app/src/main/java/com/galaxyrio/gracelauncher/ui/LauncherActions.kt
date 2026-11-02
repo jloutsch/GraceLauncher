@@ -3,6 +3,7 @@ package com.galaxyrio.gracelauncher.ui
 import androidx.compose.ui.geometry.Rect
 import android.net.Uri
 import com.galaxyrio.gracelauncher.data.ItemIcon
+import com.galaxyrio.gracelauncher.data.AppCategory
 import com.galaxyrio.gracelauncher.data.PopupItem
 import com.galaxyrio.gracelauncher.data.LauncherApp
 import com.galaxyrio.gracelauncher.data.LauncherFolder
@@ -20,6 +21,7 @@ import com.galaxyrio.gracelauncher.data.media.MediaCommand
 data class LauncherActions(
     val requestDefaultHome: () -> Unit = {},
     val openHome: () -> Unit = {},
+    val chooseWallpaper: () -> Unit = {},
     val requestUsageAccess: () -> Unit = {},
     val refreshUsageRanking: () -> Unit = {},
     val requestPrivateSpace: (Boolean, () -> Unit) -> Unit = { _, _ -> },
@@ -62,6 +64,10 @@ data class LauncherActions(
     val updateFolder: (String, String?, FolderPlacement?, Boolean?) -> Unit = { _, _, _, _ -> },
     val setFolderFavorites: suspend (Map<String, Boolean>) -> Boolean = { false },
     val deleteFolder: (String) -> Unit = {},
+    val saveAppCategory: (AppCategory) -> Unit = {},
+    val updateAppCategory: (String, (AppCategory) -> AppCategory) -> Unit = { _, _ -> },
+    val deleteAppCategory: (String) -> Unit = {},
+    val toggleCategoryItem: (String, LauncherApp) -> Unit = { _, _ -> },
     val shortcuts: suspend (LauncherApp) -> ShortcutResult = { ShortcutResult(ShortcutStatus.DefaultLauncherRequired) },
     val cachedShortcuts: (LauncherApp) -> ShortcutResult? = { null },
     val prepareShortcuts: (LauncherApp) -> Unit = {},

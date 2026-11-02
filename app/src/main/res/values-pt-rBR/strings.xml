@@ -183,7 +183,6 @@
     <string name="drawer_folders">Pastas</string>
     <string name="recently_installed">Instalados recentemente</string>
     <string name="hide_recently_installed">Ocultar instalados recentemente</string>
-    <string name="settings_recently_installed_summary">Mostrar os 8 aplicativos mais recentemente instalados na lista de aplicativos</string>
     <string name="add_to_folder">Adicionar à pasta</string>
     <string name="create_app_folder">Nova pasta na lista de aplicativos</string>
     <string name="favorites_selected">Selecionado(s)</string>
@@ -322,7 +321,6 @@
     <string name="font_apply_settings">Aplicar fonte nas configurações</string>
     <string name="font_apply_settings_summary">Use as fontes combinadas nas configurações do Grace</string>
     <string name="font_import_error">Não foi possível importar esta fonte. Escolha um arquivo TTF, OTF ou TTC válido, até 20 MB.</string>
-    <string name="settings_wallpaper_text">Cor do texto</string>
     <string name="settings_text_auto">Automático</string>
     <string name="settings_text_light">Texto claro</string>
     <string name="settings_text_dark">Texto escuro</string>
@@ -331,8 +329,6 @@
     <string name="settings_misc">Vários</string>
     <string name="settings_hide_status_bar">Esconder a barra superior</string>
     <string name="settings_hide_status_bar_summary">Ocultar na tela inicial e na lista de aplicativos</string>
-    <string name="settings_hide_alphabet">Ocultar alfabeto</string>
-    <string name="settings_hide_alphabet_summary">Ocultar na tela inicial até deslizar o alfabeto</string>
     <string name="settings_hide_favorite_names">Ocultar nomes dos favoritos</string>
     <string name="settings_hide_favorite_names_summary">Manter os nomes visíveis na lista de aplicativos</string>
     <string name="settings_dim_wallpaper">Acentuar papel de parede</string>
@@ -659,13 +655,8 @@
     <string name="list_font_color">Cor da fonte</string>
     <string name="list_color_default">Seguir a cor do texto do papel de parede</string>
     <string name="list_show_names">Mostrar nomes de aplicativos</string>
-    <string name="list_names_both">Favoritos e lista de aplicativos</string>
-    <string name="list_names_favorites">Apenas favoritos</string>
-    <string name="list_names_app_list">Apenas a lista de aplicativos</string>
-    <string name="list_names_neither">Nenhum</string>
     <string name="list_names_in_folders">Aplicar também dentro das pastas</string>
     <string name="list_left_alphabet">Utilizar o alfabeto na esquerda</string>
-    <string name="list_left_alphabet_summary">Deslize o dedo pela borda esquerda para controlar o alfabeto à direita</string>
     <string name="shortcuts_folders_title">Atalhos e pastas</string>
     <string name="popups_title">Janelas flutuantes</string>
     <string name="shortcuts_folders_enable">Ativar janela flutuante de aplicativos</string>
@@ -686,7 +677,6 @@
     <string name="alphabet_top">Posição superior</string>
     <string name="alphabet_bottom">Posição inferior</string>
     <string name="alphabet_free_movement">Movimentação livre</string>
-    <string name="alphabet_free_movement_summary">Arraste para além de qualquer fim para mover o alfabeto. Solte para voltar.</string>
     <string name="alphabet_automatic_spacing">Automático · espaçamento de %1$d dp</string>
     <string name="settings_palette_style">Estilo da paleta</string>
     <string name="palette_tonal_spot">Ponto tonal</string>
@@ -702,7 +692,6 @@
     <string name="settings_folder_auto_hide">Ocultar automaticamente aplicativos internamente</string>
     <string name="settings_folder_auto_hide_summary">Ocultar elementos atuais e futuros da lista de aplicativos. Ocultados manualmente são mantidos quando os aplicativos deixam esta pasta.</string>
     <string name="hidden_from_folder">Ocultar via pasta</string>
-    <string name="settings_additional_screen">Tela adicional</string>
     <string name="widget_screen_title">Tela de \"widget\"</string>
     <string name="widget_screen_enable">Habilitar a tela de \"widgets\"</string>
     <string name="widget_screen_swipe">Deslizar para esquerda na tela inicial</string>

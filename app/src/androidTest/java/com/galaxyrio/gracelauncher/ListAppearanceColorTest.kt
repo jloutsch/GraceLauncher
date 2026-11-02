@@ -44,7 +44,7 @@ class ListAppearanceColorTest {
         scrollTo("settings_dim_wallpaper_color")
         compose.onNodeWithTag("settings_dim_wallpaper_amount").assertExists()
         compose.onNodeWithTag("settings_dim_wallpaper_color").performClick()
-        compose.onNodeWithTag("list_appearance_preview").assertIsDisplayed()
+        compose.onNodeWithTag("wallpaper_settings").assertIsDisplayed()
         compose.onNodeWithTag("icon_designer_color_source:FromApp", useUnmergedTree = true).assertDoesNotExist()
         compose.onNodeWithTag("icon_designer_color_source:Theme", useUnmergedTree = true).performClick()
         compose.onNodeWithTag("icon_designer_color_plane").assertDoesNotExist()
@@ -70,8 +70,10 @@ class ListAppearanceColorTest {
     @Test fun bothColorPickersSaveOnBackAndResetIndependently() {
         state = state.copy(settings = state.settings.copy(dimWallpaper = true,
             listAppearance = ListAppearance(wallpaperDimColor = IconColor(0xFF274B62.toInt()))))
-        showSettings()
-        scrollTo("list_font_color")
+        showSettings("Themes")
+        compose.onNodeWithTag("settings_list").performScrollToNode(hasTestTag("settings_list_appearance"))
+        compose.onNodeWithTag("settings_list_appearance").performClick()
+        scrollTo("list_font_color", "list_appearance_controls")
         compose.onNodeWithTag("list_font_color").performClick()
         compose.onNodeWithTag("list_appearance_preview").assertIsDisplayed()
         compose.onNodeWithTag("icon_designer_color_source:FromApp", useUnmergedTree = true).assertDoesNotExist()
@@ -80,6 +82,9 @@ class ListAppearanceColorTest {
         compose.onNodeWithTag("settings_back").performClick()
         compose.onNodeWithTag("list_font_color").assertIsDisplayed()
         compose.runOnIdle { assertEquals(IconColor(0xFFFFCC00.toInt()), state.settings.listAppearance.fontColor) }
+        compose.onNodeWithTag("settings_back").performClick()
+        compose.onNodeWithTag("settings_list").performScrollToNode(hasTestTag("settings_wallpaper"))
+        compose.onNodeWithTag("settings_wallpaper").performClick()
         scrollTo("settings_dim_wallpaper_color")
         compose.onNodeWithTag("settings_dim_wallpaper_color").performClick()
         compose.onNodeWithTag("icon_designer_color_reset").performScrollTo().performClick()
@@ -119,13 +124,14 @@ class ListAppearanceColorTest {
         }
     }
 
-    private fun scrollTo(tag: String) = compose.onNodeWithTag("list_appearance_controls").performScrollToNode(hasTestTag(tag))
+    private fun scrollTo(tag: String, controls: String = "wallpaper_controls") =
+        compose.onNodeWithTag(controls).performScrollToNode(hasTestTag(tag))
 
-    private fun showSettings() {
+    private fun showSettings(initialPage: String = "Wallpaper") {
         compose.setContent {
             GraceLauncherTheme(dynamicColor = false) {
                 LauncherSettingsScreen(state, LauncherActions(updateSettings = { state = state.copy(settings = it(state.settings)) }),
-                    onBack = {}, initialPage = "ListAppearance")
+                    onBack = {}, initialPage = initialPage)
             }
         }
     }

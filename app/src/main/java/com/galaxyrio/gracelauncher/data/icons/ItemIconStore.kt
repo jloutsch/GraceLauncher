@@ -15,6 +15,9 @@ import android.net.Uri
 import android.os.Build
 import android.util.LruCache
 import android.util.Log
+import androidx.compose.material3.ColorScheme
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.ImageBitmap
@@ -25,33 +28,46 @@ import com.galaxyrio.gracelauncher.data.PrivateSpaceFolderId
 import com.galaxyrio.gracelauncher.data.LauncherSettings
 import com.galaxyrio.gracelauncher.data.ThemeMode
 import com.galaxyrio.gracelauncher.data.launcherIconColors
+import com.galaxyrio.gracelauncher.data.launcherColorScheme
 import com.galaxyrio.gracelauncher.data.launcherThemeSeed
+import com.galaxyrio.gracelauncher.data.MaterialColorRole
 import com.materialkolor.PaletteStyle
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.UUID
 import java.time.LocalDate
 
 /** Copy a bounded image into private storage; no persistent gallery/storage permission needed. */
-class ItemIconStore(private val context: Context, private val packs: IconPackRepository) {
+class ItemIconStore(context: Context, private val packs: IconPackRepository) {
+    private val context = context.applicationContext
     private val directory get() = File(context.filesDir, "item_icons")
     private val images = LruCache<String, Bitmap>(12)
     private val themePalettes = LruCache<Triple<Int, Boolean, PaletteStyle>, Pair<Int, Int>>(8)
     private val appPalettes = LruCache<Triple<Int, Boolean, PaletteStyle>, Pair<Int, Int>>(256)
+    private data class SchemeKey(val seed: Int, val dark: Boolean, val style: PaletteStyle, val amoled: Boolean)
+    private val colorSchemes = LruCache<SchemeKey, ColorScheme>(8)
     private data class RenderSignature(val source: Any?, val choice: ItemIcon,
         val packs: List<Any?>, val theme: Pair<Int, Int>, val dynamic: Pair<Int, Int>,
-        val fromApp: Pair<Int, Int>?, val configuration: Configuration, val day: LocalDate)
+        val fromApp: Pair<Int, Int>?, val materialColors: List<Int>?,
+        val configuration: IconResourceConfiguration, val calendarDay: Int?)
     private val renderedIcons = IconSnapshotCache<RenderSignature, ImageBitmap>(maxBytes = 16 * 1024 * 1024,
         sizeOf = { iconBitmapBytes(it) })
+    // Activities and live editors share this store. Serialize matching icon work,
+    // while unrelated icons can still render concurrently on IO.
+    private val renderLocks = Array(16) { Mutex() }
 
     private fun imageBitmap(name: String, size: Int): Bitmap? = runCatching {
         val key = "$name:$size"
-        images[key] ?: ImageDecoder.decodeBitmap(ImageDecoder.createSource(imageFile(name))) { decoder, info, _ ->
-            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
-            decoder.setTargetSize(size, size)
-        }.also { images.put(key, it) }
+        synchronized(images) {
+            images[key] ?: ImageDecoder.decodeBitmap(ImageDecoder.createSource(imageFile(name))) { decoder, _, _ ->
+                decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+                decoder.setTargetSize(size, size)
+            }.also { images.put(key, it) }
+        }
     }.getOrNull()
 
     suspend fun importImage(uri: Uri): ItemIcon = withContext(Dispatchers.IO) {
@@ -79,6 +95,17 @@ class ItemIconStore(private val context: Context, private val packs: IconPackRep
     internal fun themeColors(settings: LauncherSettings): Pair<Int, Int> {
         val seed = launcherThemeSeed(context.resources, settings.useDynamicColors, settings.themeColor)
         return paletteColors(seed, isDark(settings), settings.paletteStyle)
+    }
+
+    internal fun colorScheme(settings: LauncherSettings): ColorScheme {
+        val dark = isDark(settings)
+        val key = SchemeKey(launcherThemeSeed(context.resources, settings.useDynamicColors, settings.themeColor),
+            dark, settings.paletteStyle, dark && settings.amoledMode)
+        return colorSchemes[key] ?: launcherColorScheme(key.seed, key.dark, key.style).let { scheme ->
+            if (key.amoled) scheme.copy(background = Color.Black, surface = Color.Black, surfaceDim = Color.Black,
+                surfaceContainerLowest = Color.Black, surfaceContainerLow = Color.Black, surfaceContainer = Color.Black)
+            else scheme
+        }.also { colorSchemes.put(key, it) }
     }
 
     private fun paletteColors(seed: Int, dark: Boolean, style: PaletteStyle): Pair<Int, Int> {
@@ -113,7 +140,9 @@ class ItemIconStore(private val context: Context, private val packs: IconPackRep
                 })
                     ?.mutate() ?: return@withContext null
                 glyph.setTint(colors.second)
-                return@withContext iconLayers(AdaptiveIconDrawable(ColorDrawable(colors.first), InsetDrawable(glyph, 0.22f)), size, themed = true)
+                // Adaptive foreground bounds are 1.5 times the visible icon. These insets
+                // keep the symbol at 60% of the icon size, matching FolderIcon.
+                return@withContext iconLayers(AdaptiveIconDrawable(ColorDrawable(colors.first), InsetDrawable(glyph, 0.3f)), size, themed = true)
             }
             val packed = when (choice.kind) {
                 "theme" -> if (app.shortcut == null) settings.enabledIconPackPackages.firstNotNullOfOrNull {
@@ -157,7 +186,7 @@ class ItemIconStore(private val context: Context, private val packs: IconPackRep
                 val fromApp = if (design.background?.fromApp == true || design.foreground?.fromApp == true)
                     appColors(app.originalIconColor, settings) else null
                 return@safelyRender app.copy(icon = renderDesignedIcon(original, design, colors.first, colors.second,
-                    theme.first, theme.second, fromApp).asImageBitmap(),
+                    theme.first, theme.second, fromApp, colorScheme(settings)).asImageBitmap(),
                     monochromeIcon = null, iconPackPackage = when (choice.kind) {
                         "theme" -> app.themeIconPackPackage
                         "pack" -> choice.source
@@ -218,32 +247,44 @@ class ItemIconStore(private val context: Context, private val packs: IconPackRep
             }
             val source = if (app.folderId != null) app.folderId to app.isAppStack
                 else app.iconSourceRevision ?: app.profileIconSource?.cacheKey ?: app.icon
+            val loadedPacks = selectedPacks.map { packs.load(it) }
+            val usesCalendar = (choice.kind == "theme" && app.shortcut == null ||
+                choice.kind == "pack" && choice.name.isEmpty()) &&
+                loadedPacks.any { it?.hasCalendarFor(app.componentName) == true }
             val signature = RenderSignature(source, choice,
-                selectedPacks.map { packs.load(it)?.cacheKey }, themeColors(settings), dynamicColors(settings),
+                loadedPacks.map { it?.cacheKey }, themeColors(settings), dynamicColors(settings),
                 if (choice.design?.background?.fromApp == true || choice.design?.foreground?.fromApp == true)
                     appColors(app.originalIconColor, settings) else null,
-                Configuration(context.resources.configuration), LocalDate.now())
+                if (choice.design?.background?.materialRole != null || choice.design?.foreground?.materialRole != null)
+                    colorScheme(settings).let { scheme -> MaterialColorRole.entries.map { it.color(scheme).toArgb() } } else null,
+                IconResourceConfiguration.read(context), LocalDate.now().dayOfMonth.takeIf { usesCalendar })
             // A successful design produces only a bitmap. All metadata comes from the
             // current app/choice, so a cache hit cannot restore old labels or badges.
-            renderedIcons.get(app.key, signature)?.let { icon ->
-                return@withContext app.copy(icon = icon, monochromeIcon = null, iconDisplay = choice.display,
-                    iconPackPackage = when (choice.kind) {
-                        "theme" -> app.themeIconPackPackage
-                        "pack" -> choice.source
-                        else -> null
-                    })
-            }
-            apply(app, choice, settings).also {
-                // Rendering failures fall back to app.icon; don't memoize that failure.
-                if (it.icon != null && it.icon !== app.icon) renderedIcons.put(app.key, signature, it.icon)
+            renderLocks[Math.floorMod(app.key.hashCode(), renderLocks.size)].withLock {
+                renderedIcons.get(app.key, signature).takeUnless { app.isPrivateSpace }?.let { icon ->
+                    return@withLock app.copy(icon = icon, monochromeIcon = null, iconDisplay = choice.display,
+                        iconPackPackage = when (choice.kind) {
+                            "theme" -> app.themeIconPackPackage
+                            "pack" -> choice.source
+                            else -> null
+                        })
+                }
+                apply(app, choice, settings).also {
+                    // Rendering failures fall back to app.icon; don't memoize that failure.
+                    if (!app.isPrivateSpace && it.icon != null && it.icon !== app.icon) {
+                        renderedIcons.put(app.key, signature, it.icon)
+                    }
+                }
             }
         }
     }
 
     suspend fun deleteImage(choice: ItemIcon?) = withContext(Dispatchers.IO) {
         if (choice?.kind == "image") runCatching {
-            images.snapshot().keys.filter { it.startsWith("${choice.source}:") }.forEach(images::remove)
-            imageFile(choice.source).delete()
+            synchronized(images) {
+                images.snapshot().keys.filter { it.startsWith("${choice.source}:") }.forEach(images::remove)
+                imageFile(choice.source).delete()
+            }
         }
         Unit
     }
@@ -251,5 +292,13 @@ class ItemIconStore(private val context: Context, private val packs: IconPackRep
     private fun imageFile(name: String): File {
         require(name.matches(Regex("[a-fA-F0-9-]{36}\\.png")))
         return File(directory, name)
+    }
+
+    companion object {
+        @Volatile private var instance: ItemIconStore? = null
+        fun get(context: Context, packs: IconPackRepository = IconPackRepository.get(context)): ItemIconStore =
+            instance ?: synchronized(this) {
+                instance ?: ItemIconStore(context.applicationContext, packs).also { instance = it }
+            }
     }
 }

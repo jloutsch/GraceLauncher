@@ -65,7 +65,7 @@ internal fun appFontLabel(id: String?): String = when (id) {
     else -> ClockFontStore.displayName(id) ?: stringResource(R.string.clock_font_unavailable)
 }
 
-/** Component pickers only expose enabled fonts; adding/managing always uses the same page. */
+/** Show enabled fonts and the current choice; adding/managing always uses the same page. */
 @Composable
 internal fun FontPickerDialog(library: FontLibrary, selected: String?, onSelect: (String?) -> Unit,
     onManage: () -> Unit, onDismiss: () -> Unit, tag: String = "font_picker") {
@@ -73,11 +73,13 @@ internal fun FontPickerDialog(library: FontLibrary, selected: String?, onSelect:
     val store = remember(context) { ClockFontStore(context) }
     val files by produceState(emptyList<ClockFontFile>(), store) { value = store.list() }
     val available = FontLibrary.builtIns + files.map { it.id }
+    // A preset can select a built-in font without enabling it throughout the launcher.
+    val choices = (library.selected + listOfNotNull(selected)).distinct().filter { it in available }
     AlertDialog(onDismissRequest = onDismiss, title = { Text(stringResource(R.string.settings_font)) },
         text = {
             LazyColumn(Modifier.heightIn(max = 360.dp).selectableGroup().testTag(tag)) {
                 item("default") { FontOption(null, selected == null, onSelect) }
-                items(library.selected.filter { it in available }, key = { it }) { id -> FontOption(id, selected == id, onSelect) }
+                items(choices, key = { it }) { id -> FontOption(id, selected == id, onSelect) }
             }
         },
         confirmButton = { TextButton(onClick = onManage) { Text(stringResource(R.string.popup_add_new)) } },
@@ -95,7 +97,7 @@ private fun FontOption(id: String?, checked: Boolean, onSelect: (String?) -> Uni
 }
 
 @Composable
-internal fun FontSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit) {
+internal fun FontSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit, onFontColors: () -> Unit) {
     val context = LocalContext.current
     val store = remember(context) { ClockFontStore(context) }
     val scope = rememberCoroutineScope()
@@ -182,9 +184,12 @@ internal fun FontSettings(uiState: LauncherUiState, actions: LauncherActions, on
                 userScrollEnabled = reorder.draggingKey == null) {
                 item("settings") {
                     SettingsToggleItem(stringResource(R.string.font_apply_settings), stringResource(R.string.font_apply_settings_summary),
-                        uiState.settings.applyFontToSettings, 0, 1, "apply_font_to_settings", enabled = enabled) { value ->
+                        uiState.settings.applyFontToSettings, 0, 2, "apply_font_to_settings", enabled = enabled) { value ->
                         actions.updateSettings { it.copy(applyFontToSettings = value) }
                     }
+                    Spacer(Modifier.height(ListItemDefaults.SegmentedGap))
+                    SettingsActionItem(stringResource(R.string.list_font_color), null,
+                        1, 2, "font_colors", enabled = enabled, onClick = onFontColors)
                     Spacer(Modifier.height(16.dp))
                 }
                 item("add") {
@@ -243,3 +248,10 @@ internal fun FontSettings(uiState: LauncherUiState, actions: LauncherActions, on
         }
     }
 }
+
+@Composable
+private fun WallpaperTextMode.label(): String = stringResource(when (this) {
+    WallpaperTextMode.Auto -> R.string.settings_text_auto
+    WallpaperTextMode.Light -> R.string.settings_text_light
+    WallpaperTextMode.Dark -> R.string.settings_text_dark
+})

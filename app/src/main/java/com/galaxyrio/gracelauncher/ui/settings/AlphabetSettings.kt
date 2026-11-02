@@ -8,24 +8,21 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.AbsoluteRoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.Saver
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.galaxyrio.gracelauncher.R
@@ -37,21 +34,29 @@ import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.components.AlphabetRail
 import com.galaxyrio.gracelauncher.ui.drawer.AppListModel
+import com.galaxyrio.gracelauncher.ui.home.rememberHeadphonesConnected
+import com.galaxyrio.gracelauncher.ui.home.rememberHomeTime
 import com.galaxyrio.gracelauncher.ui.theme.LocalFontLibrary
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.theme.rememberLauncherAppearance
-import com.galaxyrio.gracelauncher.ui.theme.wallpaperTint
+import com.galaxyrio.gracelauncher.ui.theme.resolvedFontColor
 import kotlin.math.roundToInt
+import org.json.JSONObject
+
+private val AlphabetAppearanceDraftSaver = Saver<AlphabetAppearance, String>(
+    save = { it.json().toString() }, restore = { runCatching { AlphabetAppearance.decode(JSONObject(it)) }.getOrNull() },
+)
 
 @Composable
 internal fun AlphabetSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit, onManageFonts: () -> Unit) = BoxWithConstraints(Modifier.fillMaxSize()) {
     val saved = uiState.settings.listAppearance.alphabet
     val defaults = remember { AlphabetAppearance() }
-    var draft by remember(saved) { mutableStateOf(saved.normalized()) }
+    var draft by rememberSaveable(saved, stateSaver = AlphabetAppearanceDraftSaver) { mutableStateOf(saved.normalized()) }
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
     val controls = rememberLazyListState()
     val enabled = LocalSettingsStorageState.current.canEdit
-    val letters = rememberAlphabetPreviewLetters(uiState)
+    val previewModel = rememberAlphabetPreviewModel(uiState)
+    val letters = previewModel.letters
     val density = LocalDensity.current
     var viewportTop by remember { mutableFloatStateOf(0f) }
     // Measure before the scaffold takes out its app bar and navigation padding,
@@ -80,17 +85,17 @@ internal fun AlphabetSettings(uiState: LauncherUiState, actions: LauncherActions
         onSelect = { id -> change { it.copy(fontId = id) }; dialog = null },
         onManage = { dialog = null; onManageFonts() }, onDismiss = { dialog = null }, tag = "alphabet_font_picker")
 
-    SettingsScaffold(stringResource(R.string.settings_alphabet), "alphabet_settings",
+    SettingsPreviewScaffold(uiState, stringResource(R.string.settings_alphabet), "alphabet_settings",
         { if (dialog == "color") closeColor() else onBack() },
-        modifier = Modifier.onGloballyPositioned { viewportTop = with(density) { it.positionInWindow().y.toDp().value } },
-        fixedCollapsed = true) { padding ->
+        wallpaperNavigationBar = true,
+        modifier = Modifier.onGloballyPositioned { viewportTop = with(density) { it.positionInWindow().y.toDp().value } }) { padding ->
         BoxWithConstraints(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
             // Leave a useful controls column on small phones, and enough preview width
             // for both the wave and its indicator. The right edge has no outer margin.
             val previewWidth = (maxWidth * .42f).coerceIn(160.dp, 180.dp)
-            AlphabetPreview(uiState, draft, letters, railLayout, viewportTop, Modifier.align(AbsoluteAlignment.TopRight).width(previewWidth).fillMaxHeight()
+            AlphabetPreview(uiState, draft, previewModel, railLayout, viewportTop, Modifier.align(AbsoluteAlignment.TopRight).width(previewWidth).fillMaxHeight()
                 .padding(top = 8.dp, bottom = 8.dp + LocalSettingsBottomInset.current))
-            SharedTransitionLayout(Modifier.fillMaxSize().absolutePadding(left = 12.dp, right = previewWidth + 8.dp, top = 8.dp).clipToBounds()) {
+            SharedTransitionLayout(Modifier.fillMaxSize().absolutePadding(left = 16.dp, right = previewWidth + 8.dp, top = 8.dp).clipToBounds()) {
                 AnimatedContent(dialog == "color", Modifier.fillMaxSize(),
                     transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) }, label = "alphabetColorHero") { colorOpen ->
                     val colorModifier = Modifier.sharedBounds(rememberSharedContentState("alphabet_color"), this,
@@ -100,23 +105,24 @@ internal fun AlphabetSettings(uiState: LauncherUiState, actions: LauncherActions
                             primary.toArgb(), null,
                             onChange = { if (enabled && dialog == "color") draft = draft.copy(fontColor = it) },
                             onClose = { if (dialog == "color") closeColor() },
-                            modifier = Modifier.padding(bottom = 8.dp).then(colorModifier), fallback = wallpaper.text.toArgb())
-                    } else LazyColumn(Modifier.fillMaxSize().testTag("alphabet_controls"), state = controls,
+                            modifier = Modifier.padding(bottom = 8.dp).then(colorModifier), fallback = wallpaper.text.toArgb(),
+                            fontColors = uiState.settings.fontColors)
+                    } else LazyColumn(Modifier.fillMaxSize().clip(settingsPreviewControlsShape()).testTag("alphabet_controls"), state = controls,
                         contentPadding = PaddingValues(bottom = 24.dp + LocalSettingsBottomInset.current),
                         verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
                         item("font") {
                             SettingsActionItem(stringResource(R.string.settings_font), appFontLabel(draft.fontId),
-                                0, 7, "alphabet_font", enabled = enabled, onClick = { dialog = "font" })
+                                0, 10, "alphabet_font", enabled = enabled, onClick = { dialog = "font" })
                         }
                         item("color") {
-                            SettingsActionItem(stringResource(R.string.alphabet_letter_color), null,
-                                1, 7, "alphabet_color", enabled = enabled, modifier = colorModifier, trailing = {
+                            SettingsActionItem(stringResource(R.string.alphabet_letter_color), fontColorSummary(draft.fontColor, onWallpaper = true),
+                                1, 10, "alphabet_color", enabled = enabled, modifier = colorModifier, trailing = {
                                     Surface(Modifier.size(24.dp), shape = MaterialTheme.shapes.small,
-                                        color = draft.fontColor?.resolve(primary.toArgb())?.let(::Color) ?: wallpaper.text) {}
+                                        color = resolvedFontColor(draft.fontColor, onWallpaper = true)) {}
                                 }, onClick = { dialog = "color" })
                         }
                         item("font_size") {
-                            DesignerSegment(2, 7, "alphabet_font_size_control") {
+                            DesignerSegment(2, 10, "alphabet_font_size_control") {
                                 DesignerSlider(stringResource(R.string.clock_size), draft.fontSize.toFloat(), defaults.fontSize.toFloat(),
                                     10f..28f, enabled, "alphabet_font_size", suffix = "sp",
                                     onFinished = { value -> change { it.copy(fontSize = value.roundToInt()) } }) {
@@ -125,7 +131,7 @@ internal fun AlphabetSettings(uiState: LauncherUiState, actions: LauncherActions
                             }
                         }
                         item("shape") {
-                            DesignerSegment(3, 7, "alphabet_shape") {
+                            DesignerSegment(3, 10, "alphabet_shape") {
                                 Text(stringResource(R.string.alphabet_indicator_shape))
                                 val design = IconDesign(shape = draft.indicatorShape, cookieSides = draft.cookieSides,
                                     pebbleRoundness = draft.pebbleRoundness, squareCornerRadius = draft.squareCornerRadius)
@@ -139,7 +145,7 @@ internal fun AlphabetSettings(uiState: LauncherUiState, actions: LauncherActions
                             }
                         }
                         item("top") {
-                            DesignerSegment(4, 7, "alphabet_top_control") {
+                            DesignerSegment(4, 10, "alphabet_top_control") {
                                 if (draft.topPercent == null) Text(
                                     stringResource(R.string.alphabet_automatic_spacing, AlphabetAppearance.DefaultStepDp.roundToInt()),
                                     Modifier.testTag("alphabet_top_automatic"), style = MaterialTheme.typography.labelMedium,
@@ -155,7 +161,7 @@ internal fun AlphabetSettings(uiState: LauncherUiState, actions: LauncherActions
                             }
                         }
                         item("bottom") {
-                            DesignerSegment(5, 7, "alphabet_bottom_control") {
+                            DesignerSegment(5, 10, "alphabet_bottom_control") {
                                 DesignerSlider(stringResource(R.string.alphabet_bottom), draft.bottomPercent.toFloat(),
                                     maxOf(defaults.bottomPercent, (draft.topPercent ?: 0) + 1).toFloat(),
                                     ((draft.topPercent ?: 0) + 1f)..100f, enabled, "alphabet_bottom",
@@ -165,8 +171,45 @@ internal fun AlphabetSettings(uiState: LauncherUiState, actions: LauncherActions
                             }
                         }
                         item("free") {
-                            SettingsToggleItem(stringResource(R.string.alphabet_free_movement), stringResource(R.string.alphabet_free_movement_summary),
-                                draft.freeMovement, 6, 7, "alphabet_free_movement", enabled = enabled) { value -> change { it.copy(freeMovement = value) } }
+                            SettingsToggleItem(stringResource(R.string.alphabet_free_movement), null,
+                                draft.freeMovement, 6, 10, "alphabet_free_movement", enabled = enabled) { value -> change { it.copy(freeMovement = value) } }
+                        }
+                        item("touch_width") {
+                            DesignerSegment(7, 10, "alphabet_touch_width_control") {
+                                DesignerSlider(stringResource(R.string.alphabet_touch_width), draft.rightTouchWidth.toFloat(),
+                                    defaults.rightTouchWidth.toFloat(), 28f..56f, enabled, "alphabet_touch_width", suffix = "dp",
+                                    onFinished = { value -> change { it.copy(rightTouchWidth = value.roundToInt()) } }) {
+                                    draft = draft.copy(rightTouchWidth = it.roundToInt()).normalized()
+                                }
+                            }
+                        }
+                        item("left") {
+                            SettingsToggleItem(stringResource(R.string.list_left_alphabet), null,
+                                uiState.settings.listAppearance.leftAlphabet, 8, 10, "list_left_alphabet", enabled = enabled) { value ->
+                                actions.updateSettings { current -> current.copy(listAppearance = current.listAppearance.copy(leftAlphabet = value)) }
+                            }
+                        }
+                        item("show_in") {
+                            DesignerSegment(9, 10, "alphabet_show_in") {
+                                Text(stringResource(R.string.alphabet_show_in))
+                                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min),
+                                    horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
+                                    ToggleButton(checked = draft.showsOnHome(uiState.settings.hideAlphabet),
+                                        onCheckedChange = { value -> change { it.copy(showOnHome = value) } }, enabled = enabled,
+                                        shapes = ButtonGroupDefaults.connectedLeadingButtonShapes(),
+                                        modifier = Modifier.weight(1f).fillMaxHeight().testTag("alphabet_show_home"),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 10.dp)) {
+                                        Text(stringResource(R.string.settings_home_screen))
+                                    }
+                                    ToggleButton(checked = draft.showInAppList,
+                                        onCheckedChange = { value -> change { it.copy(showInAppList = value) } }, enabled = enabled,
+                                        shapes = ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                                        modifier = Modifier.weight(1f).fillMaxHeight().testTag("alphabet_show_app_list"),
+                                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 10.dp)) {
+                                        Text(stringResource(R.string.settings_folder_app_list))
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -176,42 +219,38 @@ internal fun AlphabetSettings(uiState: LauncherUiState, actions: LauncherActions
 }
 
 @Composable
-private fun AlphabetPreview(uiState: LauncherUiState, draft: AlphabetAppearance, letters: List<String>, layout: AlphabetRailLayout,
+private fun AlphabetPreview(uiState: LauncherUiState, draft: AlphabetAppearance, model: AppListModel, layout: AlphabetRailLayout,
     viewportTop: Float, modifier: Modifier) {
     val appearance = rememberLauncherAppearance(uiState.textMode, uiState.themedIcons, 100)
     val settings = uiState.settings
-    val primary = MaterialTheme.colorScheme.primary
-    val tint = remember(primary, appearance.darkText, settings.listAppearance.wallpaperDimColor) {
-        appearance.wallpaperTint(primary, settings.listAppearance.wallpaperDimColor)
-    }
-    val dimAlpha = if (settings.dimWallpaper) settings.wallpaperDimAmount / 100f else 0f
-    val shape = remember { AbsoluteRoundedCornerShape(topLeft = 24.dp, bottomLeft = 24.dp) }
     val density = LocalDensity.current
     var previewTop by remember { mutableFloatStateOf(0f) }
     var positioned by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<String?>(null) }
+    var showTouchArea by rememberSaveable { mutableStateOf(false) }
     BoxWithConstraints(modifier.testTag("alphabet_preview").onGloballyPositioned {
         previewTop = with(density) { it.positionInWindow().y.toDp().value }
         positioned = true
-    }.drawWithContent {
-        val outline = shape.createOutline(size, layoutDirection, this)
-        drawOutline(outline, Color.Transparent, blendMode = BlendMode.Clear)
-        drawOutline(outline, tint.copy(alpha = dimAlpha))
-        drawContent()
-    }.clip(shape)) {
+    }.clipToBounds()) {
         CompositionLocalProvider(LocalLauncherAppearance provides appearance, LocalFontLibrary provides settings.fontLibrary) {
             // A window into the desktop, not another screen with a shorter coordinate
             // system. Preserve actual letter spacing, glyph sizes and indicator geometry.
-            if (positioned) AlphabetRail(letters, selected, layout.heightDp.dp,
+            if (positioned) AlphabetRail(model.letters, selected, layout.heightDp.dp,
                 onLetterSelected = { selected = it }, alphabet = draft,
+                categorySections = model.categorySections,
+                showRightTouchArea = showTouchArea,
                 topOffset = (viewportTop + layout.topDp - previewTop).dp, touchHeight = maxHeight,
                 modifier = Modifier.align(AbsoluteAlignment.TopRight))
+        }
+        FilledTonalIconToggleButton(checked = showTouchArea, onCheckedChange = { showTouchArea = it },
+            modifier = Modifier.align(AbsoluteAlignment.BottomLeft).padding(8.dp).testTag("alphabet_touch_area_toggle")) {
+            Icon(painterResource(R.drawable.ms_touch_app), stringResource(R.string.alphabet_touch_area), Modifier.size(24.dp))
         }
     }
 }
 
 @Composable
-private fun rememberAlphabetPreviewLetters(uiState: LauncherUiState): List<String> {
+private fun rememberAlphabetPreviewModel(uiState: LauncherUiState): AppListModel {
     val settings = uiState.settings
     val profilesReady = !uiState.isLoadingSettings && !uiState.settingsLoadFailed
     val privateFolder = uiState.privateFolder.takeIf { settings.privateSpace.enabled && uiState.privateSpace.supported &&
@@ -221,7 +260,17 @@ private fun rememberAlphabetPreviewLetters(uiState: LauncherUiState): List<Strin
     val apps = uiState.appListApps
     val recentFolder = uiState.recentlyInstalledFolder(stringResource(R.string.recently_installed))
         .takeIf { settings.listAppearance.showRecentlyInstalled }
-    return remember(apps, uiState.folders, privateFolder, workFolder, recentFolder) {
-        AppListModel(apps, uiState.folders, privateFolder, recentlyInstalledFolder = recentFolder, workFolder = workFolder).letters
+    val categories = uiState.appCategories
+    val members = remember(uiState, categories) {
+        categories.associate { category -> category.key to uiState.categoryItems(category).mapNotNull(uiState::findItem) }
+    }
+    val now by rememberHomeTime()
+    val headphones by rememberHeadphonesConnected()
+    val time = now.atZone(java.time.ZoneId.systemDefault()).toLocalTime()
+    val minute = time.hour * 60 + time.minute
+    return remember(apps, uiState.folders, privateFolder, workFolder, recentFolder, settings.listAppearance.appList, categories, members, headphones, minute) {
+        AppListModel(apps, uiState.folders, privateFolder, recentlyInstalledFolder = recentFolder, workFolder = workFolder,
+            appList = settings.listAppearance.appList, categories = categories, categoryItems = members,
+            headphones = headphones, minuteOfDay = minute)
     }
 }

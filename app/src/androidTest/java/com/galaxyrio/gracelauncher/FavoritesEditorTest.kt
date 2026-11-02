@@ -16,12 +16,13 @@ import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.galaxyrio.gracelauncher.data.LauncherApp
+import com.galaxyrio.gracelauncher.data.*
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherScreen
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.ScheduleStatus
 import com.galaxyrio.gracelauncher.ui.overlays.HomepageEditorScreen
+import com.galaxyrio.gracelauncher.ui.overlays.CategoryItemsEditor
 import com.galaxyrio.gracelauncher.ui.theme.GraceLauncherTheme
 import java.io.File
 import org.junit.Assert.*
@@ -41,19 +42,37 @@ class FavoritesEditorTest {
 
     private fun show(selected: List<LauncherApp>, wholeLauncher: Boolean = false, initialAppKey: String? = null) {
         state = LauncherUiState(apps = apps, favoriteKeys = selected.map(LauncherApp::key).toSet(),
-            favoriteOrder = selected.map(LauncherApp::key), isLoadingApps = false, scheduleStatus = ScheduleStatus.Ready)
-        val toggle: (LauncherApp) -> Unit = { app ->
-            toggles++
-            val order = if (app.key in state.favoriteKeys) state.favoriteOrder - app.key else state.favoriteOrder + app.key
-            state = state.copy(favoriteKeys = order.toSet(), favoriteOrder = order)
+            favoriteOrder = selected.map(LauncherApp::key), isLoadingApps = false, scheduleStatus = ScheduleStatus.Ready,
+            settings = LauncherSettings(appCategories = AppCategory.defaults(selected.map(LauncherApp::key))))
+        fun saveCategory(id: String, change: (AppCategory) -> AppCategory) {
+            val previous = state.appCategories.first { it.id == id }
+            val next = change(previous)
+            if (previous.itemKeys.toSet() != next.itemKeys.toSet()) toggles++
+            else if (previous.itemKeys != next.itemKeys) commits++
+            val categories = state.appCategories.map { if (it.id == id) next else it }
+            val favorites = categories.first { it.id == FavoritesCategoryId }.itemKeys
+            state = state.copy(settings = state.settings.copy(appCategories = categories),
+                favoriteKeys = favorites.toSet(), favoriteOrder = favorites)
         }
-        val reorder: (List<String>) -> Unit = { commits++; state = state.copy(favoriteOrder = it) }
+        val toggle: (LauncherApp) -> Unit = { app ->
+            saveCategory(FavoritesCategoryId) { it.copy(itemKeys = if (app.key in it.itemKeys) it.itemKeys - app.key else it.itemKeys + app.key) }
+        }
+        val reorder: (List<String>) -> Unit = { keys ->
+            state = state.copy(settings = state.settings.copy(homeLayout = state.settings.homeLayout.copy(homeOrder = keys)))
+        }
+        val actions = LauncherActions(reorderFavorites = reorder, updateAppCategory = ::saveCategory,
+            toggleCategoryItem = { id, app -> saveCategory(id) {
+                it.copy(itemKeys = if (app.key in it.itemKeys) it.itemKeys - app.key else it.itemKeys + app.key)
+            } })
         compose.setContent {
             GraceLauncherTheme(dynamicColor = false) {
                 Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
                     if (wholeLauncher) LauncherScreen(state, onDateClick = {}, onClockClick = {}, onLaunchApp = {},
-                        onToggleFavorite = toggle, actions = LauncherActions(reorderFavorites = reorder))
-                    else Box(Modifier.fillMaxSize()) { HomepageEditorScreen(state, LauncherActions(), toggle, reorder, initialAppKey = initialAppKey, onDone = {}) }
+                        onToggleFavorite = toggle, actions = actions)
+                    else Box(Modifier.fillMaxSize()) {
+                        if (initialAppKey != null) HomepageEditorScreen(state, actions, toggle, reorder, initialAppKey = initialAppKey, onDone = {})
+                        else CategoryItemsEditor(state.appCategories.first(), state, actions, onBack = {}, header = {})
+                    }
                 }
             }
         }
@@ -73,6 +92,7 @@ class FavoritesEditorTest {
 
     @Test fun enteringFromAnAppSelectsItOnceAndManualUnselectIsNotUndone() {
         show(listOf(apps[0]), initialAppKey = apps[1].key)
+        compose.onNodeWithTag("favorite_edit:category:favorites").performScrollTo().performClick()
         compose.onNodeWithTag("favorite:${apps[1].key}").assertIsOn()
         compose.runOnIdle { assertEquals(1, toggles) }
         compose.onNodeWithTag("favorite:${apps[1].key}").performClick()
@@ -81,6 +101,7 @@ class FavoritesEditorTest {
 
     @Test fun enteringFromAnAlreadyFavoriteAppNeverUnselectsIt() {
         show(listOf(apps[0]), initialAppKey = apps[0].key)
+        compose.onNodeWithTag("favorite_edit:category:favorites").performScrollTo().performClick()
         compose.onNodeWithTag("favorite:${apps[0].key}").assertIsOn()
         compose.runOnIdle { assertEquals(0, toggles) }
     }
@@ -96,21 +117,21 @@ class FavoritesEditorTest {
         val selected = listOf(apps[3], apps[0], apps[2])
         show(selected)
         assertSelectedOrder(selected)
-        compose.onNodeWithTag("favorites_all_apps").performScrollTo()
-        assertTrue(bounds("favorite:${apps[2].key}").bottom <= bounds("favorites_all_apps").top)
+        compose.onNodeWithTag("category_editor_all_apps").performScrollTo()
+        assertTrue(bounds("favorite:${apps[2].key}").bottom <= bounds("category_editor_all_apps").top)
         apps.take(3).forEach { app ->
             compose.onNodeWithTag("favorite_all:${app.key}").performScrollTo().let {
                 if (app in selected) it.assertIsOn() else it.assertIsOff()
             }
         }
-        compose.onNodeWithTag("favorites_list").performScrollToIndex(0)
+        compose.onNodeWithTag("category_editor_list").performScrollToIndex(0)
         saveScreenshot("favorites-selected.png")
     }
 
     @Test fun selectionsAppendToTheSelectedSectionAndUncheckingDoesNotRemoveTheAppFromAllApps() {
         show(listOf(apps[3], apps[0]))
         compose.onNodeWithTag("favorite_all:${apps[2].key}").performScrollTo().performClick()
-        compose.onNodeWithTag("favorites_list").performScrollToIndex(0)
+        compose.onNodeWithTag("category_editor_list").performScrollToIndex(0)
         assertSelectedOrder(listOf(apps[3], apps[0], apps[2]))
         compose.onNodeWithTag("favorite:${apps[0].key}").performClick()
         compose.onNodeWithTag("favorite_all:${apps[0].key}").performScrollTo().assertIsOff()
@@ -123,6 +144,7 @@ class FavoritesEditorTest {
         show(apps.take(4), wholeLauncher = true)
         compose.onNodeWithTag("app:${apps[0].key}").performTouchInput { longClick() }
         compose.onNodeWithTag("edit_favorites").performClick()
+        compose.onNodeWithTag("favorite_edit:category:favorites").performScrollTo().performClick()
         val rowDistance = bounds("favorite_drag:${apps[3].key}").center.y - bounds("favorite_drag:${apps[0].key}").center.y
         compose.onNodeWithTag("favorite_drag:${apps[0].key}").performTouchInput {
             swipe(center, center + Offset(0f, rowDistance + 50f), 650)
@@ -136,6 +158,7 @@ class FavoritesEditorTest {
         compose.onNodeWithTag("favorite_drag:${apps[0].key}").performClick()
         compose.onNodeWithText("Move down").performClick()
         assertSelectedOrder(listOf(apps[1], apps[0], apps[2], apps[3]))
+        compose.onNodeWithTag("category_editor_done").performClick()
         compose.onNodeWithTag("favorites_done").performClick()
         compose.onNodeWithTag("favorites_screen").assertDoesNotExist()
         assertTrue(bounds("app:${apps[1].key}").top < bounds("app:${apps[0].key}").top)
@@ -191,10 +214,10 @@ class FavoritesEditorTest {
 
     @Test fun ordinaryListScrollingNeverChangesFavoritesAndAnEmptySelectionCanBeRefilled() {
         show(emptyList())
-        compose.onNodeWithText("Choose apps below to add them to your home screen.").assertIsDisplayed()
-        compose.onNodeWithTag("favorites_list").performTouchInput { swipeUp() }
+        compose.onNodeWithText(InstrumentationRegistry.getInstrumentation().targetContext.getString(R.string.favorites_empty)).assertIsDisplayed()
+        compose.onNodeWithTag("category_editor_list").performTouchInput { swipeUp() }
         compose.onNodeWithTag("favorite_all:${apps.last().key}").performScrollTo().performClick()
-        compose.onNodeWithTag("favorites_list").performScrollToIndex(0)
+        compose.onNodeWithTag("category_editor_list").performScrollToIndex(0)
         compose.onNodeWithTag("favorite:${apps.last().key}").assertIsOn()
         assertEquals(listOf(apps.last().key), state.favoriteOrder)
         assertEquals(0, commits)
@@ -203,7 +226,7 @@ class FavoritesEditorTest {
     @Test fun draggingAtTheBottomEdgeScrollsThroughALongSelectedList() {
         show(apps)
         val first = compose.onNodeWithTag("favorite_drag:${apps[0].key}")
-        val distance = bounds("favorites_list").bottom - bounds("favorite_drag:${apps[0].key}").center.y - 12f
+        val distance = bounds("category_editor_list").bottom - bounds("favorite_drag:${apps[0].key}").center.y - 12f
         compose.mainClock.autoAdvance = false
         first.performTouchInput {
             down(center)
@@ -218,7 +241,7 @@ class FavoritesEditorTest {
         assertEquals(1, commits)
         assertEquals(0, toggles)
         compose.onNodeWithTag("favorite:${apps[0].key}").performScrollTo()
-        val upward = bounds("favorites_list").top - bounds("favorite_drag:${apps[0].key}").center.y + 12f
+        val upward = bounds("category_editor_list").top - bounds("favorite_drag:${apps[0].key}").center.y + 12f
         compose.mainClock.autoAdvance = false
         first.performTouchInput {
             down(center)
@@ -237,7 +260,7 @@ class FavoritesEditorTest {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val file = File(instrumentation.targetContext.getExternalFilesDir("ui-verification"), name)
         file.parentFile!!.mkdirs()
-        val bitmap = compose.onNodeWithTag("favorites_screen").captureToImage().asAndroidBitmap()
+        val bitmap = compose.onNodeWithTag("category_editor_screen").captureToImage().asAndroidBitmap()
         file.outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
     }
 }

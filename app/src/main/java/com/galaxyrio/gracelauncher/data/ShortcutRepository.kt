@@ -39,6 +39,7 @@ data class LauncherShortcut(
             user = identity.user, userSerial = identity.userSerial, isPrivateSpace = identity.isPrivateSpace,
             showPrivateIndicator = owner.showPrivateIndicator,
             isWorkProfile = owner.isWorkProfile, showWorkIndicator = owner.showWorkIndicator,
+            isCloneProfile = owner.isCloneProfile,
             originalIconColor = owner.originalIconColor, iconSourceRevision = iconCacheKey)
     }
 }

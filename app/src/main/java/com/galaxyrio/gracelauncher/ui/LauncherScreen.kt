@@ -47,7 +47,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -83,7 +82,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.withResumed
-import androidx.core.view.WindowInsetsControllerCompat
 import androidx.core.net.toUri
 import androidx.core.content.ContextCompat
 import com.galaxyrio.gracelauncher.R
@@ -132,8 +130,13 @@ import com.galaxyrio.gracelauncher.ui.components.AppStack
 import com.galaxyrio.gracelauncher.ui.drawer.AppDrawerScreen
 import com.galaxyrio.gracelauncher.ui.drawer.AppListModel
 import com.galaxyrio.gracelauncher.ui.home.HomeScreen
+import com.galaxyrio.gracelauncher.ui.home.rememberHeadphonesConnected
+import com.galaxyrio.gracelauncher.ui.home.rememberHomeTime
 import com.galaxyrio.gracelauncher.ui.home.WidgetScreen
 import com.galaxyrio.gracelauncher.ui.settings.LauncherSettingsScreen
+import com.galaxyrio.gracelauncher.ui.settings.LocalSettingsSystemBarBackground
+import com.galaxyrio.gracelauncher.ui.settings.SettingsSystemBarBackground
+import com.galaxyrio.gracelauncher.ui.theme.LocalWallpaperFontColor
 import com.galaxyrio.gracelauncher.ui.overlays.LauncherOverlay
 import com.galaxyrio.gracelauncher.ui.overlays.LauncherOverlays
 import com.galaxyrio.gracelauncher.ui.theme.GraceLauncherTheme
@@ -188,7 +191,7 @@ fun LauncherRoute(
         contract = ActivityResultContracts.RequestPermission(),
     ) { viewModel.refreshSchedule() }
     val homeRoleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-        viewModel.refreshApps()
+        viewModel.refreshProfiles()
     }
     val mediaAccessLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         viewModel.refreshApps()
@@ -378,6 +381,7 @@ fun LauncherRoute(
                 .onFailure { openSystemApp(Intent(Settings.ACTION_HOME_SETTINGS)) }
         },
         requestUsageAccess = { openSystemApp(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS)) },
+        chooseWallpaper = { openSystemApp(Intent(Intent.ACTION_SET_WALLPAPER)) },
         refreshUsageRanking = { viewModel.refreshUsage(forceRanking = true) },
         openHome = {
             // Target Grace explicitly: this must neither resolve to another HOME
@@ -468,6 +472,10 @@ fun LauncherRoute(
         hideApp = viewModel::hideApp,
         setFolderAutoHide = viewModel::setFolderAutoHide,
         saveFolder = viewModel::saveFolder,
+        saveAppCategory = viewModel::saveAppCategory,
+        updateAppCategory = viewModel::updateAppCategory,
+        deleteAppCategory = viewModel::deleteAppCategory,
+        toggleCategoryItem = viewModel::toggleCategoryItem,
         updateFolder = viewModel::updateFolder,
         setFolderFavorites = viewModel::setFolderFavorites,
         deleteFolder = viewModel::deleteFolder,
@@ -484,16 +492,26 @@ fun LauncherRoute(
     if (settingsOnly) {
         // Do not register a root back callback here: Android owns the predictive
         // cross-task/back-to-home animation of this regular settings Activity.
-        val lightBars = MaterialTheme.colorScheme.surface.luminance() > 0.5f
-        SideEffect {
-            (context as? Activity)?.window?.let { window ->
-                WindowInsetsControllerCompat(window, launchView).apply {
-                    isAppearanceLightStatusBars = lightBars
-                    isAppearanceLightNavigationBars = lightBars
-                }
-            }
+        var settingsBarBackground by remember { mutableStateOf(SettingsSystemBarBackground.Surface) }
+        val wallpaperSettings = settingsBarBackground == SettingsSystemBarBackground.Wallpaper ||
+            settingsBarBackground == SettingsSystemBarBackground.WallpaperWithBottomScrim
+        val lightBars = if (wallpaperSettings) LocalWallpaperFontColor.current.luminance() < 0.5f
+            else if (settingsBarBackground == SettingsSystemBarBackground.WallpaperWithTopScrim)
+                MaterialTheme.colorScheme.surfaceContainer.luminance() > 0.5f
+            else MaterialTheme.colorScheme.surface.luminance() > 0.5f
+        rememberLauncherSystemBars(
+            autoHide = false,
+            darkIcons = lightBars,
+            allowPullDown = false,
+            darkNavigationIcons = when (settingsBarBackground) {
+                SettingsSystemBarBackground.WallpaperWithBottomScrim -> MaterialTheme.colorScheme.surfaceContainer.luminance() > 0.5f
+                SettingsSystemBarBackground.WallpaperWithTopScrim -> LocalWallpaperFontColor.current.luminance() < 0.5f
+                else -> lightBars
+            },
+        )
+        CompositionLocalProvider(LocalSettingsSystemBarBackground provides { settingsBarBackground = it }) {
+            LauncherSettingsScreen(uiState, actions, onCloseSettings, handleRootBack = false)
         }
-        LauncherSettingsScreen(uiState, actions, onCloseSettings, handleRootBack = false)
     } else {
         LauncherScreen(
             uiState = uiState,
@@ -584,9 +602,20 @@ internal fun LauncherScreen(
     val usageRanking = uiState.usage.ranking.takeIf {
         uiState.settings.digitalWellbeing.enabled && uiState.settings.digitalWellbeing.sortApps && uiState.usage.hasAccess
     }.orEmpty()
-    val model = remember(appListApps, uiState.folders, privateFolder, privateExpanded, privateApps, recentFolder, workFolder, workExpanded, workApps, usageRanking) {
+    val appListLayout = uiState.settings.listAppearance.appList
+    val appCategories = uiState.appCategories
+    val categoryMembers = remember(uiState, appCategories) {
+        appCategories.associate { category -> category.key to uiState.categoryItems(category).mapNotNull(uiState::findItem) }
+    }
+    val categoryNow by rememberHomeTime()
+    val categoryHeadphones by rememberHeadphonesConnected()
+    val categoryTime = categoryNow.atZone(java.time.ZoneId.systemDefault()).toLocalTime()
+    val categoryMinute = categoryTime.hour * 60 + categoryTime.minute
+    val model = remember(appListApps, uiState.folders, privateFolder, privateExpanded, privateApps, recentFolder, workFolder, workExpanded,
+        workApps, usageRanking, appListLayout, appCategories, categoryMembers, categoryHeadphones, categoryMinute) {
         AppListModel(appListApps, uiState.folders, privateFolder, privateExpanded, privateApps, recentFolder, workFolder, workExpanded, workApps,
-            usageRanking = usageRanking)
+            usageRanking = usageRanking, appList = appListLayout, categories = appCategories, categoryItems = categoryMembers,
+            headphones = categoryHeadphones, minuteOfDay = categoryMinute)
     }
     val drawerState = rememberLazyListState()
     val appearance = rememberLauncherAppearance(uiState.textMode, uiState.themedIcons,
@@ -702,11 +731,23 @@ internal fun LauncherScreen(
     }
     val backProgress = remember { Animatable(0f) }
     val homeListMotion = remember { HomeListMotion(drawerOpen) }
-    val darkSystemIcons = if (fullScreen && !searching) MaterialTheme.colorScheme.surface.luminance() > 0.5f else appearance.darkText
+    var settingsBarBackground by remember { mutableStateOf(SettingsSystemBarBackground.Surface) }
+    val wallpaperSettings = settingsBarBackground == SettingsSystemBarBackground.Wallpaper ||
+        settingsBarBackground == SettingsSystemBarBackground.WallpaperWithBottomScrim
+    val darkSystemIcons = if (isSettings && settingsBarBackground == SettingsSystemBarBackground.WallpaperWithTopScrim)
+        MaterialTheme.colorScheme.surfaceContainer.luminance() > 0.5f
+        else if (fullScreen && !searching && !(isSettings && wallpaperSettings))
+        MaterialTheme.colorScheme.surface.luminance() > 0.5f else appearance.darkText
     val statusBarPull = rememberLauncherSystemBars(
         autoHide = uiState.settings.hideStatusBar && (!fullScreen || searching),
         darkIcons = darkSystemIcons,
         allowPullDown = !fullScreen && !editingHome && !editingWidgetScreen && !editingHomeContent && overlay == null && buttonTransition == null,
+        darkNavigationIcons = when {
+            isSettings && settingsBarBackground == SettingsSystemBarBackground.WallpaperWithBottomScrim ->
+                MaterialTheme.colorScheme.surfaceContainer.luminance() > 0.5f
+            isSettings && settingsBarBackground == SettingsSystemBarBackground.WallpaperWithTopScrim -> appearance.darkText
+            else -> darkSystemIcons
+        },
     )
 
     LaunchedEffect(returnHomeRequests) {
@@ -769,8 +810,9 @@ internal fun LauncherScreen(
         else homeListMotion.animateTo(drawerOpen)
     }
     val primary = MaterialTheme.colorScheme.primary
-    val wallpaperTint = remember(primary, appearance.darkText, uiState.settings.listAppearance.wallpaperDimColor) {
-        appearance.wallpaperTint(primary, uiState.settings.listAppearance.wallpaperDimColor)
+    val colorScheme = MaterialTheme.colorScheme
+    val wallpaperTint = remember(colorScheme, appearance.darkText, uiState.settings.listAppearance.wallpaperDimColor) {
+        appearance.wallpaperTint(primary, uiState.settings.listAppearance.wallpaperDimColor, colorScheme)
     }
 
     val finishScrubbing: () -> Unit = {
@@ -1000,7 +1042,8 @@ internal fun LauncherScreen(
     val widgetHost = rememberWidgetHost()
     CompositionLocalProvider(LocalLauncherAppearance provides appearance, LocalListAppearance provides uiState.settings.listAppearance,
         LocalHapticFeedback provides haptics, LocalWidgetHost provides widgetHost,
-        LocalPopupGestureSettings provides popupSettings) {
+        LocalPopupGestureSettings provides popupSettings,
+        LocalSettingsSystemBarBackground provides { settingsBarBackground = it }) {
       // One wallpaper treatment serves both transparent search and the alphabetical app list.
       val revealDimAlpha = if (drawerTransition != null && uiState.settings.dimWallpaper)
           uiState.settings.wallpaperDimAmount.coerceIn(0, 100) / 100f else dimAlpha
@@ -1060,6 +1103,7 @@ internal fun LauncherScreen(
                     overlay = LauncherOverlay.Agenda
                 },
                 onClockClick = onClockClick,
+                onWeatherClick = actions.openBreezyWeather,
                 onWidgetMenu = { overlay = LauncherOverlay.HomeWidgetMenu },
                 onCustomWidgetMenu = { overlay = LauncherOverlay.CustomWidgetMenu },
                 actions = actions,
@@ -1155,11 +1199,13 @@ internal fun LauncherScreen(
             if (homePager.isScrollInProgress || editingWidgetScreen || editingHomeContent) 0f else 1f,
             tween(if (homePager.isScrollInProgress || editingWidgetScreen || editingHomeContent) 90 else 180), label = "pagingAlphabet",
         )
+        val showHomeAlphabet = alphabet.showsOnHome(uiState.settings.hideAlphabet)
         if (!editingHome) AlphabetRail(
             enabled = !homePager.isScrollInProgress && !editingWidgetScreen && !editingHomeContent,
             alphabet = alphabet,
             leftTouchEnabled = uiState.settings.listAppearance.leftAlphabet,
             letters = model.letters,
+            categorySections = model.categorySections,
             selectedLetter = if (drawerOpen) selectedLetter else null,
             height = railLayout.heightDp.dp,
             topOffset = railLayout.topDp.dp,
@@ -1179,7 +1225,7 @@ internal fun LauncherScreen(
             },
             modifier = Modifier.align(Alignment.TopEnd)
                 .graphicsLayer { alpha = pagingRailAlpha }
-                .graceReveal(drawerTransition.takeIf { uiState.settings.hideAlphabet }, reveal = true),
+                .graceReveal(drawerTransition.takeIf { !showHomeAlphabet }, reveal = true),
             onScrubFinished = finishScrubbing,
             doubleTapIntervalMs = uiState.settings.homeGestures.doubleTapIntervalMs,
             onDoubleTap = if (uiState.settings.homeGestures.enabled && uiState.settings.homeGestures.alphabetDoubleTap.active &&
@@ -1190,7 +1236,7 @@ internal fun LauncherScreen(
                 performGestureAction(uiState.settings.homeGestures.alphabetDoubleTap, origin, fromButton = false)
             } else null,
             // Widget screen always hides the idle glyphs; its edge touch areas stay active.
-            autoHide = (uiState.settings.hideAlphabet || homePager.currentPage == 1) && !drawerOpen,
+            autoHide = if (drawerOpen) !alphabet.showInAppList else !showHomeAlphabet || homePager.currentPage == 1,
         )
         if (!editingWidgetScreen && !editingHomeContent && ((!drawerOpen && editingHome) || uiState.settings.graceButton.isVisible(drawerOpen))) {
             val buttonBounds = uiState.settings.graceButton.layout.bounds(maxWidth.value, maxHeight.value,

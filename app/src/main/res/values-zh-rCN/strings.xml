@@ -14,7 +14,7 @@
     <!-- 即时访问与共用快捷方式选择器 -->
     <string name="clock_enable">启用时钟</string>
     <string name="calendar_enable">启用日历和日程</string>
-    <string name="calendar_above_clock">放置于时钟上方</string>
+    <string name="calendar_above_clock">日历显示在时钟上方</string>
     <string name="media_enable">启用音乐播放器</string>
     <string name="media_always_visible">常驻显示</string>
     <string name="media_always_visible_summary">没有播放音乐时也显示音乐组件</string>
@@ -182,7 +182,6 @@
     <string name="connect_calendar">连接日历</string>
     <string name="calendar_error">无法加载日历</string>
     <string name="no_upcoming_events">未来 14 天没有日程</string>
-
     <!-- 搜索与应用列表 -->
     <string name="search_apps">搜索应用</string>
     <string name="search_no_results">没有匹配的应用</string>
@@ -190,10 +189,8 @@
     <string name="drawer_folders">文件夹</string>
     <string name="recently_installed">最近安装</string>
     <string name="hide_recently_installed">隐藏最近安装</string>
-    <string name="settings_recently_installed_summary">在应用列表中显示最近安装的 8 个应用</string>
     <string name="add_to_folder">添加到文件夹</string>
     <string name="create_app_folder">在应用列表中新建文件夹</string>
-
     <!-- 收藏 -->
     <string name="favorites_selected">已选择</string>
     <string name="favorites_all_apps">所有应用</string>
@@ -205,13 +202,32 @@
     <string name="favorites_reorder">调整%1$s的顺序</string>
     <string name="favorites_move_up">上移</string>
     <string name="favorites_move_down">下移</string>
-
+    <string name="homepage_widgets">小组件</string>
+    <string name="homepage_app_group">应用分组</string>
+    <string name="homepage_add_categories">添加类别</string>
+    <string name="homepage_edit_item">编辑%1$s</string>
+    <string name="homepage_empty">尚未选择项目</string>
+    <string name="app_categories_title">应用类别</string>
+    <string name="app_category_create">创建类别</string>
+    <string name="app_category_name">类别名称</string>
+    <string name="app_category_music">音乐</string>
+    <string name="app_category_condition">显示条件</string>
+    <string name="app_category_always">始终显示</string>
+    <string name="app_category_headphones">连接耳机时</string>
+    <string name="app_category_time">每日时间段</string>
+    <string name="app_category_start">开始时间</string>
+    <string name="app_category_end">结束时间</string>
+    <string name="app_category_delete">删除类别</string>
+    <string name="app_category_delete_confirmation">删除“%1$s”？其中的应用、文件夹、应用堆叠和快捷方式会保留。</string>
+    <string name="app_category_unavailable">此类别已不可用。</string>
+    <plurals name="app_category_item_count">
+        <item quantity="other">%1$d 个项目</item>
+    </plurals>
     <!-- 文件夹 -->
     <string name="open_folder">打开文件夹</string>
     <string name="folder_actions">文件夹操作</string>
     <string name="edit_folder">编辑文件夹</string>
     <string name="empty_folder">文件夹中暂无应用</string>
-
     <!-- 通知 -->
     <string name="notification_dismiss">清除</string>
     <string name="notification_now">刚刚</string>
@@ -220,7 +236,6 @@
     <string name="notification_days">%1$d天前</string>
     <string name="notification_unavailable">这条通知已不可用</string>
     <string name="notification_allow">显示应用通知</string>
-
     <!-- 媒体 -->
     <string name="media_service_name">Grace Launcher 通知与媒体</string>
     <string name="media_player_summary">在主屏幕显示播放控件</string>
@@ -235,7 +250,6 @@
     <string name="media_open_player">打开%1$s</string>
     <string name="media_unknown_title">正在播放</string>
     <string name="media_control_unavailable">播放器已不可用</string>
-
     <!-- 设置 -->
     <string name="settings_title">设置</string>
     <string name="settings_back">返回</string>
@@ -270,6 +284,7 @@
     <string name="settings_themes">外观</string>
     <string name="settings_themes_summary">颜色、外观与个性化</string>
     <string name="settings_advanced">高级</string>
+    <string name="settings_tablets_foldables">平板与折叠屏</string>
     <string name="settings_lab">实验室</string>
     <string name="lab_accessibility">无障碍</string>
     <string name="lab_prefer_non_accessibility">尽量不使用无障碍权限</string>
@@ -288,7 +303,7 @@
     <string name="settings_open_home">直接进入桌面</string>
     <string name="settings_open_home_summary">直接进入桌面而不设置为默认启动器</string>
     <string name="settings_instant_access">即时访问</string>
-    <string name="settings_calendar_agenda">日历日程</string>
+    <string name="settings_calendar_agenda">日历与日程</string>
     <string name="settings_calendar_agenda_summary">在主屏幕显示下一项日程</string>
     <string name="settings_weather">天气</string>
     <string name="settings_media_player">媒体播放器</string>
@@ -346,7 +361,12 @@
     <string name="settings_light_mode">浅色</string>
     <string name="settings_dark_mode">深色</string>
     <string name="settings_personalization">个性化</string>
-    <string name="settings_clock_style">时钟样式</string>
+    <string name="settings_wallpaper">壁纸</string>
+    <string name="settings_wallpaper_designer">壁纸设计器</string>
+    <string name="settings_choose_wallpaper">选择壁纸</string>
+    <string name="settings_components">组件</string>
+    <string name="settings_agenda">日程</string>
+    <string name="settings_clock_style">时钟与日历</string>
     <string name="settings_icon_pack">图标包</string>
     <string name="settings_icons">图标</string>
     <string name="settings_font">字体</string>
@@ -356,7 +376,6 @@
     <string name="font_apply_settings">将字体应用于设置</string>
     <string name="font_apply_settings_summary">在 Grace 设置中使用组合后的字体</string>
     <string name="font_import_error">无法导入字体。请选择有效的 TTF、OTF 或 TTC 文件，大小不超过 20 MB。</string>
-    <string name="settings_wallpaper_text">文字颜色</string>
     <string name="settings_text_auto">自动</string>
     <string name="settings_text_light">浅色文字</string>
     <string name="settings_text_dark">深色文字</string>
@@ -365,8 +384,6 @@
     <string name="settings_misc">其他</string>
     <string name="settings_hide_status_bar">隐藏状态栏</string>
     <string name="settings_hide_status_bar_summary">在主页和应用列表隐藏系统状态栏</string>
-    <string name="settings_hide_alphabet">隐藏字母表</string>
-    <string name="settings_hide_alphabet_summary">在主页自动收起字母表，滑动时显示</string>
     <string name="settings_hide_favorite_names">隐藏收藏名称</string>
     <string name="settings_hide_favorite_names_summary">应用列表中的名称仍然显示</string>
     <string name="settings_dim_wallpaper">壁纸遮罩</string>
@@ -390,7 +407,6 @@
     <string name="settings_storage_loading">正在载入设置…</string>
     <string name="settings_storage_load_error">无法读取设置，请重新打开启动器后重试。</string>
     <string name="settings_storage_save_error">未能保存更改，请重试。</string>
-
     <!-- 图标包 -->
     <string name="icon_pack_system">系统图标</string>
     <string name="icon_pack_enabled">启用的图标包</string>
@@ -484,7 +500,6 @@
     <string name="icon_pack_unavailable">图标包不可用 · 已使用系统图标</string>
     <string name="icon_pack_missing">%1$s 不可用，将按顺序使用其他图标包或系统图标。</string>
     <string name="icon_pack_load_failed">无法读取图标包，请重试。</string>
-
     <!-- 天气设置 -->
     <string name="weather_settings_enabled_summary">桌面与日程 · Breezy Weather</string>
     <string name="weather_settings_disabled_summary">可选功能 · 需要 Breezy Weather</string>
@@ -517,7 +532,6 @@
     <plurals name="weather_settings_days_summary">
         <item quantity="other">最多显示 %1$d 天。可用预报取决于 Breezy Weather 中所选的地点和数据源。</item>
     </plurals>
-
     <!-- 天气界面 -->
     <string name="weather_current_description">%1$s，%2$s</string>
     <string name="weather_daily_description">%1$s，最高 %2$s，最低 %3$s</string>
@@ -540,7 +554,6 @@
     <string name="weather_update_unknown">暂无更新时间</string>
     <string name="weather_via_breezy">天气来自 Breezy Weather</string>
     <string name="weather_agenda_action">%1$s。打开日程和天气</string>
-
     <!-- 许可证 -->
     <string name="licenses_app_license">GNU GPLv3</string>
     <string name="licenses_app_summary">Grace Launcher 是自由软件，采用 GNU 通用公共许可证第 3 版发布，不提供担保。第三方组件保留各自的许可证。</string>
@@ -564,7 +577,6 @@
     <string name="licenses_full_text">完整文本</string>
     <string name="licenses_named_full_text">%1$s · 完整文本</string>
     <string name="licenses_link_unavailable">没有可打开此链接的应用。</string>
-
     <!-- Clock style -->
     <string name="clock_style_apply">应用</string>
     <string name="clock_layout">时钟样式</string>
@@ -586,7 +598,6 @@
     <string name="clock_show_colon">显示冒号</string>
     <string name="clock_show_colon_summary">在小时和分钟之间显示冒号</string>
     <string name="clock_reset_value">恢复%1$s的默认值</string>
-
     <!-- Search -->
     <string name="settings_search">搜索</string>
     <string name="search_settings_summary">应用、联系人与搜索建议</string>
@@ -620,7 +631,6 @@
     <string name="search_hidden_apps_summary">包含从应用列表中隐藏的应用</string>
     <string name="search_clear_query">清空搜索</string>
     <string name="app_selection_fast_scroll">快速滚动应用列表</string>
-
     <!-- Home widgets -->
     <string name="widget_home_menu">Grace 小组件</string>
     <string name="widget_add">添加自定义小组件</string>
@@ -665,20 +675,20 @@
     <string name="font_delete">删除</string>
     <string name="font_delete_title">删除字体？</string>
     <string name="font_delete_summary">删除 %1$d 个导入的字体？使用这些字体的组件将恢复为默认字体。</string>
-    <string name="settings_favorites_app_list">收藏与应用列表</string>
+    <string name="settings_favorites_app_list">应用列表</string>
+    <string name="list_appearance_tab_list">列表</string>
+    <string name="list_appearance_tab_notification">通知</string>
+    <string name="list_preview_folder">文件夹</string>
+    <string name="list_preview_notification_title">Test</string>
+    <string name="list_preview_notification_text">这是一段测试消息，用于测试通知的显示效果。</string>
     <string name="list_app_spacing">应用间距</string>
     <string name="list_side_padding">列表两侧边距</string>
     <string name="list_icon_name_gap">图标与名称间距</string>
     <string name="list_font_color">字体颜色</string>
-    <string name="list_color_default">跟随壁纸文字颜色</string>
+    <string name="list_color_default">跟随默认字体颜色</string>
     <string name="list_show_names">显示应用名称</string>
-    <string name="list_names_both">收藏与应用列表</string>
-    <string name="list_names_favorites">仅收藏</string>
-    <string name="list_names_app_list">仅应用列表</string>
-    <string name="list_names_neither">均不显示</string>
     <string name="list_names_in_folders">同时影响文件夹内部</string>
-    <string name="list_left_alphabet">从左侧使用字母表</string>
-    <string name="list_left_alphabet_summary">沿左侧边缘滑动，操作右侧的字母表</string>
+    <string name="list_left_alphabet">从左侧使用</string>
     <string name="shortcuts_folders_title">快捷方式与文件夹</string>
     <string name="popups_title">弹出窗口</string>
     <string name="shortcuts_folders_enable">启用应用弹出窗口</string>
@@ -699,7 +709,6 @@
     <string name="alphabet_top">上限位置</string>
     <string name="alphabet_bottom">下限位置</string>
     <string name="alphabet_free_movement">字母表自由移动</string>
-    <string name="alphabet_free_movement_summary">滑过任一端点时带动字母表平移，松手后回到起始位置</string>
     <string name="alphabet_automatic_spacing">自动排列 · %1$d dp 间距</string>
     <string name="settings_palette_style">调色板风格</string>
     <string name="palette_tonal_spot">色调点缀 (Tonal spot)</string>
@@ -715,7 +724,10 @@
     <string name="settings_folder_auto_hide">自动隐藏内部的应用</string>
     <string name="settings_folder_auto_hide_summary">从应用列表隐藏当前和今后加入的应用。移出后仍会保留手动设置的隐藏状态。</string>
     <string name="hidden_from_folder">从文件夹隐藏</string>
-    <string name="settings_additional_screen">附加页面</string>
+    <string name="settings_screens">页面</string>
+    <string name="settings_home_screen">首页</string>
+    <string name="settings_feed_screen">信息流页面</string>
+    <string name="settings_status_screen">状态页面</string>
     <string name="widget_screen_title">小组件页面</string>
     <string name="widget_screen_enable">启用小组件页面</string>
     <string name="widget_screen_swipe">左滑桌面进入</string>
@@ -753,4 +765,110 @@
     <string name="lab_dismiss_resistance_summary">通知和音乐组件共用。数值越大阻力越强，0% 时完全跟手。</string>
     <string name="lab_dismiss_threshold">突破阈值</string>
     <string name="lab_dismiss_threshold_summary">解除阻力前需要滑动的距离。通知和音乐组件共用，不会超过可用宽度。</string>
+    <string name="font_color_default">默认字体颜色</string>
+    <string name="font_color_theme">主题字体颜色</string>
+    <string name="font_color_add">添加颜色</string>
+    <string name="font_color_saved">已保存的字体颜色</string>
+    <string name="font_color_edit">编辑</string>
+    <string name="font_color_material">Material 颜色</string>
+    <string name="material_color_primary">主色</string>
+    <string name="material_color_on_primary">主色上的内容</string>
+    <string name="material_color_primary_container">主色容器</string>
+    <string name="material_color_on_primary_container">主色容器上的内容</string>
+    <string name="material_color_secondary">次色</string>
+    <string name="material_color_on_secondary">次色上的内容</string>
+    <string name="material_color_secondary_container">次色容器</string>
+    <string name="material_color_on_secondary_container">次色容器上的内容</string>
+    <string name="material_color_tertiary">第三色</string>
+    <string name="material_color_on_tertiary">第三色上的内容</string>
+    <string name="material_color_tertiary_container">第三色容器</string>
+    <string name="material_color_on_tertiary_container">第三色容器上的内容</string>
+    <string name="material_color_surface">表面</string>
+    <string name="material_color_on_surface">表面上的内容</string>
+    <string name="material_color_surface_variant">表面变体</string>
+    <string name="material_color_on_surface_variant">表面变体上的内容</string>
+    <string name="material_color_surface_dim">暗表面</string>
+    <string name="material_color_surface_bright">亮表面</string>
+    <string name="material_color_surface_container_lowest">表面容器（最低）</string>
+    <string name="material_color_surface_container_low">表面容器（低）</string>
+    <string name="material_color_surface_container">表面容器</string>
+    <string name="material_color_surface_container_high">表面容器（高）</string>
+    <string name="material_color_surface_container_highest">表面容器（最高）</string>
+    <string name="material_color_background">背景</string>
+    <string name="material_color_on_background">背景上的内容</string>
+    <string name="material_color_outline">轮廓</string>
+    <string name="material_color_outline_variant">轮廓变体</string>
+    <string name="material_color_error">错误色</string>
+    <string name="material_color_on_error">错误色上的内容</string>
+    <string name="material_color_error_container">错误色容器</string>
+    <string name="material_color_on_error_container">错误色容器上的内容</string>
+    <string name="material_color_inverse_surface">反色表面</string>
+    <string name="material_color_inverse_on_surface">反色表面上的内容</string>
+    <string name="material_color_inverse_primary">反色主色</string>
+    <string name="material_color_surface_tint">表面着色</string>
+    <string name="material_color_scrim">遮罩</string>
+    <string name="font_color_wallpaper">壁纸字体颜色</string>
+    <string name="font_color_follow_wallpaper">跟随壁纸字体颜色</string>
+    <string name="wallpaper_brightness_auto">自动</string>
+    <string name="wallpaper_brightness_dark">深色壁纸</string>
+    <string name="wallpaper_brightness_light">浅色壁纸</string>
+    <string name="wallpaper_color_access_unavailable">允许自动识别之前，按深色壁纸显示</string>
+    <string name="wallpaper_color_access_title">允许识别壁纸颜色？</string>
+    <string name="wallpaper_color_access_summary">允许 Grace 使用 Android 提供的壁纸颜色来选择清晰可读的文字颜色吗？如果不允许，自动模式将按深色壁纸显示。</string>
+    <string name="wallpaper_color_access_allow">允许</string>
+    <string name="wallpaper_color_access_decline">暂不允许</string>
+    <string name="clock_tab_presets">预设</string>
+    <string name="clock_tab_style">样式</string>
+    <string name="clock_show_leading_zero">显示首位的 0</string>
+    <string name="clock_show_clock">显示时钟</string>
+    <string name="clock_show_weekday">显示星期</string>
+    <string name="clock_show_date">显示日期</string>
+    <string name="clock_show_battery">显示电量</string>
+    <string name="clock_show_weather">显示天气</string>
+    <string name="clock_weather_icons">天气图标</string>
+    <string name="clock_weather_icons_monochrome">单色</string>
+    <string name="clock_color_hour_tens">小时十位</string>
+    <string name="clock_color_hour_ones">小时个位</string>
+    <string name="clock_color_minute_tens">分钟十位</string>
+    <string name="clock_color_minute_ones">分钟个位</string>
+    <string name="clock_color_weekday">星期</string>
+    <string name="clock_color_date_group">日期</string>
+    <string name="clock_color_month">月</string>
+    <string name="clock_color_day">日</string>
+    <string name="clock_color_battery">电量百分比</string>
+    <string name="clock_color_weather">天气文字</string>
+    <string name="app_category_pinned">置顶</string>
+    <string name="app_category_notification">通知</string>
+    <string name="category_inclusion">包含应用方式</string>
+    <string name="category_manual">手动选择</string>
+    <string name="category_dynamic">动态选择</string>
+    <string name="category_dynamic_rule">动态选择条件</string>
+    <string name="category_rule_notifications">有通知的应用</string>
+    <string name="category_rule_frequent">最常打开的应用</string>
+    <string name="category_icon">图标</string>
+    <string name="category_placement">显示位置</string>
+    <string name="category_home">主页</string>
+    <string name="category_notification_levels">通知级别</string>
+    <string name="category_notification_silent">静默</string>
+    <string name="category_notification_normal">普通</string>
+    <string name="category_notification_high">高</string>
+    <string name="category_app_count">应用数量：%1$d</string>
+    <string name="category_icon_music">音符</string>
+    <string name="category_icon_keep">图钉</string>
+    <string name="category_icon_notifications">未读通知</string>
+    <string name="category_icon_circle">圆形</string>
+    <string name="category_icon_info">信息</string>
+    <string name="category_icon_schedule">时钟</string>
+    <string name="category_icon_day">晴天</string>
+    <string name="category_icon_bedtime">就寝</string>
+    <string name="category_dw_disabled">未开启数字健康</string>
+    <string name="category_open_dw">前往数字健康</string>
+    <string name="app_list_bottom_folders">底部文件夹</string>
+    <string name="app_list_edit">编辑应用列表</string>
+    <string name="app_list_grace_settings">Grace 设置</string>
+    <string name="app_list_add_grace">Grace 启动器</string>
+    <string name="alphabet_show_in">显示在</string>
+    <string name="list_symbol_horizontal_offset">符号水平偏移</string>
+    <string name="alphabet_touch_area">显示触控区域</string>
+    <string name="alphabet_touch_width">右侧触控宽度</string>
 </resources>

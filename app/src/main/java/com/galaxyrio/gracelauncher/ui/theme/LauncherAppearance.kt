@@ -1,16 +1,12 @@
 package com.galaxyrio.gracelauncher.ui.theme
 
 import android.app.Activity
-import android.app.WallpaperColors
-import android.app.WallpaperManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.os.BatteryManager
 import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.view.WindowManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -22,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -36,20 +33,22 @@ import com.materialkolor.palettes.TonalPalette
 import java.util.function.Consumer
 
 data class LauncherAppearance(val darkText: Boolean = false, val themedIcons: Boolean = false, val iconSize: Int = 100,
-    val iconDisplay: IconDisplaySettings = IconDisplaySettings()) {
-    val text: Color get() = if (darkText) Color(0xFF202025) else Color(0xFFFAF9FE)
-    val textShadow: Shadow get() = if (darkText) Shadow.None else Shadow(Color.Black.copy(alpha = 0.32f), blurRadius = 4f)
+    val iconDisplay: IconDisplaySettings = IconDisplaySettings(), val textColor: Color? = null) {
+    val text: Color get() = textColor ?: if (darkText) Color(0xFF202025) else Color(0xFFFAF9FE)
+    val textShadow: Shadow get() = if (text.luminance() < 0.5f) Shadow.None
+        else Shadow(Color.Black.copy(alpha = 0.32f), blurRadius = 4f)
 }
 
 val LocalLauncherAppearance = staticCompositionLocalOf { LauncherAppearance() }
 
 /** The settings preview, app list and search resolve the same saved overlay color. */
-internal fun LauncherAppearance.wallpaperTint(primary: Color, choice: IconColor? = null): Color {
+internal fun LauncherAppearance.wallpaperTint(primary: Color, choice: IconColor? = null,
+    colorScheme: androidx.compose.material3.ColorScheme? = null): Color {
     // Adjust primary's tone, not a black scrim. Dark text gets a matching light tint.
     // Change tone within the already selected theme palette; do not generate a
     // second Tonal Spot scheme that discards the user's chosen style/chroma.
     val automatic = Color(TonalPalette.fromInt(primary.toArgb()).tone(if (darkText) 95 else 10))
-    return choice?.resolve(primary.toArgb())?.let(::Color) ?: automatic
+    return choice?.resolve(primary.toArgb(), colorScheme = colorScheme)?.let(::Color) ?: automatic
 }
 
 /** One resolver for every row: a per-app override wins, else the shared setting. */
@@ -57,31 +56,16 @@ fun LauncherApp.effectiveDisplay(appearance: LauncherAppearance): IconDisplaySet
     iconDisplay ?: appearance.iconDisplay
 
 @Composable
+@Suppress("UNUSED_PARAMETER") // Retain the legacy call signature while font colors replace wallpaper text modes.
 fun rememberLauncherAppearance(mode: WallpaperTextMode, themedIcons: Boolean, iconSize: Int = 100,
     iconDisplay: IconDisplaySettings = IconDisplaySettings()): LauncherAppearance {
-    val context = LocalContext.current
-    val manager = remember(context) { WallpaperManager.getInstance(context) }
-    fun prefersDark(colors: WallpaperColors?): Boolean = Build.VERSION.SDK_INT >= 31 &&
-        colors != null && (colors.colorHints and WallpaperColors.HINT_SUPPORTS_DARK_TEXT) != 0
-    var dark by remember(manager) {
-        mutableStateOf(runCatching { prefersDark(manager.getWallpaperColors(WallpaperManager.FLAG_SYSTEM)) }.getOrDefault(false))
-    }
-    DisposableEffect(manager) {
-        val listener = WallpaperManager.OnColorsChangedListener { colors, which ->
-            if (which and WallpaperManager.FLAG_SYSTEM != 0) dark = prefersDark(colors)
-        }
-        manager.addOnColorsChangedListener(listener, Handler(Looper.getMainLooper()))
-        onDispose { manager.removeOnColorsChangedListener(listener) }
-    }
+    val text = resolvedFontColor(onWallpaper = true)
     return LauncherAppearance(
-        darkText = when (mode) {
-            WallpaperTextMode.Auto -> dark
-            WallpaperTextMode.Light -> false
-            WallpaperTextMode.Dark -> true
-        },
+        darkText = text.luminance() < 0.5f,
         themedIcons = themedIcons,
         iconSize = iconSize.coerceIn(80, 150),
         iconDisplay = iconDisplay,
+        textColor = text,
     )
 }
 

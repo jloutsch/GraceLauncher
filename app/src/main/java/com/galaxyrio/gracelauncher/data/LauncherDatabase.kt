@@ -45,7 +45,6 @@ data class LauncherSettingsEntity(
     @ColumnInfo(defaultValue = "0") val weatherEnabled: Boolean = false,
     @ColumnInfo(defaultValue = "7") val weatherForecastDays: Int = 7,
     val weatherLocationId: String? = null,
-    val weatherAppKey: String? = null,
     val clockAppKey: String? = null,
     val clockStyleJson: String? = null,
     val homeLayoutJson: String? = null,
@@ -58,6 +57,7 @@ data class LauncherSettingsEntity(
     @ColumnInfo(defaultValue = "16") val wallpaperBlurRadius: Int = 16,
     val appFontId: String? = null,
     val fontLibraryJson: String? = null,
+    val fontColorsJson: String? = null,
     val listAppearanceJson: String? = null,
     @ColumnInfo(defaultValue = "1") val applyFontToSettings: Boolean = true,
     val privateSpaceJson: String? = null,
@@ -67,8 +67,8 @@ data class LauncherSettingsEntity(
     val shortcutsFoldersJson: String? = null,
     val digitalWellbeingJson: String? = null,
     val widgetScreenJson: String? = null,
+    val appCategoriesJson: String? = null,
     @ColumnInfo(defaultValue = "0") val preferNonAccessibility: Boolean = false,
-    val headphoneAppsJson: String? = null,
 )
 
 @Entity(tableName = "hidden_apps")
@@ -82,7 +82,6 @@ data class LauncherFolderEntity(
     @ColumnInfo(defaultValue = "1") val appListAtBottom: Boolean = true,
     @ColumnInfo(defaultValue = "0") val autoHideApps: Boolean = false,
     @ColumnInfo(defaultValue = "0") val isAppStack: Boolean = false,
-    @ColumnInfo(defaultValue = "0") val isWidgetStack: Boolean = false,
 )
 
 @Dao
@@ -140,7 +139,7 @@ abstract class LauncherDatabase : RoomDatabase() {
     abstract fun backupDao(): BackupDao
 
     companion object {
-        const val SCHEMA_VERSION = 30
+        const val SCHEMA_VERSION = 29
 
         val Migration1To2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -337,23 +336,17 @@ abstract class LauncherDatabase : RoomDatabase() {
 
         val Migration27To28 = object : Migration(27, 28) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE folders ADD COLUMN isWidgetStack INTEGER NOT NULL DEFAULT 0")
+                db.execSQL("ALTER TABLE launcher_settings ADD COLUMN appCategoriesJson TEXT DEFAULT NULL")
             }
         }
 
         val Migration28To29 = object : Migration(28, 29) {
             override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE launcher_settings ADD COLUMN headphoneAppsJson TEXT DEFAULT NULL")
+                db.execSQL("ALTER TABLE launcher_settings ADD COLUMN fontColorsJson TEXT DEFAULT NULL")
             }
         }
 
-        val Migration29To30 = object : Migration(29, 30) {
-            override fun migrate(db: SupportSQLiteDatabase) {
-                db.execSQL("ALTER TABLE launcher_settings ADD COLUMN weatherAppKey TEXT DEFAULT NULL")
-            }
-        }
-
-        val Migrations: Array<Migration> = arrayOf(Migration1To2, Migration2To3, Migration3To4, Migration4To5, Migration5To6, Migration6To7, Migration7To8, Migration8To9, Migration9To10, Migration10To11, Migration11To12, Migration12To13, Migration13To14, Migration14To15, Migration15To16, Migration16To17, Migration17To18, Migration18To19, Migration19To20, Migration20To21, Migration21To22, Migration22To23, Migration23To24, Migration24To25, Migration25To26, Migration26To27, Migration27To28, Migration28To29, Migration29To30)
+        val Migrations: Array<Migration> = arrayOf(Migration1To2, Migration2To3, Migration3To4, Migration4To5, Migration5To6, Migration6To7, Migration7To8, Migration8To9, Migration9To10, Migration10To11, Migration11To12, Migration12To13, Migration13To14, Migration14To15, Migration15To16, Migration16To17, Migration17To18, Migration18To19, Migration19To20, Migration20To21, Migration21To22, Migration22To23, Migration23To24, Migration24To25, Migration25To26, Migration26To27, Migration27To28, Migration28To29)
 
         fun getInstance(context: Context): LauncherDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(

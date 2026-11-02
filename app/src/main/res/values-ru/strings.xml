@@ -96,7 +96,6 @@
     <string name="private_space_security_required">Настройте блокировку экрана устройства, чтобы включить защиту паролем</string>
     <string name="private_space_unlock_edit">Разблокируйте для редактирования</string>
     <string name="private_space_lock">Заблокировать личное пространство</string>
-
     <!-- Core -->
     <string name="app_name">Grace Launcher</string>
     <string name="alphabet_scroller">Быстрая прокрутка по алфавиту</string>
@@ -179,7 +178,6 @@
     <string name="connect_calendar">Подключить календарь</string>
     <string name="calendar_error">Не удалось загрузить календарь</string>
     <string name="no_upcoming_events">В ближайшие 14 дней событий нет</string>
-
     <!-- Search and app drawer -->
     <string name="search_apps">Поиск приложений</string>
     <string name="search_no_results">Подходящие приложения не найдены</string>
@@ -187,10 +185,8 @@
     <string name="drawer_folders">Папки</string>
     <string name="recently_installed">Недавно установленные</string>
     <string name="hide_recently_installed">Скрыть недавно установленные</string>
-    <string name="settings_recently_installed_summary">Показывать 8 последних установленных приложений в списке</string>
     <string name="add_to_folder">Добавить в папку</string>
     <string name="create_app_folder">Новая папка в списке приложений</string>
-
     <!-- Favorites -->
     <string name="favorites_selected">Выбранное</string>
     <string name="favorites_all_apps">Все приложения</string>
@@ -202,13 +198,11 @@
     <string name="favorites_reorder">Изменить положение «%1$s»</string>
     <string name="favorites_move_up">Переместить вверх</string>
     <string name="favorites_move_down">Переместить вниз</string>
-
     <!-- Folders -->
     <string name="open_folder">Открыть папку</string>
     <string name="folder_actions">Действия с папкой</string>
     <string name="edit_folder">Изменить папку</string>
     <string name="empty_folder">В этой папке нет приложений</string>
-
     <!-- Notifications -->
     <string name="notification_dismiss">Смахнуть</string>
     <string name="notification_now">сейчас</string>
@@ -217,7 +211,6 @@
     <string name="notification_days">%1$d дн.</string>
     <string name="notification_unavailable">Это уведомление больше недоступно</string>
     <string name="notification_allow">Показывать уведомления приложений</string>
-
     <!-- Media -->
     <string name="media_service_name">Уведомления и медиа Grace Launcher</string>
     <string name="media_player_summary">Показывать воспроизведение на главном экране</string>
@@ -232,7 +225,6 @@
     <string name="media_open_player">Открыть «%1$s»</string>
     <string name="media_unknown_title">Сейчас воспроизводится</string>
     <string name="media_control_unavailable">Плеер больше недоступен</string>
-
     <!-- Settings -->
     <string name="settings_title">Настройки</string>
     <string name="settings_back">Назад</string>
@@ -264,7 +256,7 @@
         <item quantity="one">Скрыто %1$d приложение</item>
         <item quantity="few">Скрыто %1$d приложения</item>
         <item quantity="many">Скрыто %1$d приложений</item>
-        <item quantity="other">Скрыто %1$d приложения</item>
+        <item quantity="other">Скрыто %1$d приложений</item>
     </plurals>
     <string name="settings_hide_apps_description">Скрывать приложения только из списка. Они остаются доступны в избранном, папках, всплывающих меню и поиске.</string>
     <string name="settings_folders">Папки</string>
@@ -272,7 +264,7 @@
         <item quantity="one">%1$d папка</item>
         <item quantity="few">%1$d папки</item>
         <item quantity="many">%1$d папок</item>
-        <item quantity="other">%1$d папки</item>
+        <item quantity="other">%1$d папок</item>
     </plurals>
     <string name="settings_folder_empty">Храните связанные приложения вместе. Создайте первую папку.</string>
     <string name="settings_folder_create">Создать папку</string>
@@ -289,7 +281,7 @@
         <item quantity="one">%1$d элемент · %2$s</item>
         <item quantity="few">%1$d элемента · %2$s</item>
         <item quantity="many">%1$d элементов · %2$s</item>
-        <item quantity="other">%1$d элемента · %2$s</item>
+        <item quantity="other">%1$d элементов · %2$s</item>
     </plurals>
     <string name="settings_folder_delete">Удалить папку</string>
     <string name="settings_folder_delete_confirmation">Удалить «%1$s» и её виджеты? Приложения внутри останутся установленными.</string>
@@ -333,7 +325,6 @@
     <string name="font_apply_settings">Применять шрифт в настройках</string>
     <string name="font_apply_settings_summary">Использовать выбранную комбинацию шрифтов в настройках Grace</string>
     <string name="font_import_error">Не удалось импортировать шрифт. Выберите корректный файл TTF, OTF или TTC размером до 20 МБ.</string>
-    <string name="settings_wallpaper_text">Цвет текста</string>
     <string name="settings_text_auto">Автоматически</string>
     <string name="settings_text_light">Светлый текст</string>
     <string name="settings_text_dark">Тёмный текст</string>
@@ -342,8 +333,6 @@
     <string name="settings_misc">Разное</string>
     <string name="settings_hide_status_bar">Скрыть строку состояния</string>
     <string name="settings_hide_status_bar_summary">Скрывать на главном экране и в списке приложений</string>
-    <string name="settings_hide_alphabet">Скрыть алфавит</string>
-    <string name="settings_hide_alphabet_summary">Скрывать на главном экране до свайпа по алфавиту</string>
     <string name="settings_hide_favorite_names">Скрыть названия в избранном</string>
     <string name="settings_hide_favorite_names_summary">Оставлять названия видимыми в списке приложений</string>
     <string name="settings_dim_wallpaper">Затемнять обои</string>
@@ -367,7 +356,6 @@
     <string name="settings_storage_loading">Загрузка настроек…</string>
     <string name="settings_storage_load_error">Не удалось загрузить настройки. Перезапустите лаунчер, чтобы повторить попытку.</string>
     <string name="settings_storage_save_error">Не удалось сохранить изменение. Повторите попытку.</string>
-
     <!-- Icon display -->
     <string name="icon_display_section">Отображение значков</string>
     <string name="icon_display_full">Полные значки</string>
@@ -384,7 +372,6 @@
     <string name="icon_dot_color_theme">Цвет темы</string>
     <string name="icon_dot_color_custom">Свой цвет</string>
     <string name="icon_dot_size">Размер точки</string>
-
     <!-- Icon packs -->
     <string name="icon_pack_system">Системные значки</string>
     <string name="icon_pack_enabled">Включённые наборы значков</string>
@@ -462,7 +449,6 @@
     <string name="icon_pack_unavailable">Набор значков недоступен · используются системные значки</string>
     <string name="icon_pack_missing">%1$s недоступен. Будут использованы другие включённые наборы или системные значки.</string>
     <string name="icon_pack_load_failed">Не удалось загрузить наборы значков. Повторите попытку.</string>
-
     <!-- Weather settings -->
     <string name="weather_settings_enabled_summary">Главный экран и повестка · Breezy Weather</string>
     <string name="weather_settings_disabled_summary">По желанию · требуется Breezy Weather</string>
@@ -493,15 +479,14 @@
         <item quantity="one">%1$d день</item>
         <item quantity="few">%1$d дня</item>
         <item quantity="many">%1$d дней</item>
-        <item quantity="other">%1$d дня</item>
+        <item quantity="other">%1$d дней</item>
     </plurals>
     <plurals name="weather_settings_days_summary">
         <item quantity="one">Прогноз максимум на %1$d день. Доступность прогнозов зависит от выбранного места и источника в Breezy Weather.</item>
         <item quantity="few">Прогноз максимум на %1$d дня. Доступность прогнозов зависит от выбранного места и источника в Breezy Weather.</item>
         <item quantity="many">Прогноз максимум на %1$d дней. Доступность прогнозов зависит от выбранного места и источника в Breezy Weather.</item>
-        <item quantity="other">Прогноз максимум на %1$d дня. Доступность прогнозов зависит от выбранного места и источника в Breezy Weather.</item>
+        <item quantity="other">Прогноз максимум на %1$d дней. Доступность прогнозов зависит от выбранного места и источника в Breezy Weather.</item>
     </plurals>
-
     <!-- Weather UI -->
     <string name="weather_current_description">%1$s, %2$s</string>
     <string name="weather_daily_description">%1$s, максимум %2$s, минимум %3$s</string>
@@ -524,7 +509,6 @@
     <string name="weather_update_unknown">время обновления неизвестно</string>
     <string name="weather_via_breezy">Погода из Breezy Weather</string>
     <string name="weather_agenda_action">%1$s. Открыть повестку и погоду</string>
-
     <!-- Licenses -->
     <string name="licenses_app_license">GNU GPLv3</string>
     <string name="licenses_app_summary">Grace Launcher — свободное программное обеспечение под лицензией GNU General Public License версии 3. Распространяется без гарантий. Сторонние компоненты сохраняют собственные лицензии.</string>
@@ -533,7 +517,7 @@
         <item quantity="one">%1$d библиотека</item>
         <item quantity="few">%1$d библиотеки</item>
         <item quantity="many">%1$d библиотек</item>
-        <item quantity="other">%1$d библиотеки</item>
+        <item quantity="other">%1$d библиотек</item>
     </plurals>
     <string name="licenses_search">Поиск библиотек</string>
     <string name="licenses_clear_search">Очистить поиск</string>
@@ -551,7 +535,6 @@
     <string name="licenses_full_text">Полный текст</string>
     <string name="licenses_named_full_text">%1$s · Полный текст</string>
     <string name="licenses_link_unavailable">Нет приложения для открытия этой ссылки.</string>
-
     <!-- Clock style -->
     <string name="clock_style_apply">Применить</string>
     <string name="clock_layout">Расположение часов</string>
@@ -573,7 +556,6 @@
     <string name="clock_show_colon">Показывать двоеточие</string>
     <string name="clock_show_colon_summary">Разделять часы и минуты двоеточием</string>
     <string name="clock_reset_value">Сбросить «%1$s» к значению по умолчанию</string>
-
     <!-- Search -->
     <string name="settings_search">Поиск</string>
     <string name="search_settings_summary">Приложения, контакты и подсказки</string>
@@ -607,7 +589,6 @@
     <string name="search_hidden_apps_summary">Включать приложения, скрытые из списка</string>
     <string name="search_clear_query">Очистить поиск</string>
     <string name="app_selection_fast_scroll">Быстрая прокрутка приложений</string>
-
     <!-- Home widgets -->
     <string name="widget_home_menu">Виджет Grace</string>
     <string name="widget_add">Добавить свой виджет</string>
@@ -634,7 +615,7 @@
         <item quantity="one">%d виджет</item>
         <item quantity="few">%d виджета</item>
         <item quantity="many">%d виджетов</item>
-        <item quantity="other">%d виджета</item>
+        <item quantity="other">%d виджетов</item>
     </plurals>
     <string name="pin_item_title">Добавить на главный экран</string>
     <string name="pin_item_add">Добавить</string>
@@ -642,7 +623,6 @@
     <string name="pin_widget_message">Добавить виджет «%1$s» на главный экран?</string>
     <string name="pin_item_expired">Этот запрос больше недоступен. Повторите попытку из приложения.</string>
     <string name="pin_item_error">Не удалось добавить ярлык. Повторите попытку.</string>
-
     <!-- Font library and favorites/app-list appearance -->
     <string name="font_follow_manager">По умолчанию · Менеджер шрифтов</string>
     <string name="font_add">Добавить шрифт</string>
@@ -658,13 +638,8 @@
     <string name="list_font_color">Цвет шрифта</string>
     <string name="list_color_default">Как у текста на обоях</string>
     <string name="list_show_names">Показывать названия приложений</string>
-    <string name="list_names_both">Избранное и список приложений</string>
-    <string name="list_names_favorites">Только избранное</string>
-    <string name="list_names_app_list">Только список приложений</string>
-    <string name="list_names_neither">Нигде</string>
     <string name="list_names_in_folders">Применять и внутри папок</string>
     <string name="list_left_alphabet">Управлять алфавитом слева</string>
-    <string name="list_left_alphabet_summary">Проводите вдоль левого края, чтобы управлять алфавитом справа</string>
     <string name="shortcuts_folders_title">Ярлыки и папки</string>
     <string name="shortcuts_folders_enable">Включить всплывающие меню приложений</string>
     <string name="popup_swipe_left_first">Свайп влево для открытия первого элемента</string>
@@ -680,7 +655,6 @@
     <string name="alphabet_top">Верхнее положение</string>
     <string name="alphabet_bottom">Нижнее положение</string>
     <string name="alphabet_free_movement">Свободное перемещение</string>
-    <string name="alphabet_free_movement_summary">Перетащите за любой край алфавита, чтобы переместить его. Отпустите, чтобы вернуть на место.</string>
     <string name="alphabet_automatic_spacing">Автоматически · интервал %1$d dp</string>
     <string name="settings_palette_style">Стиль палитры</string>
     <string name="palette_tonal_spot">Приглушённая палитра</string>
@@ -696,7 +670,6 @@
     <string name="settings_folder_auto_hide">Автоматически скрывать приложения внутри</string>
     <string name="settings_folder_auto_hide_summary">Скрывать из списка текущие и будущие приложения этой папки. Приложения, скрытые вручную, останутся скрытыми после удаления из папки.</string>
     <string name="hidden_from_folder">Скрыто папкой</string>
-    <string name="settings_additional_screen">Дополнительный экран</string>
     <string name="widget_screen_title">Экран виджетов</string>
     <string name="widget_screen_enable">Включить экран виджетов</string>
     <string name="widget_screen_swipe">Свайп влево на главном экране</string>

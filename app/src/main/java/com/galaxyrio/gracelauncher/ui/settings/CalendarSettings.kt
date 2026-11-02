@@ -17,10 +17,6 @@ internal fun CalendarSettings(uiState: LauncherUiState, actions: LauncherActions
                     actions.updateSettings { it.copy(calendarAgenda = enabled) }
                 }
             }
-            item {
-                SettingsToggleItem(stringResource(R.string.settings_show_battery), null, uiState.settings.showBatteryPercentage,
-                    0, 1, "show_battery") { value -> actions.updateSettings { it.copy(showBatteryPercentage = value) } }
-            }
             if (uiState.scheduleStatus == ScheduleStatus.PermissionRequired) item {
                 SettingsHeading(stringResource(R.string.widget_calendar_access))
                 SettingsActionItem(stringResource(R.string.connect_calendar), stringResource(R.string.calendar_permission_description),

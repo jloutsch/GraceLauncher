@@ -2,6 +2,8 @@ package com.galaxyrio.gracelauncher.ui.components
 
 import android.content.ComponentName
 import android.graphics.Rect
+import android.os.Process
+import android.os.UserHandle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
@@ -24,13 +26,14 @@ internal val LocalHomeAnimationTarget = staticCompositionLocalOf { false }
 
 /** Record the exact Compose artwork, including themed and third-party icons. */
 @Composable
-internal fun Modifier.launcherAnimationTarget(components: List<ComponentName>, folder: Boolean = false): Modifier {
+internal fun Modifier.launcherAnimationTarget(components: List<ComponentName>, folder: Boolean = false,
+    user: UserHandle = Process.myUserHandle()): Modifier {
     val transitions = LocalAppTransitions.current ?: return this
     val home = LocalHomeAnimationTarget.current
     val view = LocalView.current
     val layer = rememberGraphicsLayer()
     val location = remember { IconLocation() }
-    val target = remember(transitions, components, home, folder, view, layer) {
+    val target = remember(transitions, components, home, folder, view, layer, user) {
         LauncherIconTarget(components, home, folder, view, boundsInWindow = {
             location.coordinates?.takeIf { it.isAttached }?.boundsInWindow()?.let {
                 Rect(it.left.roundToInt(), it.top.roundToInt(), it.right.roundToInt(), it.bottom.roundToInt())
@@ -38,7 +41,7 @@ internal fun Modifier.launcherAnimationTarget(components: List<ComponentName>, f
             }
         }, capture = {
             if (layer.size.width > 0 && layer.size.height > 0) layer.toImageBitmap().asAndroidBitmap() else null
-        })
+        }, user = user)
     }
     DisposableEffect(transitions, target) {
         transitions.register(target)

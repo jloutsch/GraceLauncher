@@ -47,6 +47,8 @@ data class LauncherApp(
     val iconSourceRevision: Any? = null,
     /** Provider-supplied English label; never replaces the displayed name. */
     val englishLabel: String? = null,
+    /** Clone profiles live alongside personal apps, with their own user identity and badge. */
+    val isCloneProfile: Boolean = false,
 ) {
     val key: String = folderId?.let { "folder:$it" } ?: shortcut?.key
         ?: userSerial?.let { "profile:$it:${componentName.flattenToString()}" } ?: componentName.flattenToString()

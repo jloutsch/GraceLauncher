@@ -33,6 +33,7 @@ internal class UsageRepository private constructor(private val context: Context)
     private var weekHistory: Map<String, Long> = emptyMap()
     private var monthHistory: Map<String, Long> = emptyMap()
     private var loadedDisplays = emptySet<UsageDisplay>()
+    private var openCountsLoaded = false
 
     fun hasAccess(): Boolean = runCatching {
         val ops = context.getSystemService(AppOpsManager::class.java)
@@ -40,13 +41,15 @@ internal class UsageRepository private constructor(private val context: Context)
         ops.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, Process.myUid(), context.packageName) == AppOpsManager.MODE_ALLOWED
     }.getOrDefault(false)
 
-    suspend fun refresh(settings: DigitalWellbeingSettings, forceRanking: Boolean = false): UsageSnapshot = withContext(Dispatchers.IO) {
+    suspend fun refresh(settings: DigitalWellbeingSettings, forceRanking: Boolean = false,
+        needOpenCounts: Boolean = false): UsageSnapshot = withContext(Dispatchers.IO) {
         mutex.withLock {
             val access = hasAccess()
+            // Dynamic categories never collect or expose usage data while Digital Wellbeing is off.
             if (!settings.enabled || !access) {
                 cached = UsageSnapshot(hasAccess = access)
                 historyKey = null; loadedDisplays = emptySet(); lastAttempt = 0
-                rankingLoaded = false
+                rankingLoaded = false; openCountsLoaded = false
                 opens.clear(revoke = !access)
                 if (!access) rankingFile.delete()
                 return@withLock cached
@@ -61,16 +64,25 @@ internal class UsageRepository private constructor(private val context: Context)
             val zone = ZoneId.systemDefault()
             val today = LocalDate.now(zone)
             val key = "$today/$zone"
-            val rankDue = forceRanking || (settings.sortApps && usageRefreshDue(cached.rankedAt, now, settings.refresh, zone))
-            val needsLabels = settings.showUsage && settings.display.isNotEmpty()
-            if (!needsLabels && !rankDue && !settings.sortApps) return@withLock cached
+            val plan = usageReadPlan(settings, needOpenCounts, forceRanking, cached.rankedAt, now, zone)
+            val rankDue = plan.ranking
+            val needsLabels = plan.labels
+            if (!needsLabels && !plan.opens) return@withLock cached
             val sameDay = historyKey == key && now >= cached.updatedAt
             if (!forceRanking && cached.failed && attemptKey == key && elapsed - lastAttempt in 0 until 60_000) return@withLock cached
             if (!forceRanking && attemptKey == key && elapsed - lastAttempt in 0 until 60_000 &&
-                (!needsLabels || (sameDay && settings.display.all { it in loadedDisplays })) && !rankDue) return@withLock cached
+                (!needsLabels || (sameDay && settings.display.all { it in loadedDisplays })) &&
+                (!plan.opens || openCountsLoaded) && !rankDue) return@withLock cached
             lastAttempt = elapsed
             attemptKey = key
             try {
+                // Categories use fresh counts even while the drawer's saved ordering is frozen.
+                // Keep this result if a separate duration-label query subsequently fails.
+                val openCounts = if (plan.opens) opens.update(now, zone) else cached.openCounts
+                if (plan.opens) {
+                    cached = cached.copy(openCounts = openCounts)
+                    openCountsLoaded = true
+                }
                 val start = today.atStartOfDay(zone).toInstant().toEpochMilli()
                 val day = if (needsLabels) readDay(start, now) else cached.day
                 // Historical daily buckets are queried only once per date/time-zone,
@@ -88,9 +100,6 @@ internal class UsageRepository private constructor(private val context: Context)
                     weekHistory = sum(weekStart); monthHistory = sum(monthStart)
                     historyKey = key; loadedDisplays = settings.display
                 }
-                // Collect on foreground returns even when the visible order is frozen (Never).
-                // This preserves counts after Android prunes its detailed event history.
-                val openCounts = if (settings.sortApps || rankDue) opens.update(now, zone) else emptyMap()
                 val rank = if (rankDue) openCounts else cached.ranking
                 val rankedAt = if (rankDue) now else cached.rankedAt
                 // A manual refresh is successful only if its snapshot is durable (including Never).
@@ -98,11 +107,11 @@ internal class UsageRepository private constructor(private val context: Context)
                 cached = UsageSnapshot(hasAccess = true, updatedAt = if (needsLabels) now else cached.updatedAt, day = day,
                     week = if (needsLabels) plus(weekHistory, day) else cached.week,
                     month = if (needsLabels) plus(monthHistory, day) else cached.month,
-                    ranking = rank, rankedAt = rankedAt)
+                    ranking = rank, rankedAt = rankedAt, openCounts = openCounts)
             } catch (_: Exception) {
                 cached = cached.copy(hasAccess = hasAccess(), failed = true)
                 if (!cached.hasAccess) {
-                    cached = UsageSnapshot(); rankingFile.delete(); rankingLoaded = false
+                    cached = UsageSnapshot(); rankingFile.delete(); rankingLoaded = false; openCountsLoaded = false
                     opens.clear(revoke = true)
                 }
             }

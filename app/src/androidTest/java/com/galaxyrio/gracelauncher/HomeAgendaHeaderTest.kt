@@ -45,6 +45,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.galaxyrio.gracelauncher.data.LauncherSettings
 import com.galaxyrio.gracelauncher.data.LauncherApp
+import com.galaxyrio.gracelauncher.data.ClockStyle
+import com.galaxyrio.gracelauncher.data.ClockVisibility
 import com.galaxyrio.gracelauncher.data.ScheduleEvent
 import com.galaxyrio.gracelauncher.data.weather.WeatherCondition
 import com.galaxyrio.gracelauncher.data.weather.WeatherCurrent
@@ -79,10 +81,12 @@ class HomeAgendaHeaderTest {
     private val wallpaperColor = Color(0xFF17202A)
     private var agendaClicks = 0
     private var clockClicks = 0
+    private var weatherClicks = 0
     private var state by mutableStateOf(
         LauncherUiState(
             isLoadingApps = false,
-            settings = LauncherSettings(calendarAgenda = true, weatherEnabled = true, showBatteryPercentage = false),
+            settings = LauncherSettings(calendarAgenda = true, weatherEnabled = true,
+                clockStyle = ClockStyle(visibility = ClockVisibility(showBattery = false))),
             scheduleStatus = ScheduleStatus.Ready,
             events = listOf(allDayEvent("国庆节")),
             weather = WeatherState(
@@ -110,15 +114,16 @@ class HomeAgendaHeaderTest {
         assertTrue("The title and metadata must not overlap", bounds("schedule_title").right < bounds("schedule_remaining").left)
     }
 
-    @Test fun bothRowsUseTheSameSingleButtonAndClockKeepsItsOwnAction() {
+    @Test fun dateAndAgendaShareTheirActionWhileClockAndWeatherStayIndependent() {
         showHome()
         compose.onNodeWithTag("home_date").assertHasClickAction()
         compose.onAllNodes(
             hasClickAction() and hasAnyAncestor(hasTestTag("home_date")),
             useUnmergedTree = true,
-        ).assertCountEquals(0)
+        ).assertCountEquals(1)
         node("home_date_text").assertHasNoClickAction()
         node("schedule_line").assertHasNoClickAction()
+        node("home_weather").assertHasClickAction()
 
         node("home_date_text").performTouchInput { click() }
         compose.runOnIdle { assertEquals("The first row opens the agenda once", 1, agendaClicks) }
@@ -128,6 +133,13 @@ class HomeAgendaHeaderTest {
         compose.runOnIdle {
             assertEquals(1, clockClicks)
             assertEquals("The clock does not open the agenda", 2, agendaClicks)
+        }
+        node("home_weather").performTouchInput { click() }
+        node("home_weather").performClick()
+        compose.runOnIdle {
+            assertEquals("Touch and accessibility clicks open weather", 2, weatherClicks)
+            assertEquals("Weather never opens the parent calendar action", 2, agendaClicks)
+            assertEquals("Weather does not open the clock", 1, clockClicks)
         }
     }
 
@@ -141,8 +153,13 @@ class HomeAgendaHeaderTest {
         node("home_weather").assertIsDisplayed()
         val singleLineHeight = bounds("home_date").height
         assertTrue("A disabled agenda must not retain an empty second row", twoLineHeight - singleLineHeight >= eventHeight - 2f)
-        node("home_date_text").performTouchInput { click() }
-        compose.runOnIdle { assertEquals(1, agendaClicks) }
+        node("home_date_text").assertDoesNotExist()
+        compose.onNodeWithTag("home_date").assertHasNoClickAction()
+        node("home_weather").performTouchInput { click() }
+        compose.runOnIdle {
+            assertEquals(1, weatherClicks)
+            assertEquals(0, agendaClicks)
+        }
         screenshot("home-agenda-disabled-single-line.png")
 
         // No event also produces the same compact layout, even when the calendar is enabled.
@@ -253,6 +270,7 @@ class HomeAgendaHeaderTest {
                             onAppShortcuts = { _, _ -> },
                             onDateClick = { agendaClicks++ },
                             onClockClick = { clockClicks++ },
+                            onWeatherClick = { weatherClicks++ },
                             modifier = Modifier.width(width),
                         )
                     }

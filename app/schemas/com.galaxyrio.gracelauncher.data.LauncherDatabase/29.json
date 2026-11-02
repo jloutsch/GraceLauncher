@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 29,
-    "identityHash": "cd791f184d4061d74c1f0466ecca821e",
+    "identityHash": "545f92d12b108a35a13a5a14861658ba",
     "entities": [
       {
         "tableName": "launcher_settings",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `clockEnabled` INTEGER NOT NULL DEFAULT 1, `calendarAboveClock` INTEGER NOT NULL DEFAULT 0, `calendarAgenda` INTEGER NOT NULL, `showBatteryPercentage` INTEGER NOT NULL, `allowHapticFeedback` INTEGER NOT NULL, `useDynamicColors` INTEGER NOT NULL, `themeColor` INTEGER NOT NULL, `paletteStyle` TEXT NOT NULL DEFAULT 'TonalSpot', `darkMode` TEXT NOT NULL, `amoledMode` INTEGER NOT NULL DEFAULT 0, `iconPackPackage` TEXT, `iconPackPackagesJson` TEXT, `iconDesignJson` TEXT, `mediaPlayer` INTEGER NOT NULL DEFAULT 1, `mediaAlwaysVisible` INTEGER NOT NULL DEFAULT 0, `mediaKeepWhilePlaying` INTEGER NOT NULL DEFAULT 1, `dismissResistance` INTEGER NOT NULL DEFAULT 55, `dismissThresholdDp` INTEGER NOT NULL DEFAULT 72, `mediaAppKey` TEXT, `graceButtonJson` TEXT, `weatherEnabled` INTEGER NOT NULL DEFAULT 0, `weatherForecastDays` INTEGER NOT NULL DEFAULT 7, `weatherLocationId` TEXT, `clockAppKey` TEXT, `clockStyleJson` TEXT, `homeLayoutJson` TEXT, `hideStatusBar` INTEGER NOT NULL DEFAULT 1, `hideAlphabet` INTEGER NOT NULL DEFAULT 0, `hideFavoriteNames` INTEGER NOT NULL DEFAULT 0, `dimWallpaper` INTEGER NOT NULL DEFAULT 0, `wallpaperDimAmount` INTEGER NOT NULL DEFAULT 20, `blurWallpaper` INTEGER NOT NULL DEFAULT 1, `wallpaperBlurRadius` INTEGER NOT NULL DEFAULT 16, `appFontId` TEXT, `fontLibraryJson` TEXT, `listAppearanceJson` TEXT, `applyFontToSettings` INTEGER NOT NULL DEFAULT 1, `privateSpaceJson` TEXT, `workProfileJson` TEXT, `homeGesturesJson` TEXT, `searchJson` TEXT, `shortcutsFoldersJson` TEXT, `digitalWellbeingJson` TEXT, `widgetScreenJson` TEXT, `preferNonAccessibility` INTEGER NOT NULL DEFAULT 0, `headphoneAppsJson` TEXT, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `clockEnabled` INTEGER NOT NULL DEFAULT 1, `calendarAboveClock` INTEGER NOT NULL DEFAULT 0, `calendarAgenda` INTEGER NOT NULL, `showBatteryPercentage` INTEGER NOT NULL, `allowHapticFeedback` INTEGER NOT NULL, `useDynamicColors` INTEGER NOT NULL, `themeColor` INTEGER NOT NULL, `paletteStyle` TEXT NOT NULL DEFAULT 'TonalSpot', `darkMode` TEXT NOT NULL, `amoledMode` INTEGER NOT NULL DEFAULT 0, `iconPackPackage` TEXT, `iconPackPackagesJson` TEXT, `iconDesignJson` TEXT, `mediaPlayer` INTEGER NOT NULL DEFAULT 1, `mediaAlwaysVisible` INTEGER NOT NULL DEFAULT 0, `mediaKeepWhilePlaying` INTEGER NOT NULL DEFAULT 1, `dismissResistance` INTEGER NOT NULL DEFAULT 55, `dismissThresholdDp` INTEGER NOT NULL DEFAULT 72, `mediaAppKey` TEXT, `graceButtonJson` TEXT, `weatherEnabled` INTEGER NOT NULL DEFAULT 0, `weatherForecastDays` INTEGER NOT NULL DEFAULT 7, `weatherLocationId` TEXT, `clockAppKey` TEXT, `clockStyleJson` TEXT, `homeLayoutJson` TEXT, `hideStatusBar` INTEGER NOT NULL DEFAULT 1, `hideAlphabet` INTEGER NOT NULL DEFAULT 0, `hideFavoriteNames` INTEGER NOT NULL DEFAULT 0, `dimWallpaper` INTEGER NOT NULL DEFAULT 0, `wallpaperDimAmount` INTEGER NOT NULL DEFAULT 20, `blurWallpaper` INTEGER NOT NULL DEFAULT 1, `wallpaperBlurRadius` INTEGER NOT NULL DEFAULT 16, `appFontId` TEXT, `fontLibraryJson` TEXT, `fontColorsJson` TEXT, `listAppearanceJson` TEXT, `applyFontToSettings` INTEGER NOT NULL DEFAULT 1, `privateSpaceJson` TEXT, `workProfileJson` TEXT, `homeGesturesJson` TEXT, `searchJson` TEXT, `shortcutsFoldersJson` TEXT, `digitalWellbeingJson` TEXT, `widgetScreenJson` TEXT, `appCategoriesJson` TEXT, `preferNonAccessibility` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -232,6 +232,11 @@
             "affinity": "TEXT"
           },
           {
+            "fieldPath": "fontColorsJson",
+            "columnName": "fontColorsJson",
+            "affinity": "TEXT"
+          },
+          {
             "fieldPath": "listAppearanceJson",
             "columnName": "listAppearanceJson",
             "affinity": "TEXT"
@@ -279,16 +284,16 @@
             "affinity": "TEXT"
           },
           {
+            "fieldPath": "appCategoriesJson",
+            "columnName": "appCategoriesJson",
+            "affinity": "TEXT"
+          },
+          {
             "fieldPath": "preferNonAccessibility",
             "columnName": "preferNonAccessibility",
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
-          },
-          {
-            "fieldPath": "headphoneAppsJson",
-            "columnName": "headphoneAppsJson",
-            "affinity": "TEXT"
           }
         ],
         "primaryKey": {
@@ -318,7 +323,7 @@
       },
       {
         "tableName": "folders",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `placement` TEXT NOT NULL, `appListAtBottom` INTEGER NOT NULL DEFAULT 1, `autoHideApps` INTEGER NOT NULL DEFAULT 0, `isAppStack` INTEGER NOT NULL DEFAULT 0, `isWidgetStack` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `placement` TEXT NOT NULL, `appListAtBottom` INTEGER NOT NULL DEFAULT 1, `autoHideApps` INTEGER NOT NULL DEFAULT 0, `isAppStack` INTEGER NOT NULL DEFAULT 0, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -355,13 +360,6 @@
           {
             "fieldPath": "isAppStack",
             "columnName": "isAppStack",
-            "affinity": "INTEGER",
-            "notNull": true,
-            "defaultValue": "0"
-          },
-          {
-            "fieldPath": "isWidgetStack",
-            "columnName": "isWidgetStack",
             "affinity": "INTEGER",
             "notNull": true,
             "defaultValue": "0"
@@ -473,7 +471,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'cd791f184d4061d74c1f0466ecca821e')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '545f92d12b108a35a13a5a14861658ba')"
     ]
   }
 }

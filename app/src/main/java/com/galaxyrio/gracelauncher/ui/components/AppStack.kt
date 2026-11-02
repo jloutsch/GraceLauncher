@@ -40,8 +40,6 @@ internal fun AppStack(
     onLaunch: (LauncherApp, Rect) -> Unit, onDetails: (LauncherApp) -> Unit, onEdit: () -> Unit,
     modifier: Modifier = Modifier, enabled: Boolean = true, gridManaged: Boolean = false,
     iconSize: Dp = 40.dp, onWallpaper: Boolean = true,
-    /** Contents for a stack that is not stored as a folder; null reads the folder's saved items. */
-    contents: List<LauncherApp>? = null,
 ) {
     // Every surface that places a stack (home, drawer, folders, Widget Screen) shows widget stacks here too.
     if (stack.isWidgetStack) {
@@ -52,7 +50,7 @@ internal fun AppStack(
     val appearance = LocalLauncherAppearance.current
     val displayedIconSize = iconSize * (appearance.iconSize / 100f)
     val symbolColor = if (onWallpaper) appearance.text else LocalContentColor.current
-    val apps = contents ?: uiState.popupItems(uiState.folderItem(stack), emptyList()).mapNotNull { entry ->
+    val apps = uiState.popupItems(uiState.folderItem(stack), emptyList()).mapNotNull { entry ->
         if (entry.widget != null) null else uiState.findItem(entry.key)?.takeIf { it.folderId == null }
     }
     val editLabel = stringResource(R.string.app_stack_edit)

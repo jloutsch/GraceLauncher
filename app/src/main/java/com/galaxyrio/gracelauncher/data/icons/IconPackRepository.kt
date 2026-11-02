@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.LauncherApps
+import android.content.res.Configuration
 import android.content.res.Resources
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -15,6 +17,11 @@ import android.graphics.RectF
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
+import android.os.Process
+import android.os.SystemClock
+import android.os.UserHandle
 import android.util.LruCache
 import android.util.Xml
 import androidx.compose.ui.graphics.ImageBitmap
@@ -36,11 +43,78 @@ import kotlinx.coroutines.withContext
 data class IconPackInfo(val packageName: String, val label: String, val icon: ImageBitmap?, val englishLabel: String? = null)
 enum class IconPackStatus { System, Ready, Unavailable }
 
-class IconPackRepository(private val context: Context) {
-    private val pm = context.packageManager
+class IconPackRepository(context: Context) {
+    private val context = context.applicationContext
+    private val pm = this.context.packageManager
+    private val stateLock = Any()
     private val cacheMutex = Mutex()
-    private val cachedPacks = object : LinkedHashMap<String, Pair<String, LoadedIconPack>>(8, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Pair<String, LoadedIconPack>>?): Boolean = size > 12
+    private val discoveryMutex = Mutex()
+    private data class PackEntry(val pack: LoadedIconPack?, val expiresAt: Long)
+    private data class DiscoveryEntry(val packs: List<IconPackInfo>, val expiresAt: Long)
+    private var configuration = IconResourceConfiguration.read(this.context)
+    private var revision = 0L
+    private var discovered: DiscoveryEntry? = null
+    private var lastDiscovered = emptyList<IconPackInfo>()
+    private val cachedPacks = object : LinkedHashMap<String, PackEntry>(8, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PackEntry>?): Boolean = size > 12
+    }
+    private val packageChanges = object : LauncherApps.Callback() {
+        private fun changed(packages: Collection<String>, user: UserHandle) {
+            if (user == Process.myUserHandle()) invalidate(packages)
+        }
+        override fun onPackageAdded(packageName: String, user: UserHandle) = changed(listOf(packageName), user)
+        override fun onPackageRemoved(packageName: String, user: UserHandle) = changed(listOf(packageName), user)
+        override fun onPackageChanged(packageName: String, user: UserHandle) = changed(listOf(packageName), user)
+        override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) =
+            changed(packageNames.toList(), user)
+        override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) =
+            changed(packageNames.toList(), user)
+        override fun onPackagesSuspended(packageNames: Array<out String>, user: UserHandle) = changed(packageNames.toList(), user)
+        override fun onPackagesUnsuspended(packageNames: Array<out String>, user: UserHandle) = changed(packageNames.toList(), user)
+    }
+    // This repository and its callback live for the application process. The callback
+    // only changes small cache metadata; resource/XML work always stays on IO.
+    private val observesPackages = runCatching {
+        this.context.getSystemService(LauncherApps::class.java)
+            .registerCallback(packageChanges, Handler(Looper.getMainLooper()))
+        true
+    }.getOrDefault(false)
+
+    fun invalidate(packageNames: Collection<String>? = null) = synchronized(stateLock) {
+        revision++
+        discovered = null
+        if (packageNames == null) cachedPacks.clear() else {
+            packageNames.forEach(cachedPacks::remove)
+            lastDiscovered = lastDiscovered.filterNot { it.packageName in packageNames }
+        }
+    }
+
+    /** Includes explicit per-item packs, which need not appear in the enabled-pack list. */
+    fun consumeDueRetries(): Boolean = synchronized(stateLock) {
+        refreshConfiguration()
+        val now = SystemClock.elapsedRealtime()
+        val expired = cachedPacks.filterValues { it.pack == null && now >= it.expiresAt }.keys.toList()
+        if (expired.isEmpty()) return@synchronized false
+        expired.forEach(cachedPacks::remove)
+        revision++
+        true
+    }
+
+    /** Rendered catalog snapshots must not bypass a pack update or a due failure retry. */
+    fun cacheRevision(): Long = synchronized(stateLock) {
+        refreshConfiguration()
+        revision
+    }
+
+    /** Called under stateLock; ordinary Activity recreation must retain resource caches. */
+    private fun refreshConfiguration() {
+        val current = IconResourceConfiguration.read(context)
+        if (configuration != current) {
+            configuration = current
+            revision++
+            discovered = null
+            cachedPacks.clear()
+        }
     }
 
     suspend fun iconNames(packageName: String): List<String> = withContext(Dispatchers.IO) {
@@ -78,39 +152,87 @@ class IconPackRepository(private val context: Context) {
     }
 
     suspend fun installedPacks(): List<IconPackInfo> = withContext(Dispatchers.IO) {
-        val packages = linkedSetOf<String>()
-        discoveryIntents().forEach { intent ->
+        discoveryMutex.withLock { discoverPacks() }
+    }
+
+    private suspend fun discoverPacks(): List<IconPackInfo> {
+        while (true) {
             currentCoroutineContext().ensureActive()
-            @Suppress("DEPRECATION")
-            pm.queryIntentActivities(intent, 0).forEach { result ->
-                result.activityInfo?.applicationInfo?.takeIf { it.enabled }?.packageName?.let(packages::add)
+            val request = synchronized(stateLock) {
+                refreshConfiguration()
+                discovered?.takeIf { SystemClock.elapsedRealtime() < it.expiresAt }
+                    ?.let { return it.packs }
+                revision
+            }
+            val packages = linkedSetOf<String>()
+            var complete = true
+            discoveryIntents().forEach { intent ->
+                currentCoroutineContext().ensureActive()
+                @Suppress("DEPRECATION")
+                val matches = safely { pm.queryIntentActivities(intent, 0) }
+                if (matches == null) complete = false
+                matches.orEmpty().forEach { result ->
+                    result.activityInfo?.applicationInfo?.takeIf { it.enabled }?.packageName?.let(packages::add)
+                }
+            }
+            val englishLabels = EnglishLabelReader(context)
+            val result = packages.mapNotNull { pkg ->
+                safely {
+                    val app = pm.getApplicationInfo(pkg, 0)
+                    val icon = safely { renderIcon(pm.getApplicationIcon(app)).asImageBitmap() }
+                    if (icon == null) complete = false
+                    IconPackInfo(pkg, pm.getApplicationLabel(app).toString(),
+                        icon, englishLabel = englishLabels.label(app))
+                }.also { if (it == null) complete = false }
+            }.sortedWith(compareBy(LauncherLabelOrder) { it.label })
+            synchronized(stateLock) {
+                refreshConfiguration()
+                if (revision == request) {
+                    // A temporarily unavailable package provider must not become a
+                    // permanent empty result for this process.
+                    val expires = if (complete && result.isNotEmpty() && observesPackages) Long.MAX_VALUE
+                        else SystemClock.elapsedRealtime() + RetryDelayMillis
+                    val visible = if (complete) result else (result + lastDiscovered)
+                        .distinctBy { it.packageName }.sortedWith(compareBy(LauncherLabelOrder) { it.label })
+                    if (complete) lastDiscovered = result
+                    discovered = DiscoveryEntry(visible, expires)
+                    return visible
+                }
             }
         }
-        val englishLabels = EnglishLabelReader(context)
-        packages.mapNotNull { pkg ->
-            safely {
-                val app = pm.getApplicationInfo(pkg, 0)
-                IconPackInfo(pkg, pm.getApplicationLabel(app).toString(),
-                    safely { renderIcon(pm.getApplicationIcon(app)).asImageBitmap() }, englishLabel = englishLabels.label(app))
-            }
-        }.sortedWith(compareBy(LauncherLabelOrder) { it.label })
     }
 
     internal suspend fun load(packageName: String?): LoadedIconPack? = withContext(Dispatchers.IO) {
         if (packageName == null) return@withContext null
-        cacheMutex.withLock {
-            safely {
-                val info = pm.getPackageInfo(packageName, 0)
-                val config = context.resources.configuration
-                val key = "$packageName:${info.lastUpdateTime}:${info.longVersionCode}:${config.densityDpi}:${config.uiMode}:${config.locales}"
-                cachedPacks[packageName]?.takeIf { it.first == key }?.let { return@safely it.second }
+        cacheMutex.withLock { loadPack(packageName) }
+    }
+
+    private suspend fun loadPack(packageName: String): LoadedIconPack? {
+        while (true) {
+            currentCoroutineContext().ensureActive()
+            val request = synchronized(stateLock) {
+                refreshConfiguration()
+                // Check memory before touching PackageManager. A catalog may ask
+                // for the same enabled pack once per app and designer layer.
+                cachedPacks[packageName]?.takeIf { SystemClock.elapsedRealtime() < it.expiresAt }
+                    ?.let { return it.pack }
+                revision
+            }
+            val loaded = safely {
                 val resources = pm.getResourcesForApplication(packageName)
                 val coroutine = currentCoroutineContext()
                 val definition = readDefinition(resources, packageName) { coroutine.ensureActive() }
                     ?: return@safely null
                 val themed = pm.queryIntentActivities(Intent(ThemedIconAction).setPackage(packageName), 0).isNotEmpty()
-                LoadedIconPack(packageName, resources, definition, themed).also {
-                    cachedPacks[packageName] = key to it
+                LoadedIconPack(packageName, resources, definition, themed)
+            }
+            synchronized(stateLock) {
+                refreshConfiguration()
+                if (revision == request) {
+                    val expires = if (loaded != null && observesPackages) Long.MAX_VALUE
+                        else SystemClock.elapsedRealtime() + RetryDelayMillis
+                    cachedPacks[packageName] = PackEntry(loaded, expires)
+                    return loaded
                 }
             }
         }
@@ -143,7 +265,24 @@ class IconPackRepository(private val context: Context) {
         "com.teslacoilsw.launcher.THEME", "com.anddoes.launcher.THEME", "com.fede.launcher.THEME_ICONPACK",
     ).map { Intent(Intent.ACTION_MAIN).addCategory(it) }
 
-    companion object { private const val ThemedIconAction = "app.lawnchair.icons.THEMED_ICON" }
+    companion object {
+        private const val ThemedIconAction = "app.lawnchair.icons.THEMED_ICON"
+        private const val RetryDelayMillis = 15_000L
+        @Volatile private var instance: IconPackRepository? = null
+        fun get(context: Context): IconPackRepository = instance ?: synchronized(this) {
+            instance ?: IconPackRepository(context.applicationContext).also { instance = it }
+        }
+    }
+}
+
+/** Resource choices relevant to icon artwork, without window/orientation churn. */
+internal data class IconResourceConfiguration(val density: Int, val nightMode: Int, val locales: String) {
+    companion object {
+        fun read(context: Context): IconResourceConfiguration = context.resources.configuration.let {
+            IconResourceConfiguration(it.densityDpi, it.uiMode and Configuration.UI_MODE_NIGHT_MASK,
+                it.locales.toLanguageTags())
+        }
+    }
 }
 
 internal data class PackIcon(val bitmap: ImageBitmap, val monochrome: ImageBitmap? = null, val monochromeScale: Float = 1.4f)
@@ -157,6 +296,8 @@ internal class LoadedIconPack(
 ) {
     internal val cacheKey = Any()
     private val bitmaps = LruCache<String, Bitmap>(96)
+
+    fun hasCalendarFor(component: ComponentName): Boolean = definition.hasCalendarFor(component.flattenToString())
 
     @Synchronized
     fun namedIcon(name: String): PackIcon? {

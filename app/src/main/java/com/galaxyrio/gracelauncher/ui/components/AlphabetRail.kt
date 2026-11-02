@@ -47,6 +47,7 @@ import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFontFamilyResolver
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -60,15 +61,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.AlphabetAppearance
+import com.galaxyrio.gracelauncher.data.AppCategory
 import com.galaxyrio.gracelauncher.data.IconShape
 import com.galaxyrio.gracelauncher.data.icons.iconShapePath
 import com.galaxyrio.gracelauncher.ui.drawer.GraceSection
+import com.galaxyrio.gracelauncher.ui.settings.categoryLabel
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.theme.rememberAppFontFamily
+import com.galaxyrio.gracelauncher.ui.theme.resolvedFontColor
 import kotlin.math.exp
 import kotlin.math.min
 import kotlin.math.roundToInt
@@ -105,12 +110,13 @@ fun AlphabetRail(
     enabled: Boolean = true,
     onDoubleTap: ((Offset) -> Unit)? = null,
     doubleTapIntervalMs: Int? = null,
+    categorySections: Map<String, AppCategory> = emptyMap(),
+    showRightTouchArea: Boolean = false,
 ) {
     if (letters.isEmpty()) return
     val appearance = LocalLauncherAppearance.current
-    val defaultTextColor = if (onWallpaper) appearance.text else MaterialTheme.colorScheme.onSurface
-    val textColor = alphabet?.fontColor?.resolve(MaterialTheme.colorScheme.primary.toArgb())
-        ?.let(::Color) ?: defaultTextColor
+    val textColor = resolvedFontColor(alphabet?.fontColor, onWallpaper = onWallpaper)
+    val indicatorColor = if (alphabet?.indicatorShape == IconShape.None) textColor else MaterialTheme.colorScheme.onPrimary
     val fontSize = (alphabet?.fontSize ?: 14).sp
     val fontFamily = if (alphabet != null) rememberAppFontFamily(alphabet.fontId) else MaterialTheme.typography.bodyLarge.fontFamily
     val freeMovement by rememberUpdatedState(alphabet?.freeMovement == true)
@@ -139,7 +145,9 @@ fun AlphabetRail(
     val cellHeightPx = with(density) { cellHeight.toPx() }
     val waveRadius = with(density) { 82.dp.toPx() }
     val basePull = with(density) { 50.dp.toPx() }
+    val rightTouchWidth = (alphabet?.rightTouchWidth?.coerceIn(28, 56) ?: 48).dp
     val railWidth = with(density) { 48.dp.toPx() }
+    val rightAligned by rememberUpdatedState(LocalLayoutDirection.current == LayoutDirection.Ltr)
     val indicatorSize = with(density) { 46.dp.toPx() }
     val indicatorGap = with(density) { 14.dp.toPx() }
     // Leave room for the rail's widest glyph (or its 18dp home star),
@@ -211,7 +219,12 @@ fun AlphabetRail(
                     val railY = change.position.y - railTopPx
                     state.drift = alphabetDriftAt(railY, railHeightPx.toFloat(), state.drift, freeMovement)
                     state.fingerY = (railY - state.drift).coerceIn(0f, railHeightPx.toFloat())
-                    state.fingerX = if (fromLeft) railWidth - change.position.x else change.position.x
+                    // Translate the right strip into the fixed visual rail's coordinates.
+                    state.fingerX = when {
+                        fromLeft -> railWidth - change.position.x
+                        rightAligned -> railWidth - size.width + change.position.x
+                        else -> change.position.x
+                    }
                     val index = alphabetIndexAt(
                         y = state.fingerY,
                         height = railHeightPx.toFloat(),
@@ -239,23 +252,28 @@ fun AlphabetRail(
     }
 
     // Two touch regions, one visual rail and one scrub state. No second alphabet is drawn.
-    Box(modifier.then(if (leftTouchEnabled) Modifier.fillMaxWidth() else Modifier.width(48.dp)).height(touchHeight)) {
+    Box(modifier.then(if (leftTouchEnabled) Modifier.fillMaxWidth() else Modifier.width(maxOf(48.dp, rightTouchWidth))).height(touchHeight)) {
         if (leftTouchEnabled) Box(Modifier.align(Alignment.TopStart).width(28.dp).height(touchHeight)
             .onGloballyPositioned { leftTouchOrigin = it.positionInRoot() }
             .testTag("alphabet_left_touch").then(touchSurface(true)).clearAndSetSemantics {})
         Box(
-            Modifier.align(Alignment.TopEnd).width(48.dp).height(touchHeight)
+            Modifier.align(Alignment.TopEnd).width(rightTouchWidth).height(touchHeight)
+                .then(if (showRightTouchArea) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)) else Modifier)
                 .onGloballyPositioned { rightTouchOrigin = it.positionInRoot() }
                 .testTag("alphabet_rail")
                 .semantics { contentDescription = railDescription }
                 .then(touchSurface(false)),
-        ) {
+        )
+        // The glyphs and indicator keep their original position as the touch strip changes.
+        Box(Modifier.align(Alignment.TopEnd).width(48.dp).height(touchHeight)) {
             entries.forEachIndexed { index, letter ->
                 val isSelected = if (state.active) state.selectedIndex == index else selectedLetter == letter
+                val category = letter?.let(categorySections::get)
                 val description = when (letter) {
                     null -> homeDescription
                     GraceSection -> stringResource(R.string.jump_to_section, stringResource(R.string.app_name))
-                    else -> stringResource(if (includeHome) R.string.jump_to_letter else R.string.jump_to_section, letter)
+                    else -> if (category != null) stringResource(R.string.jump_to_section, categoryLabel(category))
+                        else stringResource(if (includeHome) R.string.jump_to_letter else R.string.jump_to_section, letter)
                 }
                 Box(
                     modifier = Modifier
@@ -293,6 +311,8 @@ fun AlphabetRail(
                         LauncherIcon(LauncherSymbol.Star, Modifier.size(18.dp), tint = color)
                     } else if (letter == GraceSection) {
                         Box(Modifier.size(8.dp).background(color, CircleShape))
+                    } else if (category != null) {
+                        CategoryIndicator(category.icon, Modifier.size(18.dp), tint = color)
                     } else {
                         Text(
                             text = letter,
@@ -338,16 +358,20 @@ fun AlphabetRail(
                     contentAlignment = Alignment.Center,
                 ) {
                     val letter = entries.getOrNull(state.selectedIndex)
+                    val category = letter?.let(categorySections::get)
                     if (letter == null) {
                         LauncherIcon(
                             LauncherSymbol.Star,
                             Modifier.size(28.dp).testTag("alphabet_indicator_star"),
-                            tint = MaterialTheme.colorScheme.onPrimary,
+                            tint = indicatorColor,
                         )
                     } else if (letter == GraceSection) {
-                        Box(Modifier.size(16.dp).background(MaterialTheme.colorScheme.onPrimary, CircleShape))
+                        Box(Modifier.size(16.dp).background(indicatorColor, CircleShape))
+                    } else if (category != null) {
+                        CategoryIndicator(category.icon, Modifier.size(28.dp).testTag("alphabet_indicator_category"),
+                            tint = indicatorColor)
                     } else {
-                        CenteredIndicatorGlyph(letter, MaterialTheme.colorScheme.onPrimary, fontFamily)
+                        CenteredIndicatorGlyph(letter, indicatorColor, fontFamily)
                     }
                 }
             }

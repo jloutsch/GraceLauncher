@@ -41,13 +41,14 @@ internal fun rememberLauncherSystemBars(
     autoHide: Boolean,
     darkIcons: Boolean,
     allowPullDown: Boolean,
+    darkNavigationIcons: Boolean = darkIcons,
 ): NestedScrollConnection {
     val window = LocalActivity.current?.window
     val view = LocalView.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val bars = remember(window, view) { window?.let { LauncherStatusBar(it, view, autoHide) } }
     val canPullDown by rememberUpdatedState(allowPullDown)
-    SideEffect { bars?.configure(autoHide, darkIcons) }
+    SideEffect { bars?.configure(autoHide, darkIcons, darkNavigationIcons) }
     DisposableEffect(bars, lifecycle, view) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -106,9 +107,9 @@ private class LauncherStatusBar(window: Window, private val view: View, private 
         if (Build.VERSION.SDK_INT >= 29) window.isStatusBarContrastEnforced = false
     }
 
-    fun configure(hide: Boolean, darkIcons: Boolean) {
+    fun configure(hide: Boolean, darkIcons: Boolean, darkNavigationIcons: Boolean) {
         insets.isAppearanceLightStatusBars = darkIcons
-        insets.isAppearanceLightNavigationBars = darkIcons
+        insets.isAppearanceLightNavigationBars = darkNavigationIcons
         if (autoHide == hide) return
         autoHide = hide
         view.removeCallbacks(hideLater)

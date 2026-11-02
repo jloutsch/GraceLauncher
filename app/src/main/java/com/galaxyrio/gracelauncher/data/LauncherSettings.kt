@@ -1,6 +1,5 @@
 package com.galaxyrio.gracelauncher.data
 
-import com.galaxyrio.gracelauncher.data.media.HeadphoneAppsSettings
 import com.materialkolor.PaletteStyle
 
 enum class ThemeMode { System, Light, Dark }
@@ -31,12 +30,13 @@ data class LauncherSettings(
     val dismissResistance: Int = 75,
     val dismissThresholdDp: Int = 72,
     val mediaAppKey: String? = null,
-    val headphoneApps: HeadphoneAppsSettings = HeadphoneAppsSettings(),
     val weatherEnabled: Boolean = false,
     val weatherForecastDays: Int = 7,
     val weatherLocationId: String? = null,
     /** Opened by tapping the hourly forecast; null leaves the forecast without a tap action. */
     val weatherAppKey: String? = null,
+    /** Folders shown as widget stacks (fork); the folder row itself has no column for this. */
+    val widgetStackFolderIds: Set<String> = emptySet(),
     /** null delegates to Android's standard SHOW_ALARMS action. */
     val clockAppKey: String? = null,
     val clockStyle: ClockStyle = ClockStyle(),
@@ -52,6 +52,7 @@ data class LauncherSettings(
     /** Legacy selection, used only when migrating to the ordered font library. */
     val appFontId: String? = null,
     val fontLibrary: FontLibrary = FontLibrary(),
+    val fontColors: FontColors = FontColors(),
     val listAppearance: ListAppearance = ListAppearance(),
     val applyFontToSettings: Boolean = true,
     val privateSpace: ProfileSettings = ProfileSettings(),
@@ -62,6 +63,8 @@ data class LauncherSettings(
     val graceButton: GraceButtonSettings = GraceButtonSettings(),
     val homeGestures: GraceButtonSettings = GraceButtonSettings.homeDefaults(),
     val widgetScreen: WidgetScreenSettings = WidgetScreenSettings(),
+    /** Null until the legacy favorite order has been migrated. */
+    val appCategories: List<AppCategory>? = null,
     val preferNonAccessibility: Boolean = false,
 ) {
     /** Icon designer overrides precede this order; system icons always follow it. */
