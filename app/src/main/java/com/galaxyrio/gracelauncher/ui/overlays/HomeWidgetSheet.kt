@@ -1,6 +1,8 @@
 package com.galaxyrio.gracelauncher.ui.overlays
 
 import android.content.ComponentName
+import android.appwidget.AppWidgetManager
+import android.os.Process
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -8,10 +10,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -20,19 +25,40 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.LauncherApp
+import com.galaxyrio.gracelauncher.data.LauncherProfiles
+import com.galaxyrio.gracelauncher.data.LauncherProfileType
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.components.AppIcon
 import com.galaxyrio.gracelauncher.ui.components.LauncherSymbol
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 internal fun HomeWidgetSheet(uiState: LauncherUiState, actions: LauncherActions, onChange: (LauncherOverlay?) -> Unit, custom: Boolean) {
     val settings = uiState.settings
     val widget = settings.homeLayout
     val component = widget.widgetProvider?.let(ComponentName::unflattenFromString)
-    val app = component?.let { provider ->
-        uiState.apps.firstOrNull { it.packageName == provider.packageName }
-            ?: LauncherApp(provider, widget.widgetLabel ?: provider.packageName, null)
+    val context = LocalContext.current
+    val owner by produceState<LauncherApp?>(null, context, widget.widgetId, component) {
+        value = null
+        value = withContext(Dispatchers.IO) {
+            val provider = component ?: return@withContext null
+            val info = runCatching { AppWidgetManager.getInstance(context).getAppWidgetInfo(widget.widgetId) }
+                .getOrNull()?.takeIf { it.provider == provider } ?: return@withContext null
+            val profile = LauncherProfiles(context).snapshot().profiles.firstOrNull { it.user == info.profile }
+                ?.takeIf { it.isPublic } ?: return@withContext null
+            val foreignUser = profile.user.takeUnless { it == Process.myUserHandle() }
+            LauncherApp(provider, widget.widgetLabel ?: provider.packageName, null,
+                user = foreignUser, userSerial = profile.serial.takeIf { foreignUser != null },
+                isWorkProfile = profile.type == LauncherProfileType.Work,
+                isCloneProfile = profile.type == LauncherProfileType.Clone)
+        }
+    }
+    val app = owner?.let { target ->
+        // The provider's actual user distinguishes personal and cloned copies of one package.
+        uiState.apps.firstOrNull { it.packageName == target.packageName && it.user == target.user &&
+            it.shortcut == null && it.folderId == null } ?: target
     }
     fun navigate(page: String) { onChange(LauncherOverlay.SettingsDestination(page)) }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())

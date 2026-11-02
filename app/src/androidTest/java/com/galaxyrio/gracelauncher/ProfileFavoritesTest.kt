@@ -45,7 +45,8 @@ class ProfileFavoritesTest {
         listOf("favorites_shortcuts", "favorites_folders", "favorites_stacks").forEach {
             compose.onNodeWithTag(it).assertDoesNotExist()
         }
-        listOf("favorites_add_shortcut", "favorites_add_folder", "favorites_add_stack").forEach {
+        compose.onNodeWithTag("favorites_add_shortcut").assertDoesNotExist()
+        listOf("favorites_add_category", "favorites_add_folder", "favorites_add_stack").forEach {
             compose.onNodeWithTag(it).performScrollTo().assertIsEnabled()
         }
         listOf(PrivateSpaceFolderKey, WorkProfileFolderKey).forEach {
@@ -55,9 +56,12 @@ class ProfileFavoritesTest {
         listOf(PrivateSpaceFolderKey, WorkProfileFolderKey).forEach {
             compose.onNodeWithTag("favorites_group:$it").performScrollTo().assertIsEnabled().performClick().assertIsOn()
         }
-        compose.onNodeWithTag("favorite:$PrivateSpaceFolderKey").performScrollTo().assertIsOn()
+        compose.onNodeWithTag("favorite:$PrivateSpaceFolderKey").performScrollTo()
+            .onChildren().filter(isToggleable()).onFirst().assertIsOn()
         compose.onNodeWithTag("favorite_drag:$PrivateSpaceFolderKey").assertExists()
         compose.onNodeWithTag("favorite:$PrivateSpaceFolderKey").performClick()
+        compose.runOnIdle { assertTrue(PrivateSpaceFolderKey in state.favoriteKeys) }
+        compose.onNodeWithTag("favorite:$PrivateSpaceFolderKey").onChildren().filter(isToggleable()).onFirst().performClick()
         compose.onNodeWithTag("favorites_group:$PrivateSpaceFolderKey").performScrollTo().assertIsOff()
         compose.runOnIdle {
             state = state.copy(settings = state.settings.copy(workProfile = state.settings.workProfile.copy(enabled = false)))

@@ -43,7 +43,7 @@ class WidgetRestoreTest {
 
     @Test
     fun resolveReplacesPlaceholderEverywhere() = runBlocking {
-        settings.updateSettings(LauncherSettings(homeLayout = HomeLayout(homeOrder = listOf(GraceWidget.Clock.key, "widget:-2"))))
+        settings.updateSettings(LauncherSettings(homeLayout = HomeLayout(homeOrder = listOf(GraceWidget.ClockCalendar.key, "widget:-2"))))
         settings.saveFolder(LauncherFolder("f1", "Work", listOf("a/a.Main"), FolderPlacement.AppList))
         items.updatePopup(HomeContentKey, emptyList()) { listOf(widget(-2)) }
         items.updatePopup("folder:f1", emptyList()) { listOf(PopupItem("a/a.Main"), widget(-3)) }
@@ -53,7 +53,7 @@ class WidgetRestoreTest {
         restore.resolve(-2, 120)
         assertEquals(listOf(PopupItem("widget:120", HomeLayout(widgetId = 120, widgetProvider = provider, widgetHeightDp = 180))),
             items.snapshots.first().popups[HomeContentKey])
-        assertEquals(listOf(GraceWidget.Clock.key, "widget:120"), settings.snapshots.first().settings.homeLayout.homeOrder)
+        assertEquals(listOf(GraceWidget.ClockCalendar.key, "widget:120"), settings.snapshots.first().settings.homeLayout.homeOrder)
 
         restore.resolve(-3, null)
         assertEquals(listOf(PopupItem("a/a.Main")), items.snapshots.first().popups["folder:f1"])

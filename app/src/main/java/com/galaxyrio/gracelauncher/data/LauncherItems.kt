@@ -162,9 +162,11 @@ class LauncherItemsRepository(private val database: LauncherDatabase) {
             val folder = key.takeIf { it.startsWith("folder:") }?.removePrefix("folder:")
                 ?.let { database.settingsDao().folder(it) }
             val stack = folder?.isAppStack == true
+            val widgetStack = folder != null && folder.id in stringSetField(
+                database.settingsDao().readSettings()?.shortcutsFoldersJson, WidgetStackFoldersField)
             // App stacks hold apps and shortcuts; widget stacks hold widgets only.
             val next = transform(previous).distinctBy { it.key }.filter {
-                (!stack || if (folder?.isWidgetStack == true) it.widget != null else (it.widget == null && !it.key.startsWith("folder:"))) &&
+                (!stack || if (widgetStack) it.widget != null else (it.widget == null && !it.key.startsWith("folder:"))) &&
                     (key == WidgetScreenKey || (it.key != PrivateSpaceFolderKey && it.key != WorkProfileFolderKey))
             }
             dao.savePopup(AppPopupEntity(key, PopupItem.encode(next)))

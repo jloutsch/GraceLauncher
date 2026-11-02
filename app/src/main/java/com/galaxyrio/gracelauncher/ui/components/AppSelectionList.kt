@@ -1,6 +1,7 @@
 package com.galaxyrio.gracelauncher.ui.components
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyListState
@@ -100,12 +101,15 @@ internal fun AppSelectionRow(
     selectable: Boolean = true,
     icon: (@Composable () -> Unit)? = null,
     annotation: String? = null,
+    onCheckboxClick: (() -> Unit)? = null,
+    checkboxEnabled: Boolean = enabled,
     trailing: @Composable () -> Unit = {},
 ) {
     Row(
         modifier.fillMaxWidth().heightIn(min = 64.dp).clip(RoundedCornerShape(16.dp))
             .then(when {
                 !selectable -> Modifier
+                onCheckboxClick != null -> Modifier.clickable(enabled = enabled, onClick = onClick)
                 singleChoice -> Modifier.selectable(selected, enabled = enabled, role = Role.RadioButton, onClick = onClick)
                 else -> Modifier.toggleable(selected, enabled = enabled, role = Role.Checkbox, onValueChange = { onClick() })
             }).padding(horizontal = 8.dp, vertical = 8.dp),
@@ -113,7 +117,7 @@ internal fun AppSelectionRow(
     ) {
         if (selectable) {
             if (singleChoice) RadioButton(selected, null, Modifier.size(24.dp), enabled = enabled)
-            else Checkbox(selected, null, Modifier.size(24.dp), enabled = enabled)
+            else Checkbox(selected, if (onCheckboxClick == null) null else ({ onCheckboxClick() }), Modifier.size(24.dp), enabled = enabled && checkboxEnabled)
             Spacer(Modifier.width(16.dp))
         }
         if (icon != null) {

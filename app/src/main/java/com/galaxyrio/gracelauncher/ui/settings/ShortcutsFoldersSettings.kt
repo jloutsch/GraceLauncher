@@ -24,7 +24,7 @@ import com.galaxyrio.gracelauncher.ui.components.LauncherSymbol
 @Composable
 internal fun ShortcutsFoldersSettingsScreen(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit) {
     val settings = uiState.settings.shortcutsFolders
-    val itemCount = 5
+    val itemCount = 3
     var requestAccess by rememberSaveable { mutableStateOf(false) }
     fun update(change: (ShortcutsFoldersSettings) -> ShortcutsFoldersSettings) =
         actions.updateSettings { it.copy(shortcutsFolders = change(it.shortcutsFolders)) }
@@ -57,18 +57,6 @@ internal fun ShortcutsFoldersSettingsScreen(uiState: LauncherUiState, actions: L
                 NotificationDisplayItem(stringResource(R.string.popup_normal_notifications),
                     settings.normalNotifications, settings.enabled, 2, itemCount, "popup_normal") { mode ->
                     update { it.copy(normalNotifications = mode) }
-                }
-            }
-            item {
-                SettingsToggleItem(stringResource(R.string.popup_single_line_previews), stringResource(R.string.popup_single_line_previews_summary),
-                    settings.singleLineNotificationPreviews, 3, itemCount, "popup_single_line_previews", enabled = settings.enabled) { value ->
-                    update { it.copy(singleLineNotificationPreviews = value) }
-                }
-            }
-            item {
-                SettingsToggleItem(stringResource(R.string.popup_multiple_app_previews), stringResource(R.string.popup_multiple_app_previews_summary),
-                    settings.multipleAppNotificationPreviews, 4, itemCount, "popup_multiple_app_previews", enabled = settings.enabled) { value ->
-                    update { it.copy(multipleAppNotificationPreviews = value) }
                 }
             }
         }

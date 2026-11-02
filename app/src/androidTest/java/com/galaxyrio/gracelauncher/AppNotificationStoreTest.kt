@@ -1,6 +1,7 @@
 package com.galaxyrio.gracelauncher
 
 import android.app.Notification
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
 import android.media.session.MediaSession
@@ -11,8 +12,10 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.Person
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.galaxyrio.gracelauncher.data.CategoryNotificationLevel
 import com.galaxyrio.gracelauncher.data.notifications.AppNotificationStore
 import com.galaxyrio.gracelauncher.data.notifications.AppNotificationRanking
+import com.galaxyrio.gracelauncher.data.notifications.NotificationAppId
 import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
@@ -86,7 +89,15 @@ class AppNotificationStoreTest {
             store.posted(sbn(1, builder().setStyle(Notification.MediaStyle().setMediaSession(player.sessionToken)).build()))
             store.posted(sbn(2, builder().setVisibility(Notification.VISIBILITY_SECRET).build()))
             store.posted(sbn(3, user = UserHandle.getUserHandleForUid(1_000_000)))
+            store.posted(sbn(4, builder().setContentTitle(null).setContentText(null).build()))
             assertTrue(notifications().isEmpty())
+            assertEquals(mapOf(
+                NotificationAppId(context.packageName, Process.myUserHandle()) to setOf(CategoryNotificationLevel.Normal),
+                NotificationAppId(context.packageName, UserHandle.getUserHandleForUid(1_000_000)) to setOf(CategoryNotificationLevel.Normal),
+            ), store.categoryState.value)
+            listOf(1, 2, 4).forEach { store.removed(sbn(it).key) }
+            assertEquals(setOf(NotificationAppId(context.packageName, UserHandle.getUserHandleForUid(1_000_000))),
+                store.categoryState.value.keys)
         } finally { player.release() }
     }
 
@@ -96,13 +107,17 @@ class AppNotificationStoreTest {
         store.disconnected()
         store.posted(sbn(2))
         assertTrue(notifications().isEmpty())
+        assertTrue(store.categoryState.value.isEmpty())
         assertFalse(store.dismiss(old.key, old.revision))
         store.connected(listOf(sbn(3))) { cancelled += it; true }
         assertEquals(sbn(3).key, notifications().single().key)
+        assertEquals(setOf(NotificationAppId(context.packageName, Process.myUserHandle())), store.categoryState.value.keys)
         store.ranking { AppNotificationRanking(visible = false) }
         assertTrue(notifications().isEmpty())
+        assertTrue(store.categoryState.value.isEmpty())
         store.ranking { AppNotificationRanking() }
         assertEquals(1, notifications().size)
+        assertEquals(setOf(CategoryNotificationLevel.Normal), store.categoryState.value.values.single())
     }
 
     @Test fun missingOrStaleContentIntentDoesNotLaunchAnything() = main {
@@ -131,5 +146,31 @@ class AppNotificationStoreTest {
         assertTrue(notifications().single().silent)
         store.ranking { AppNotificationRanking(visible = false, silent = true) }
         assertTrue(notifications().isEmpty())
+    }
+
+    @Test fun categoryLevelsAggregateActiveNotificationsAndFollowRankingChangesAndRemoval() = main {
+        val first = sbn(1)
+        val second = sbn(2)
+        val third = sbn(3)
+        store.connected(listOf(first, second, third), { key ->
+            AppNotificationRanking(importance = when (key) {
+                first.key -> NotificationManager.IMPORTANCE_LOW
+                second.key -> NotificationManager.IMPORTANCE_HIGH
+                else -> NotificationManager.IMPORTANCE_DEFAULT
+            })
+        }) { true }
+        assertEquals(CategoryNotificationLevel.entries.toSet(), store.categoryState.value.values.single())
+
+        store.ranking { key -> AppNotificationRanking(visible = key != third.key,
+            importance = if (key == first.key) NotificationManager.IMPORTANCE_MIN else NotificationManager.IMPORTANCE_UNSPECIFIED) }
+        assertEquals(setOf(CategoryNotificationLevel.Silent, CategoryNotificationLevel.Normal),
+            store.categoryState.value.values.single())
+        store.removed(first.key)
+        assertEquals(setOf(CategoryNotificationLevel.Normal), store.categoryState.value.values.single())
+        store.removed(second.key)
+        assertTrue(store.categoryState.value.isEmpty())
+
+        store.ranking { AppNotificationRanking(importance = NotificationManager.IMPORTANCE_HIGH + 1) }
+        assertEquals(setOf(CategoryNotificationLevel.High), store.categoryState.value.values.single())
     }
 }

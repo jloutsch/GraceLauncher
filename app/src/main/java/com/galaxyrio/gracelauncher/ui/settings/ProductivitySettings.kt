@@ -124,58 +124,77 @@ internal fun ProductivitySettings(
                 SettingsActionItem(stringResource(R.string.popups_title), stringResource(R.string.shortcuts_folders_title), 6, 7, "settings_shortcuts_folders",
                     leading = { LauncherIcon(LauncherSymbol.Outbound) }) { navigate(SettingsPage.ShortcutsFolders) }
             }
+            item { SettingsHeading(stringResource(R.string.settings_screens)) }
             item {
-                Spacer(Modifier.height(12.dp))
-                SettingsActionItem(stringResource(R.string.edit_homepage), null, 0, 1, "settings_edit_homepage",
+                SettingsActionItem(stringResource(R.string.settings_home_screen), null, 0, 5, "settings_edit_homepage",
                     leading = { LauncherIcon(LauncherSymbol.Home) }) { navigate(SettingsPage.Homepage) }
             }
-            item { SettingsHeading(stringResource(R.string.settings_additional_screen)) }
             item {
-                SettingsActionItem(stringResource(R.string.widget_screen_title), null, 0, 1, "settings_widget_screen",
+                SettingsActionItem(stringResource(R.string.settings_folder_app_list), null, 1, 5, "settings_app_list",
+                    leading = { LauncherIcon(LauncherSymbol.Apps) }) { navigate(SettingsPage.AppList) }
+            }
+            item {
+                SettingsActionItem(stringResource(R.string.widget_screen_title), null, 2, 5, "settings_widget_screen",
                     leading = { LauncherIcon(LauncherSymbol.Widgets) }) { navigate(SettingsPage.WidgetScreen) }
+            }
+            item {
+                SettingsActionItem(stringResource(R.string.settings_feed_screen), null, 3, 5, "settings_feed_screen",
+                    leading = { LauncherIcon(LauncherSymbol.Category) }) { navigate(SettingsPage.FeedScreen) }
+            }
+            item {
+                SettingsActionItem(stringResource(R.string.settings_status_screen), null, 4, 5, "settings_status_screen",
+                    leading = { LauncherIcon(LauncherSymbol.Notifications) }) { navigate(SettingsPage.StatusScreen) }
             }
             item { SettingsHeading(stringResource(R.string.settings_app_organization)) }
             item {
                 SettingsActionItem(
                     stringResource(R.string.settings_hide_apps), pluralStringResource(R.plurals.settings_hidden_count, uiState.effectiveHiddenAppKeys.size, uiState.effectiveHiddenAppKeys.size),
-                    0, 5, "settings_open_hidden_apps",
+                    0, 6, "settings_open_hidden_apps",
                     leading = { LauncherIcon(LauncherSymbol.VisibilityOff) },
                 ) { navigate(SettingsPage.HiddenApps) }
             }
             item {
+                SettingsActionItem(stringResource(R.string.app_categories_title), null, 1, 6, "settings_app_categories",
+                    leading = { LauncherIcon(LauncherSymbol.Category) }) { navigate(SettingsPage.AppCategories) }
+            }
+            item {
                 SettingsActionItem(
                     stringResource(R.string.settings_folders), pluralStringResource(R.plurals.settings_folder_count, uiState.folders.count { !it.isAppStack }, uiState.folders.count { !it.isAppStack }),
-                    1, 5, "settings_open_folders",
+                    2, 6, "settings_open_folders",
                     leading = { LauncherIcon(LauncherSymbol.Folder) },
                 ) { navigate(SettingsPage.Folders) }
             }
             item {
-                SettingsActionItem(stringResource(R.string.app_stacks_title), null, 2, 5, "settings_app_stacks",
+                SettingsActionItem(stringResource(R.string.app_stacks_title), null, 3, 6, "settings_app_stacks",
                     leading = { LauncherIcon(LauncherSymbol.Steppers) }) { navigate(SettingsPage.AppStacks) }
             }
             item {
                 SettingsActionItem(stringResource(R.string.work_profile_title), stringResource(R.string.work_profile_summary),
-                    3, 5, "settings_open_work_profile", leading = { LauncherIcon(LauncherSymbol.Work) }) { navigate(SettingsPage.WorkProfile) }
+                    4, 6, "settings_open_work_profile", leading = { LauncherIcon(LauncherSymbol.Work) }) { navigate(SettingsPage.WorkProfile) }
             }
             item {
                 SettingsActionItem(stringResource(R.string.private_space_title), stringResource(R.string.private_space_summary),
-                    4, 5, "settings_open_private_space", leading = { LauncherIcon(LauncherSymbol.Lock) }) { navigate(SettingsPage.PrivateSpace) }
+                    5, 6, "settings_open_private_space", leading = { LauncherIcon(LauncherSymbol.Lock) }) { navigate(SettingsPage.PrivateSpace) }
             }
             item { SettingsHeading(stringResource(R.string.settings_advanced)) }
             item {
-                SettingsActionItem(stringResource(R.string.settings_gestures), null, 0, 3, "settings_gestures",
+                SettingsActionItem(stringResource(R.string.settings_gestures), null, 0, 4, "settings_gestures",
                     leading = { LauncherIcon(LauncherSymbol.Gesture) }) { navigate(SettingsPage.Gestures) }
             }
             item {
                 SettingsToggleItem(
                     stringResource(R.string.settings_allow_haptics), stringResource(R.string.settings_allow_haptics_summary),
-                    settings.allowHapticFeedback, 1, 3, "allow_haptics",
+                    settings.allowHapticFeedback, 1, 4, "allow_haptics",
                     leading = { LauncherIcon(LauncherSymbol.Vibration) },
                 ) { value -> actions.updateSettings { current -> current.copy(allowHapticFeedback = value) } }
             }
             item {
-                SettingsActionItem(stringResource(R.string.digital_wellbeing), null, 2, 3, "settings_digital_wellbeing",
+                SettingsActionItem(stringResource(R.string.digital_wellbeing), null, 2, 4, "settings_digital_wellbeing",
                     leading = { LauncherIcon(LauncherSymbol.Hourglass) }) { navigate(SettingsPage.DigitalWellbeing) }
+            }
+            item {
+                SettingsActionItem(stringResource(R.string.settings_tablets_foldables), null, 3, 4, "settings_tablets_foldables",
+                    leading = { LauncherIcon(LauncherSymbol.SplitscreenLandscape) }) { navigate(SettingsPage.TabletsFoldables) }
             }
         }
     }

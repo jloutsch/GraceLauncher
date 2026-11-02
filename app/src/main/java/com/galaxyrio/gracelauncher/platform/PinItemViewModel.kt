@@ -6,7 +6,6 @@ import android.appwidget.AppWidgetProviderInfo
 import android.content.Intent
 import android.content.pm.LauncherApps
 import android.os.Process
-import android.os.UserManager
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -138,7 +137,7 @@ class PinItemViewModel(application: Application) : AndroidViewModel(application)
         val info = pin.shortcutInfo ?: error("Missing shortcut")
         val user = info.userHandle
         val serial = if (user == Process.myUserHandle()) null else
-            context.getSystemService(UserManager::class.java).getSerialNumberForUser(user).takeIf { it >= 0 }
+            com.galaxyrio.gracelauncher.data.LauncherProfiles.serialNumber(context, user)
                 ?: error("Unknown profile")
         val activity = info.activity ?: launcher.getActivityList(info.`package`, user).firstOrNull()?.componentName
             ?: error("Missing shortcut activity")
@@ -146,12 +145,17 @@ class PinItemViewModel(application: Application) : AndroidViewModel(application)
             activity, user, serial)
         val app = LauncherApp(activity, shortcut.label, null, shortcut = shortcut, user = user, userSerial = serial)
         // Initialize the existing favorite order before adding the requested item.
-        val apps = AppRepository(context).loadApps()
+        val apps = AppRepository.get(context).loadApps()
         // Once Android acknowledges the request, finish saving even if the caller opens HOME.
         withContext(NonCancellable) {
             check(valid(pin) && pin.accept()) { "Request no longer valid" }
             LauncherItemsRepository(database).rememberShortcut(app, showInAppList = true)
-            FavoritesStore(context).add(app.key, apps)
+            val legacyFavorites = FavoritesStore(context).favoritesFor(apps)
+            LauncherSettingsRepository(database).mutateAppCategories(legacyFavorites) { categories ->
+                categories.map { category -> if (category.id != com.galaxyrio.gracelauncher.data.FavoritesCategoryId) category
+                    else category.copy(itemKeys = (category.itemKeys + app.key).distinct(),
+                        placement = com.galaxyrio.gracelauncher.data.CategoryPlacement.Home) }
+            }
             withContext(Dispatchers.Main) { complete() }
         }
     }

@@ -58,6 +58,30 @@ class DigitalWellbeingTest {
         assertFalse(usageRefreshDue(sunday, sunday - 90L * 86_400_000, UsageRefresh.Never, zone))
         assertTrue(usageRefreshDue(0, sunday, UsageRefresh.Never, zone))
     }
+    @Test fun categoryCountsNeverReadUsageWhenDigitalWellbeingIsDisabled() {
+        val now = time("2026-10-25T16:00:00Z")
+        val plan = usageReadPlan(DigitalWellbeingSettings(), needOpenCounts = true, forceRanking = true,
+            rankedAt = 0, now = now, zone = zone)
+        assertEquals(UsageReadPlan(labels = false, opens = false, ranking = false), plan)
+    }
+    @Test fun liveCategoryCountsDoNotUnfreezeTheSavedDrawerRanking() {
+        val now = time("2026-10-25T16:00:00Z")
+        val settings = DigitalWellbeingSettings(enabled = true, showUsage = false, refresh = UsageRefresh.Never)
+        val plan = usageReadPlan(settings, needOpenCounts = true, forceRanking = false,
+            rankedAt = now - 86_400_000, now = now, zone = zone)
+        assertEquals(UsageReadPlan(labels = false, opens = true, ranking = false), plan)
+    }
+    @Test fun categoryCountsDoNotEnableSortingAndManualRefreshStillUpdatesTheSavedRanking() {
+        val now = time("2026-10-25T16:00:00Z")
+        val settings = DigitalWellbeingSettings(enabled = true, showUsage = false, sortApps = false)
+        assertEquals(UsageReadPlan(labels = false, opens = true, ranking = false),
+            usageReadPlan(settings, needOpenCounts = true, forceRanking = false, rankedAt = 0, now = now, zone = zone))
+        assertEquals(UsageReadPlan(labels = false, opens = true, ranking = true),
+            usageReadPlan(settings, needOpenCounts = false, forceRanking = true, rankedAt = 0, now = now, zone = zone))
+        assertEquals(UsageReadPlan(labels = true, opens = false, ranking = false),
+            usageReadPlan(settings.copy(showUsage = true), needOpenCounts = false, forceRanking = false,
+                rankedAt = 0, now = now, zone = zone))
+    }
     @Test fun midnightSessionsAreClippedAndUnfinishedSessionsEndAtQueryTime() {
         val usage = ForegroundUsage(100, 200)
         usage.resume("one", "Activity", 50)

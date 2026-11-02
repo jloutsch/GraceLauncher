@@ -19,6 +19,7 @@ import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -49,6 +50,7 @@ import com.galaxyrio.gracelauncher.data.icons.drawDesignedIcon
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.components.AppIcon
 import com.galaxyrio.gracelauncher.ui.components.IconBadge
+import com.galaxyrio.gracelauncher.ui.components.showsProfileBadge
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import kotlin.math.abs
 import kotlin.math.cos
@@ -64,6 +66,7 @@ internal fun DesignerPreviewIcon(app: LauncherApp, layers: IconLayers?, design: 
     var gestureDraft by remember(layers) { mutableStateOf<IconDesign?>(null) }
     val currentDesign by rememberUpdatedState(design)
     val changeDesign by rememberUpdatedState(onChange)
+    val colorScheme = MaterialTheme.colorScheme
     val description = if (draggable) stringResource(R.string.icon_designer_drag_symbol, app.label) else app.label
     Box(modifier.size(size).semantics { contentDescription = description }
         .then(if (!draggable || layers == null) Modifier else Modifier.pointerInput(layers) {
@@ -130,7 +133,7 @@ internal fun DesignerPreviewIcon(app: LauncherApp, layers: IconLayers?, design: 
                 val checkpoint = canvas.save()
                 canvas.scale(this.size.width / layers.original.width, this.size.height / layers.original.height)
                 drawDesignedIcon(canvas, layers, gestureDraft ?: design, dynamicColors.first, dynamicColors.second,
-                    themeColors.first, themeColors.second, appColors)
+                    themeColors.first, themeColors.second, appColors, colorScheme = colorScheme)
                 canvas.restoreToCount(checkpoint)
             }
         } else AppIcon(app, size = size, applyDisplaySize = false)
@@ -147,7 +150,7 @@ internal fun DesignerDisplayedIcon(app: LauncherApp, layers: IconLayers?, design
         // every slider tick, even though the large preview already draws the layers.
         Box(modifier.size(size)) {
             DesignerPreviewIcon(app, layers, design, dynamicColors, size, themeColors = themeColors, appColors = appColors)
-            if ((app.isPrivateSpace && app.showPrivateIndicator) || (app.isWorkProfile && app.showWorkIndicator)) {
+            if (app.showsProfileBadge) {
                 IconBadge(app, size * .42f, Modifier.align(Alignment.BottomEnd))
             }
         }

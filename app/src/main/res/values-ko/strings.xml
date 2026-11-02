@@ -1,3 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="media_enable">미디어 플레이어 활성화</string>
 </resources>

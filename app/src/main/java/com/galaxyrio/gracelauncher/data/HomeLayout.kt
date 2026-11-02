@@ -17,6 +17,8 @@ data class HomeLayout(
     /** Null reads the legacy header/widget/favorites arrangement until the first edit. */
     val homeOrder: List<String>? = null,
     val baselineEnabled: Boolean = true,
+    /** Master visibility preserves the independent clock, calendar and weather preferences. */
+    val clockCalendarEnabled: Boolean = true,
     /** Offset from the old home origin, captured once to preserve its existing visual position. */
     val baselineOffsetDp: Float? = null,
     val editingLocked: Boolean = false,
@@ -24,7 +26,8 @@ data class HomeLayout(
     val hasWidget: Boolean get() = widgetId >= 0
 
     fun withoutWidget() = HomeLayout(topOffsetDp = topOffsetDp, homeOrder = homeOrder,
-        baselineEnabled = baselineEnabled, baselineOffsetDp = baselineOffsetDp, editingLocked = editingLocked)
+        baselineEnabled = baselineEnabled, clockCalendarEnabled = clockCalendarEnabled,
+        baselineOffsetDp = baselineOffsetDp, editingLocked = editingLocked)
 
     fun encode(): String = JSONObject().apply {
         put("topOffsetDp", topOffsetDp.takeIf { it.isFinite() }?.coerceIn(-1200f, 1200f) ?: 0f)
@@ -36,8 +39,9 @@ data class HomeLayout(
         put("popupFullWidth", popupFullWidth)
         put("popupBackground", popupBackground)
         put("popupContentScale", popupContentScale.coerceIn(50, 150))
-        homeOrder?.let { put("homeOrder", org.json.JSONArray(it.distinct())) }
+        homeOrder?.let { put("homeOrder", org.json.JSONArray(normalizeHomeOrder(it))) }
         put("baselineEnabled", baselineEnabled)
+        put("clockCalendarEnabled", clockCalendarEnabled)
         put("editingLocked", editingLocked)
         baselineOffsetDp?.takeIf { it.isFinite() }?.let { put("baselineOffsetDp", it.coerceIn(0f, 1600f)) }
     }.toString()
@@ -56,9 +60,10 @@ data class HomeLayout(
                 popupBackground = data.optBoolean("popupBackground", false),
                 popupContentScale = data.optInt("popupContentScale", 100).coerceIn(50, 150),
                 homeOrder = data.optJSONArray("homeOrder")?.let { array ->
-                    (0 until array.length()).mapNotNull { (array.opt(it) as? String)?.takeIf(String::isNotBlank) }.distinct()
+                    normalizeHomeOrder((0 until array.length()).mapNotNull { (array.opt(it) as? String)?.takeIf(String::isNotBlank) })
                 },
                 baselineEnabled = data.optBoolean("baselineEnabled", true),
+                clockCalendarEnabled = data.optBoolean("clockCalendarEnabled", true),
                 editingLocked = data.optBoolean("editingLocked", false),
                 baselineOffsetDp = data.optDouble("baselineOffsetDp", Double.NaN).toFloat().takeIf { it.isFinite() }?.coerceIn(0f, 1600f),
             )

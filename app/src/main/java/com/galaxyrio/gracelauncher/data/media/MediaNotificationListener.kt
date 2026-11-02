@@ -93,6 +93,7 @@ class MediaNotificationListener : NotificationListenerService() {
             // Use the system's per-notification importance, not sound/vibration or DND:
             // muting the phone does not turn ordinary messages into silent channels.
             silent = ranking.importance in NotificationManager.IMPORTANCE_MIN..NotificationManager.IMPORTANCE_LOW,
+            importance = ranking.importance,
         )
     }
     override fun onListenerDisconnected() { mediaNotifications.disconnected(); appNotifications.disconnected() }

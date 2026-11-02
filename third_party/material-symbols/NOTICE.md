@@ -125,7 +125,6 @@ Media controls added 2026-09-27 (same official Outlined 24px style):
 - `ms_skip_previous.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/skip_previous/materialsymbolsoutlined/skip_previous_24px.svg
 - `ms_skip_next.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/skip_next/materialsymbolsoutlined/skip_next_24px.svg
 - `ms_music_note.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/music_note/materialsymbolsoutlined/music_note_24px.svg
-- `ms_headphones.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/headphones/materialsymbolsoutlined/headphones_24px.svg
 
 - `ms_account_balance.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/account_balance/materialsymbolsoutlined/account_balance_24px.svg
 - `ms_person.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/person/materialsymbolsoutlined/person_24px.svg
@@ -148,3 +147,33 @@ Media controls added 2026-09-27 (same official Outlined 24px style):
 - `ms_palette.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/palette/materialsymbolsoutlined/palette_24px.svg
 - `ms_home.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/home/materialsymbolsoutlined/home_24px.svg
 - `ms_search.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/search/materialsymbolsoutlined/search_24px.svg
+
+Settings icon added 2026-10-28 (same official Outlined 24px style; original path and 960px viewport retained, tint supplied by Compose):
+
+- `ms_splitscreen_landscape.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/splitscreen_landscape/materialsymbolsoutlined/splitscreen_landscape_24px.xml
+
+### Category icons added 2026-10-31
+
+These are official Material Symbols Outlined Android vectors, optical size 24,
+weight 400, grade 0 and fill 0, under the Apache-2.0 license above. The original
+24dp dimensions, 960px viewport and `pathData` are retained. Only the root
+`android:tint` is removed and the white path fill is changed to black; Compose
+supplies the displayed color.
+
+- `ms_keep.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/keep/materialsymbolsoutlined/keep_24px.xml
+- `ms_notifications_unread.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/notifications_unread/materialsymbolsoutlined/notifications_unread_24px.xml
+- `ms_circle.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/circle/materialsymbolsoutlined/circle_24px.xml
+- `ms_clear_day.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/clear_day/materialsymbolsoutlined/clear_day_24px.xml
+- `ms_bedtime.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/bedtime/materialsymbolsoutlined/bedtime_24px.xml
+
+The category chooser also reuses the existing `ms_music_note.xml` and
+`ms_info.xml` resources attributed above, and `ms_schedule.xml` from the official
+Material Symbols [Schedule SVG](https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/schedule/materialsymbolsoutlined/schedule_24px.svg).
+The None option draws no icon.
+
+### Touch-area preview icon added 2026-11-02
+
+- `ms_touch_app.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/touch_app/materialsymbolsoutlined/touch_app_24px.xml
+  (Official Material Symbols Outlined Android vector, optical size 24, weight 400,
+  grade 0 and fill 0. The original path and 960px viewport are retained; the root
+  tint is removed and the path fill is black, with Compose supplying its color.)

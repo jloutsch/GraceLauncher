@@ -97,7 +97,8 @@ class BackupRoundTripTest {
         importer().import(backup.inputStream(), allApps, setOf("w/w.Provider", "v/v.Provider")) as ImportResult.Success
 
         val folder = database.backupDao().allFolders().single()
-        assertTrue(folder.isAppStack && folder.isWidgetStack)
+        assertTrue(folder.isAppStack)
+        assertTrue(LauncherSettingsRepository(database).snapshots.first().folders.single().isWidgetStack)
         val restore = WidgetRestoreRepository(database)
         assertEquals(listOf("v/v.Provider", "w/w.Provider"), restore.pending().map { it.provider })
         assertTrue(restore.pending().all { it.ownerKey == "folder:ws" })
@@ -136,7 +137,7 @@ class BackupRoundTripTest {
         val layout = HomeLayout.decode(after.settings.single().homeLayoutJson)
         assertEquals(seeded.settings.single().copy(homeLayoutJson = null), after.settings.single().copy(homeLayoutJson = null))
         assertEquals(ClockLayout.TwoLines, ClockStyle.decode(after.settings.single().clockStyleJson).layout)
-        assertEquals(listOf(GraceWidget.Clock.key, "widget:-2"), layout.homeOrder)
+        assertEquals(listOf(GraceWidget.ClockCalendar.key, "widget:-2"), layout.homeOrder)
         assertEquals(seededLayout.copy(homeOrder = layout.homeOrder), layout)
         assertEquals(seeded.popups.filterNot { it.ownerKey == HomeContentKey }, after.popups.filterNot { it.ownerKey == HomeContentKey })
         val home = PopupItem.decode(after.popups.single { it.ownerKey == HomeContentKey }.itemsJson)
@@ -148,7 +149,7 @@ class BackupRoundTripTest {
         seed()
         LauncherSettingsRepository(database).mutateSettings {
             it.copy(homeLayout = HomeLayout(widgetId = 7, widgetProvider = "w/w.Legacy", widgetHeightDp = 90,
-                homeOrder = listOf(GraceWidget.Clock.key, "widget:7")))
+                homeOrder = listOf(GraceWidget.ClockCalendar.key, "widget:7")))
         }
         database.itemsDao().deletePopup(HomeContentKey)
         val backup = export()
@@ -158,7 +159,7 @@ class BackupRoundTripTest {
 
         val layout = HomeLayout.decode(database.backupDao().allSettings().single().homeLayoutJson)
         assertFalse(layout.hasWidget)
-        assertEquals(listOf(GraceWidget.Clock.key, "widget:-2"), layout.homeOrder)
+        assertEquals(listOf(GraceWidget.ClockCalendar.key, "widget:-2"), layout.homeOrder)
         val home = PopupItem.decode(database.backupDao().allPopups().single { it.ownerKey == HomeContentKey }.itemsJson)
         assertEquals(listOf("widget:-2"), home.map { it.key })
         assertEquals(-2, home.single().widget?.widgetId)
@@ -500,7 +501,7 @@ class BackupRoundTripTest {
         val ids = database.backupDao().allPopups().flatMap { PopupItem.decode(it.itemsJson) }.mapNotNull { it.widget?.widgetId }
         assertTrue(ids.all(::isWidgetPlaceholder))
         val layout = HomeLayout.decode(database.backupDao().allSettings().single().homeLayoutJson)
-        assertEquals(listOf(GraceWidget.Clock.key, "widget:${pending.single().placeholderId}"), layout.homeOrder)
+        assertEquals(listOf(GraceWidget.ClockCalendar.key, "widget:${pending.single().placeholderId}"), layout.homeOrder)
     }
 
     @Test
@@ -607,7 +608,7 @@ class BackupRoundTripTest {
     private suspend fun seed() {
         val settings = LauncherSettingsRepository(database)
         settings.updateSettings(LauncherSettings(clockStyle = ClockStyle(layout = ClockLayout.TwoLines),
-            homeLayout = HomeLayout(homeOrder = listOf(GraceWidget.Clock.key, "widget:41"))))
+            homeLayout = HomeLayout(homeOrder = listOf(GraceWidget.ClockCalendar.key, "widget:41"))))
         settings.saveFolder(LauncherFolder("f1", "Work", listOf("a/a.Main", "b/b.Main"), FolderPlacement.AppList))
         settings.saveFolder(LauncherFolder("f2", "Play", listOf("c/c.Main"), FolderPlacement.Both))
         settings.hideApp("d/d.Main")

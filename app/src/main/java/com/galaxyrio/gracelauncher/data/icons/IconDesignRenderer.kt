@@ -15,6 +15,7 @@ import android.graphics.RectF
 import android.graphics.drawable.AdaptiveIconDrawable
 import android.graphics.drawable.Drawable
 import android.os.Build
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialShapes
 import androidx.core.graphics.createBitmap
 import androidx.graphics.shapes.toPath
@@ -88,18 +89,20 @@ internal fun iconLayers(drawable: Drawable, size: Int, themed: Boolean = false):
 }
 
 internal fun renderDesignedIcon(layers: IconLayers, design: IconDesign, dynamicBackground: Int, dynamicForeground: Int,
-    themeBackground: Int = dynamicBackground, themeForeground: Int = dynamicForeground, appColors: Pair<Int, Int>? = null): Bitmap {
+    themeBackground: Int = dynamicBackground, themeForeground: Int = dynamicForeground, appColors: Pair<Int, Int>? = null,
+    colorScheme: ColorScheme? = null): Bitmap {
     val style = design.normalized()
     if (style == IconDesign()) return layers.original
     val side = layers.original.width
     val output = createBitmap(side, side)
-    drawDesignedIcon(Canvas(output), layers, style, dynamicBackground, dynamicForeground, themeBackground, themeForeground, appColors)
+    drawDesignedIcon(Canvas(output), layers, style, dynamicBackground, dynamicForeground, themeBackground, themeForeground, appColors, colorScheme)
     return output
 }
 
 /** Draw the same layers directly for previews; moving a symbol must not allocate a bitmap every frame. */
 internal fun drawDesignedIcon(canvas: Canvas, layers: IconLayers, design: IconDesign, dynamicBackground: Int, dynamicForeground: Int,
-    themeBackground: Int = dynamicBackground, themeForeground: Int = dynamicForeground, appColors: Pair<Int, Int>? = null) {
+    themeBackground: Int = dynamicBackground, themeForeground: Int = dynamicForeground, appColors: Pair<Int, Int>? = null,
+    colorScheme: ColorScheme? = null) {
     val style = design.normalized()
     val side = layers.original.width
     val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
@@ -116,8 +119,8 @@ internal fun drawDesignedIcon(canvas: Canvas, layers: IconLayers, design: IconDe
         else iconShapePath(style.shape, style.cookieSides, side.toFloat(), style.pebbleRoundness, style.squareCornerRadius, style.squareAspectRatio)
     mask?.let(canvas::clipPath)
     val canTheme = style.themeIcons && (layers.monochrome != null || style.themeUnsupportedIcons)
-    val background = style.background?.resolve(themeBackground, appColors?.first)
-    val foreground = style.foreground?.resolve(themeForeground, appColors?.second)?.takeIf { canTheme }
+    val background = style.background?.resolve(themeBackground, appColors?.first, colorScheme)
+    val foreground = style.foreground?.resolve(themeForeground, appColors?.second, colorScheme)?.takeIf { canTheme }
     if (layers.layered) {
         if (canTheme && background != null) canvas.drawColor(background)
         else layers.background?.let { canvas.drawBitmap(it, 0f, 0f, paint) }

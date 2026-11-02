@@ -13,7 +13,7 @@ import com.galaxyrio.gracelauncher.R
 enum class LauncherSymbol {
     Star, Info, Hourglass, Category, Delete, Chevron, Settings, Launch, Outbound, Android,
     Plus, Edit, Apps, Check, Palette, Home, Search, Folder, Clock, Calendar, Weather, Move, Resize, DesignServices, Lock, Work, Encrypted, History2,
-    Music, Widgets, Notifications, VisibilityOff, Gesture, Vibration, Steppers
+    Music, Widgets, Notifications, VisibilityOff, Gesture, Vibration, Steppers, SplitscreenLandscape
 }
 
 /** Official Material Symbols Outlined: optical size 24, weight 400, grade 0, fill 0. */
@@ -61,6 +61,7 @@ fun LauncherIcon(
                 LauncherSymbol.VisibilityOff -> R.drawable.ms_visibility_off
                 LauncherSymbol.Gesture -> R.drawable.ms_gesture
                 LauncherSymbol.Vibration -> R.drawable.ms_vibration
+                LauncherSymbol.SplitscreenLandscape -> R.drawable.ms_splitscreen_landscape
             },
         ),
         // These icons decorate parent-labelled actions, which own accessibility semantics.

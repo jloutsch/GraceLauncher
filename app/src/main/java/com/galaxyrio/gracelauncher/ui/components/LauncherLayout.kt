@@ -20,12 +20,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import com.galaxyrio.gracelauncher.data.ListAppearance
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.theme.rememberAppFontFamily
+import com.galaxyrio.gracelauncher.ui.theme.resolvedFontColor
 
 internal val LocalListAppearance = staticCompositionLocalOf { ListAppearance() }
 
@@ -37,8 +37,7 @@ internal val ListAppearance.endPadding: Dp get() = (sidePadding + 12).dp
 internal fun listLabelStyle(onWallpaper: Boolean = true): TextStyle {
     val list = LocalListAppearance.current
     val wallpaper = LocalLauncherAppearance.current
-    val color = list.fontColor?.resolve(MaterialTheme.colorScheme.primary.toArgb())?.let(::Color)
-        ?: if (onWallpaper) wallpaper.text else MaterialTheme.colorScheme.onSurface
+    val color = resolvedFontColor(list.fontColor, onWallpaper = onWallpaper)
     return MaterialTheme.typography.bodyLarge.copy(fontFamily = rememberAppFontFamily(list.fontId),
         fontSize = list.fontSize.sp, lineHeight = (list.fontSize * 1.5f).sp, fontWeight = FontWeight.Normal,
         color = color, letterSpacing = 0.2.sp, shadow = if (onWallpaper) wallpaper.textShadow else null)

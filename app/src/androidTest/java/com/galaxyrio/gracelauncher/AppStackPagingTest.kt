@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.galaxyrio.gracelauncher.data.PopupItem
 import com.galaxyrio.gracelauncher.data.FolderPlacement
 import com.galaxyrio.gracelauncher.data.LauncherApp
 import com.galaxyrio.gracelauncher.data.LauncherFolder
@@ -34,7 +35,8 @@ class AppStackPagingTest {
         GraceLauncherTheme(dynamicColor = false) {
             // 280dp fits five 40dp icons per page.
             Surface(Modifier.width(280.dp)) {
-                AppStack(stack, LauncherUiState(), onLaunch = { app, _ -> onLaunch(app) }, onDetails = {}, onEdit = {}, contents = apps)
+                AppStack(stack, LauncherUiState(apps = apps, folders = listOf(stack), popups = mapOf(stack.key to apps.map { PopupItem(it.key) })),
+                    onLaunch = { app, _ -> onLaunch(app) }, onDetails = {}, onEdit = {})
             }
         }
     }

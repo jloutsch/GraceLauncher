@@ -106,14 +106,16 @@ class ShortcutsFoldersTest {
         assertTrue(nonAppEntries.notificationsFor(owner, true).isEmpty())
     }
 
-    @Test fun permissionPromptMovesIntoNewSettingsPageAndModesAreSingleChoice() {
-        var state by mutableStateOf(LauncherUiState())
+    @Test fun popupModesStaySingleChoiceAndPreviewOptionsMoveToListAppearance() {
+        var state by mutableStateOf(LauncherUiState(settings = LauncherSettings(
+            shortcutsFolders = ShortcutsFoldersSettings(singleLineNotificationPreviews = true))))
         compose.setContent {
             GraceLauncherTheme(dynamicColor = false) {
                 LauncherSettingsScreen(state, LauncherActions(updateSettings = { change -> state = state.copy(settings = change(state.settings)) }),
-                    onBack = {}, initialPage = "Productivity")
+                    onBack = {})
             }
         }
+        compose.onNodeWithTag("settings_category_productivity").performClick()
         compose.onNodeWithTag("settings_list").performScrollToNode(hasTestTag("settings_shortcuts_folders"))
         compose.onNodeWithTag("notifications_access").assertDoesNotExist()
         compose.onNodeWithTag("settings_shortcuts_folders").performClick()
@@ -127,14 +129,32 @@ class ShortcutsFoldersTest {
         // Clicking the active button must not leave a single-choice group empty.
         compose.onNodeWithTag("popup_silent:expanded").performClick().assertIsOn()
         compose.runOnIdle { assertEquals(NotificationDisplay.ExpandedOnly, state.settings.shortcutsFolders.silentNotifications) }
-        compose.onNodeWithTag("settings_list").performScrollToNode(hasTestTag("popup_single_line_previews"))
-        compose.onNodeWithTag("popup_single_line_previews").assertIsOff().performClick().assertIsOn()
-        compose.onNodeWithTag("settings_list").performScrollToNode(hasTestTag("popup_multiple_app_previews"))
+        compose.onNodeWithTag("settings_list").performScrollToNode(hasTestTag("popup_normal"))
+        compose.onNodeWithTag("popup_single_line_previews").assertDoesNotExist()
+        compose.onNodeWithTag("popup_multiple_app_previews").assertDoesNotExist()
+        compose.onNodeWithTag("settings_back").performClick()
+        compose.onNodeWithTag("settings_back").performClick()
+        compose.onNodeWithTag("settings_category_themes").performClick()
+        compose.onNodeWithTag("settings_list").performScrollToNode(hasTestTag("settings_list_appearance"))
+        compose.onNodeWithTag("settings_list_appearance").performClick()
+        compose.onNodeWithTag("list_appearance_tab:List").assertIsSelected()
+        compose.onNodeWithTag("list_appearance_tab:Notification").performClick()
+        compose.onNodeWithTag("list_notification_controls").performScrollToNode(hasTestTag("popup_single_line_previews"))
+        compose.onNodeWithTag("popup_single_line_previews").assertIsOn().performClick().assertIsOff()
+        compose.onNodeWithTag("list_notification_controls").performScrollToNode(hasTestTag("popup_multiple_app_previews"))
         compose.onNodeWithTag("popup_multiple_app_previews").assertIsOff().performClick().assertIsOn()
         compose.runOnIdle {
-            assertTrue(state.settings.shortcutsFolders.singleLineNotificationPreviews)
+            assertFalse(state.settings.shortcutsFolders.singleLineNotificationPreviews)
             assertTrue(state.settings.shortcutsFolders.multipleAppNotificationPreviews)
+            assertEquals(NotificationDisplay.ExpandedOnly, state.settings.shortcutsFolders.silentNotifications)
         }
+        compose.onNodeWithTag("settings_back").performClick()
+        compose.onNodeWithTag("settings_list_appearance").performClick()
+        compose.onNodeWithTag("list_appearance_tab:Notification").performClick()
+        compose.onNodeWithTag("list_notification_controls").performScrollToNode(hasTestTag("popup_single_line_previews"))
+        compose.onNodeWithTag("popup_single_line_previews").assertIsOff()
+        compose.onNodeWithTag("list_notification_controls").performScrollToNode(hasTestTag("popup_multiple_app_previews"))
+        compose.onNodeWithTag("popup_multiple_app_previews").assertIsOn()
     }
 
     @Test fun masterSwitchDisablesAppPopupButDoesNotHideOrDisableFolders() {

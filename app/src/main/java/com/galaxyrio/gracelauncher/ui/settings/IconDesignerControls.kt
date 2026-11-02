@@ -398,7 +398,8 @@ private fun DesignerColorRow(label: String, choice: IconColor?, default: IconCol
         Row(Modifier.weight(1f).then(modifier).heightIn(min = 64.dp).clip(MaterialTheme.shapes.medium)
             .clickable(enabled = enabled, role = Role.Button, onClick = onPick).testTag(tag).padding(horizontal = 4.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically) {
-            val swatch = choice?.let { Color(it.resolve(theme, appColor)) } ?: MaterialTheme.colorScheme.surfaceContainerHighest
+            val swatch = choice?.let { Color(it.resolve(theme, appColor, colorScheme = MaterialTheme.colorScheme)) }
+                ?: MaterialTheme.colorScheme.surfaceContainerHighest
             val outline = MaterialTheme.colorScheme.outline
             Canvas(Modifier.size(28.dp)) {
                 val radius = size.minDimension / 2 - 1.dp.toPx()

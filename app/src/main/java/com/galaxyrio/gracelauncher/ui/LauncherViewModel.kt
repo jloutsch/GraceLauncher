@@ -9,9 +9,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.res.Configuration
 import android.content.pm.PackageManager
-import android.content.pm.LauncherApps
-import android.os.UserHandle
-import android.os.Process
 import android.graphics.Rect
 import android.os.Bundle
 import android.os.SystemClock
@@ -24,7 +21,12 @@ import com.galaxyrio.gracelauncher.data.backup.BackupImporter
 import com.galaxyrio.gracelauncher.data.backup.renamedAppKeys
 import com.galaxyrio.gracelauncher.data.backup.widgetIdsToDelete
 import com.galaxyrio.gracelauncher.data.backup.withoutWidgetPlaceholders
+import com.galaxyrio.gracelauncher.data.AppCategory
+import com.galaxyrio.gracelauncher.data.FavoritesCategoryId
+import com.galaxyrio.gracelauncher.data.migrateHomeCategories
 import com.galaxyrio.gracelauncher.data.LauncherAppCache
+import com.galaxyrio.gracelauncher.data.LauncherCatalogMemory
+import com.galaxyrio.gracelauncher.data.LauncherProfileSnapshot
 import com.galaxyrio.gracelauncher.data.CalendarRepository
 import com.galaxyrio.gracelauncher.data.CatalogRefreshState
 import com.galaxyrio.gracelauncher.data.FavoritesStore
@@ -68,18 +70,22 @@ import com.galaxyrio.gracelauncher.platform.PrivateSpaceController
 import com.galaxyrio.gracelauncher.platform.PrivateSpaceState
 import com.galaxyrio.gracelauncher.platform.DefaultHome
 import com.galaxyrio.gracelauncher.platform.BreezyWeatherUpdates
-import com.galaxyrio.gracelauncher.data.media.HeadphoneMonitor
-import com.galaxyrio.gracelauncher.data.media.HeadphoneState
 import com.galaxyrio.gracelauncher.data.media.MediaCommand
 import com.galaxyrio.gracelauncher.data.media.MediaSessionRepository
 import com.galaxyrio.gracelauncher.data.media.MediaSnapshot
 import com.galaxyrio.gracelauncher.data.media.NowPlaying
+import com.galaxyrio.gracelauncher.data.CategoryInclusion
+import com.galaxyrio.gracelauncher.data.CategoryDynamicRule
+import com.galaxyrio.gracelauncher.data.CategoryNotificationLevel
+import com.galaxyrio.gracelauncher.data.BuiltInCategoryIds
+import com.galaxyrio.gracelauncher.data.notifications.NotificationAppId
 import com.galaxyrio.gracelauncher.data.notifications.AppNotification
 import com.galaxyrio.gracelauncher.data.notifications.appNotifications
 import com.galaxyrio.gracelauncher.data.weather.BreezyWeatherRepository
 import com.galaxyrio.gracelauncher.data.weather.WeatherState
 import com.galaxyrio.gracelauncher.data.weather.WeatherStatus
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -90,6 +96,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
@@ -100,6 +107,11 @@ enum class ScheduleStatus {
     Ready,
     Error,
 }
+
+private fun recentInstallations(apps: List<LauncherApp>): List<LauncherApp> = apps.asSequence()
+        .filter { it.shortcut == null && it.folderId == null && !it.isPrivateSpace && !it.isLauncherSettings }
+        .sortedWith(compareByDescending<LauncherApp> { it.firstInstallTime }.then(LauncherAppOrder))
+        .distinctBy { it.userSerial to it.packageName }.take(8).toList()
 
 data class LauncherUiState(
     val apps: List<LauncherApp> = emptyList(),
@@ -127,6 +139,7 @@ data class LauncherUiState(
     val isDefaultHome: Boolean? = null,
     val media: MediaSnapshot = MediaSnapshot(),
     val notifications: Map<String, List<AppNotification>> = emptyMap(),
+    val categoryNotifications: Map<NotificationAppId, Set<CategoryNotificationLevel>> = emptyMap(),
     val usage: com.galaxyrio.gracelauncher.data.UsageSnapshot = com.galaxyrio.gracelauncher.data.UsageSnapshot(),
     val favoriteOrder: List<String> = emptyList(),
     val weather: WeatherState = WeatherState(),
@@ -144,7 +157,6 @@ data class LauncherUiState(
     val workProfiles: List<WorkProfile> = emptyList(),
     val workFolderApp: LauncherApp? = null,
     val shownShortcutKeys: Set<String> = emptySet(),
-    val headphones: HeadphoneState = HeadphoneState(),
 ) {
     val folderHiddenAppKeys: Set<String> = com.galaxyrio.gracelauncher.data.hiddenAppsFromFolders(folders)
     val effectiveHiddenAppKeys: Set<String> = hiddenAppKeys + folderHiddenAppKeys
@@ -180,10 +192,7 @@ data class LauncherUiState(
 
     // Hidden apps remain available in folders. Profile-protected apps and saved
     // shortcuts are not installations in this personal-profile collection.
-    val recentlyInstalledApps: List<LauncherApp> get() = apps.asSequence()
-        .filter { it.shortcut == null && it.folderId == null && !it.isPrivateSpace && !it.isLauncherSettings }
-        .sortedWith(compareByDescending<LauncherApp> { it.firstInstallTime }.then(LauncherAppOrder))
-        .distinctBy { it.userSerial to it.packageName }.take(8).toList()
+    val recentlyInstalledApps: List<LauncherApp> get() = recentInstallations(apps)
 
     fun recentlyInstalledFolder(name: String) = LauncherFolder(
         RecentlyInstalledFolderId, settings.listAppearance.recentlyInstalledName ?: name,
@@ -203,7 +212,7 @@ data class LauncherUiState(
                 else if (owner.folderId == null) defaults.map { it.key }
                 else folders.firstOrNull { it.id == owner.folderId }?.appKeys.orEmpty()).distinct().map { PopupItem(it) }
         return if (owner.folderId != PrivateSpaceFolderId && !settings.privateSpace.exposesApps)
-            items.filterNot { it.key.startsWith("profile:") && findItem(it.key)?.isWorkProfile != true } else items
+            items.filterNot { it.key.startsWith("profile:") && findItem(it.key)?.isPrivateSpace != false } else items
     }
 
     fun ownNotificationsFor(app: LauncherApp, expanded: Boolean): List<AppNotification> =
@@ -243,16 +252,6 @@ data class LauncherUiState(
             settings.mediaPlayer && media.hasAccess && !isLoadingSettings && !settingsLoadFailed
         }
 
-    /** Shown for as long as headphones are connected, like the media player shows while media is available. */
-    val headphoneApps: List<LauncherApp>
-        get() {
-            val choice = settings.headphoneApps
-            if (!settings.mediaPlayer || !choice.enabled || choice.appKeys.isEmpty() || isLoadingSettings || settingsLoadFailed ||
-                !headphones.connected) return emptyList()
-            val available = allApps.associateBy(LauncherApp::key)
-            return choice.appKeys.mapNotNull(available::get)
-        }
-
     /** Hide Apps affects only the alphabetical app list, not other launcher surfaces. */
     val appListApps: List<LauncherApp>
         get() = if (isLoadingSettings || settingsLoadFailed) emptyList()
@@ -290,13 +289,53 @@ data class LauncherUiState(
             return (favoriteOrder + items.keys).distinct().mapNotNull(items::get)
         }
 
-    val homeItems: List<PopupItem> get() = com.galaxyrio.gracelauncher.data.orderedHomeItems(
-        settings, favoriteItems.map(LauncherApp::key), popups[com.galaxyrio.gracelauncher.data.HomeContentKey].orEmpty())
+    val appCategories: List<AppCategory> get() = settings.appCategories
+        ?: requireNotNull(migrateHomeCategories(settings, favoriteOrder.ifEmpty { favoriteKeys.toList() }).appCategories)
+
+    val homeItems: List<PopupItem> get() {
+        val migrated = migrateHomeCategories(settings, favoriteOrder.ifEmpty { favoriteKeys.toList() })
+        return com.galaxyrio.gracelauncher.data.orderedHomeItems(migrated,
+            (if (isLoadingSettings || settingsLoadFailed) emptyList() else appCategories.filter { it.showOnHome }.map { it.key }) +
+                favoriteFolders.map { it.key },
+            popups[com.galaxyrio.gracelauncher.data.HomeContentKey].orEmpty())
+    }
+
+    val needsCategoryOpenCounts: Boolean get() = appCategories.any {
+        it.inclusion == CategoryInclusion.Dynamic && it.dynamicRule == CategoryDynamicRule.FrequentlyOpened
+    }
+
+    /** Membership does not depend on placement or display conditions; editors show the same live result. */
+    fun categoryItems(category: AppCategory): List<String> {
+        if (isLoadingSettings || settingsLoadFailed) return emptyList()
+        fun available(app: LauncherApp) = !app.isPrivateSpace || (settings.privateSpace.exposesApps && privateContentVisible)
+        if (category.inclusion == CategoryInclusion.Manual) return category.itemKeys.filter { key ->
+            findItem(key)?.let(::available) == true
+        }
+        val candidates = allApps.filter { app -> available(app) && app.key !in effectiveHiddenAppKeys &&
+            app.shortcut == null && app.folderId == null && !app.isLauncherSettings }
+        return when (category.dynamicRule) {
+            CategoryDynamicRule.Notifications -> candidates.filter { app ->
+                categoryNotifications[NotificationAppId(app.packageName, app.user ?: android.os.Process.myUserHandle())]
+                    .orEmpty().any { it in category.notificationLevels }
+            }.sortedWith(LauncherAppOrder)
+            CategoryDynamicRule.RecentlyInstalled -> recentInstallations(candidates)
+            CategoryDynamicRule.FrequentlyOpened -> if (!settings.digitalWellbeing.enabled || !usage.hasAccess) emptyList() else
+                candidates.filter { it.user == null && (usage.openCounts[it.packageName] ?: 0) > 0 }
+                    .sortedWith(compareByDescending<LauncherApp> { usage.openCounts[it.packageName] ?: 0 }.then(LauncherAppOrder))
+                    .distinctBy { it.packageName }.take(category.appLimit)
+        }.map(LauncherApp::key)
+    }
+
+    internal fun visibleHomeContent(headphones: Boolean, minuteOfDay: Int) =
+        com.galaxyrio.gracelauncher.data.expandHomeCategories(homeItems, appCategories, headphones, minuteOfDay,
+            categoryItems = ::categoryItems) { key ->
+            findItem(key)?.let { !it.isPrivateSpace || (settings.privateSpace.exposesApps && privateContentVisible) } == true
+        }
 }
 
 class LauncherViewModel(application: Application) : AndroidViewModel(application) {
-    private val iconPacks = IconPackRepository(application)
-    private val appRepository = AppRepository(application, iconPacks)
+    private val iconPacks = IconPackRepository.get(application)
+    private val appRepository = AppRepository.get(application, iconPacks)
     private val appCache = LauncherAppCache(application)
     private var startupPreviewPending = true
     private val privateAppCache = PrivateAppCache(application)
@@ -310,13 +349,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val shortcutRepository = ShortcutRepository(application)
     private val settingsRepository = LauncherSettingsRepository(LauncherDatabase.getInstance(application))
     private val itemsRepository = LauncherItemsRepository(LauncherDatabase.getInstance(application))
-    private val itemIcons = ItemIconStore(application, iconPacks)
+    private val itemIcons = ItemIconStore.get(application, iconPacks)
     private data class StyledShortcuts(val inputs: List<Any?>, val result: ShortcutResult)
     private val styledShortcuts = android.util.LruCache<String, StyledShortcuts>(24)
     private var itemsSnapshot = LauncherItemsSnapshot()
     private var itemsReady = false
     private val mediaRepository = MediaSessionRepository(application)
-    private val headphoneMonitor = HeadphoneMonitor(application)
     private val weatherRepository = BreezyWeatherRepository(application)
     private val settingsWriteMutex = Mutex()
 
@@ -333,8 +371,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     val returnHomeRequests = _returnHomeRequests.asSharedFlow()
 
     private var appLoadJob: Job? = null
-    private data class CatalogInputs(val configuration: Configuration, val day: LocalDate,
-        val renames: Map<String, String>, val themedIcons: Boolean, val shortcutAccess: Boolean)
+    private var profileRefreshJob: Job? = null
+    private var profileRefreshPending = false
+    private var appProfiles = LauncherProfileSnapshot(emptyList(), complete = false)
+    private data class CatalogInputs(val configuration: String, val day: LocalDate,
+        val renames: Map<String, String>, val themedIcons: Boolean, val shortcutAccess: Boolean,
+        val profiles: LauncherProfileSnapshot, val repositoryRevision: Long, val iconPackRevision: Long)
     private val catalogRefresh = CatalogRefreshState<CatalogInputs>()
     private var privateAppLoadJob: Job? = null
     private var scheduleLoadJob: Job? = null
@@ -342,34 +384,20 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val usageRepository = com.galaxyrio.gracelauncher.data.UsageRepository.get(application)
     private var usageLoadJob: Job? = null
     private var lastWeatherRefresh = 0L
+    private var iconPackDiscoveryJob: Job? = null
+    private var retryIconPacksAfter = 0L
     private val dateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) { refreshApps() }
     }
-    private val launcherApps = application.getSystemService(LauncherApps::class.java)
-    private val packageChanges = object : LauncherApps.Callback() {
-        private fun changed(user: UserHandle, packages: Collection<String>) {
-            appRepository.invalidateApps(user, packages)
-            if (user == Process.myUserHandle() && BreezyWeatherRepository.PACKAGE_NAME in packages) refreshWeather()
-            refreshApps()
-        }
-        override fun onPackageAdded(packageName: String, user: UserHandle) = changed(user, listOf(packageName))
-        override fun onPackageRemoved(packageName: String, user: UserHandle) = changed(user, listOf(packageName))
-        override fun onPackageChanged(packageName: String, user: UserHandle) = changed(user, listOf(packageName))
-        override fun onPackagesAvailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) {
-            if (replacing) changed(user, packageNames.toList()) else refreshApps()
-        }
-        override fun onPackagesUnavailable(packageNames: Array<out String>, user: UserHandle, replacing: Boolean) {
-            if (replacing) changed(user, packageNames.toList()) else refreshApps()
-        }
-        override fun onPackagesSuspended(packageNames: Array<out String>, user: UserHandle) = refreshApps()
-        override fun onPackagesUnsuspended(packageNames: Array<out String>, user: UserHandle) = refreshApps()
-        override fun onShortcutsChanged(packageName: String, shortcuts: MutableList<android.content.pm.ShortcutInfo>, user: UserHandle) {
-            if (itemsSnapshot.shortcuts.any { it.packageName == packageName }) refreshApps()
-        }
-    }
 
     init {
-        launcherApps.registerCallback(packageChanges)
+        viewModelScope.launch {
+            appRepository.revision.collect {
+                styledShortcuts.evictAll()
+                refreshWeather(force = false)
+                refreshOnResume()
+            }
+        }
         viewModelScope.launch {
             privateSpaceController.state.collect { state ->
                 val previous = _uiState.value.privateSpace
@@ -410,9 +438,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         viewModelScope.launch {
             mediaRepository.state.collect { media -> _uiState.update { it.copy(media = media) } }
         }
-        headphoneMonitor.start()
         viewModelScope.launch {
-            headphoneMonitor.state.collect { headphones -> _uiState.update { it.copy(headphones = headphones) } }
+            appNotifications.categoryState.collect { memberships -> _uiState.update { it.copy(categoryNotifications = memberships) } }
         }
         ContextCompat.registerReceiver(application, dateReceiver, IntentFilter().apply {
             addAction(Intent.ACTION_DATE_CHANGED)
@@ -420,11 +447,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             addAction(Intent.ACTION_TIMEZONE_CHANGED)
             addAction(Intent.ACTION_WALLPAPER_CHANGED)
             addAction(Intent.ACTION_CONFIGURATION_CHANGED)
-            addAction(Intent.ACTION_MANAGED_PROFILE_ADDED)
-            addAction(Intent.ACTION_MANAGED_PROFILE_REMOVED)
-            addAction(Intent.ACTION_MANAGED_PROFILE_AVAILABLE)
-            addAction(Intent.ACTION_MANAGED_PROFILE_UNAVAILABLE)
-            addAction(Intent.ACTION_MANAGED_PROFILE_UNLOCKED)
         }, ContextCompat.RECEIVER_NOT_EXPORTED)
         viewModelScope.launch {
             settingsRepository.snapshots
@@ -437,10 +459,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 }
                 .collect { snapshot ->
                     val previous = _uiState.value
+                    val legacyFavorites = favoritesStore.savedFavorites()
+                    if (snapshot.settings.appCategories == null && legacyFavorites != null) {
+                        persistSettings { settingsRepository.migrateAppCategories(legacyFavorites) }
+                    }
+                    val favorites = categoryFavoriteOrder(snapshot.settings, legacyFavorites ?: previous.favoriteOrder)
                     privateSpaceController.configure(snapshot.settings.privateSpace)
                     _uiState.update {
                         it.copy(
                             settings = snapshot.settings,
+                            favoriteKeys = favorites.toSet(), favoriteOrder = favorites,
                             apps = it.apps.map { app -> if (app.isWorkProfile) app.copy(showWorkIndicator = snapshot.settings.workProfile.showIndicator) else app },
                             shortcutApps = it.shortcutApps.map { app -> if (app.isWorkProfile) app.copy(showWorkIndicator = snapshot.settings.workProfile.showIndicator) else app },
                             themedIcons = snapshot.settings.iconDesign?.design?.withThemeDefaults(IconDesign.defaults(preferences.themedIcons))?.themeIcons
@@ -460,12 +488,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     if (previous.isLoadingSettings || previous.settings.enabledIconPackPackages != snapshot.settings.enabledIconPackPackages ||
                         previous.settings.iconDesign != snapshot.settings.iconDesign ||
                         previous.settings.darkMode != snapshot.settings.darkMode ||
+                        previous.settings.amoledMode != snapshot.settings.amoledMode ||
                         previous.settings.useDynamicColors != snapshot.settings.useDynamicColors ||
                         previous.settings.themeColor != snapshot.settings.themeColor ||
                         previous.settings.paletteStyle != snapshot.settings.paletteStyle ||
                         previous.folders != snapshot.folders) refreshApps()
                     if (previous.settings.privateSpace != snapshot.settings.privateSpace) refreshPrivateApps()
-                    if (previous.isLoadingSettings || previous.settings.digitalWellbeing != snapshot.settings.digitalWellbeing) {
+                    if (previous.isLoadingSettings || previous.settings.digitalWellbeing != snapshot.settings.digitalWellbeing ||
+                        previous.needsCategoryOpenCounts != _uiState.value.needsCategoryOpenCounts) {
                         usageLoadJob?.cancel()
                         usageLoadJob = null
                         refreshUsage()
@@ -482,8 +512,13 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         refreshApps()
     }
 
-    private fun catalogInputs() = CatalogInputs(Configuration(getApplication<Application>().resources.configuration),
-        LocalDate.now(), preferences.renames(), preferences.themedIcons, shortcutRepository.hasAccess())
+    private fun catalogConfiguration(): String = getApplication<Application>().resources.configuration.let {
+        "${it.densityDpi}:${it.uiMode and Configuration.UI_MODE_NIGHT_MASK}:${it.locales.toLanguageTags()}"
+    }
+
+    private fun catalogInputs() = CatalogInputs(catalogConfiguration(),
+        LocalDate.now(), preferences.renames(), preferences.themedIcons, shortcutRepository.hasAccess(), appProfiles,
+        appRepository.revision.value, iconPacks.cacheRevision())
 
     private var renamingApps: Job? = null
 
@@ -493,7 +528,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val state = _uiState.value
         val saved = favorites + state.hiddenAppKeys + state.popups.flatMap { (owner, items) -> items.map { it.key } + owner } +
             listOfNotNull(state.settings.mediaAppKey, state.settings.clockAppKey, state.settings.weatherAppKey) +
-            state.settings.headphoneApps.appKeys
+            state.settings.appCategories.orEmpty().flatMap { it.itemKeys }
         val renames = renamedAppKeys(saved, installed)
         if (renames.isEmpty()) return
         renamingApps = viewModelScope.launch {
@@ -506,8 +541,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     fun refreshApps() {
         // Explicit package/pack refreshes can change artwork without changing its saved identity.
         styledShortcuts.evictAll()
+        if (_uiState.value.appLoadFailed) appRepository.invalidateAll()
         catalogRefresh.invalidate()
         refreshOnResume()
+    }
+
+    fun refreshProfiles() {
+        appRepository.invalidateProfiles()
+        refreshApps()
     }
 
     fun refreshOnResume() {
@@ -518,11 +559,140 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         privateSpaceController.refresh()
         if (_uiState.value.privateAppsFailed) refreshPrivateApps()
         val favorites = _uiState.value.takeUnless { it.isLoadingApps || it.appLoadFailed }
-            ?.let { favoritesStore.favoritesFor(it.apps) }
+            ?.let { categoryFavoriteOrder(it.settings, favoritesStore.favoritesFor(it.apps)) }
         _uiState.update { it.copy(isDefaultHome = isDefaultHome, hasShortcutAccess = shortcutRepository.hasAccess(),
             categories = preferences.categories(), textMode = preferences.textMode,
             favoriteKeys = favorites?.toSet() ?: it.favoriteKeys, favoriteOrder = favorites ?: it.favoriteOrder) }
         // Wait for the stored pack choice: do not flash system icons on cold start.
+        if (!itemsReady || _uiState.value.isLoadingSettings || _uiState.value.settingsLoadFailed) return
+        if (iconPacks.consumeDueRetries()) catalogRefresh.invalidate()
+        if (retryIconPacksAfter != 0L && SystemClock.elapsedRealtime() >= retryIconPacksAfter) {
+            retryIconPacksAfter = 0L
+            catalogRefresh.invalidate()
+        }
+        // Some OEMs omit package/profile callbacks when a clone is created or removed.
+        // Check identity and availability on resume without reloading unchanged icons.
+        profileRefreshPending = true
+        if (profileRefreshJob?.isActive == true) return
+        profileRefreshJob = viewModelScope.launch {
+            while (profileRefreshPending) {
+                profileRefreshPending = false
+                try {
+                    restoreStartupPreview()
+                    appProfiles = appRepository.profileSnapshot()
+                    refreshCatalog()
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    Log.w("LauncherViewModel", "Unable to discover launcher profiles", error)
+                    _uiState.update { it.copy(isLoadingApps = false, appLoadFailed = true) }
+                }
+            }
+        }
+    }
+
+    /** Only changes that affect every rendered icon invalidate the whole preview. */
+    private fun startupCacheKey(): String {
+        val settings = _uiState.value.settings
+        return LauncherAppCache.key(listOf(
+            "public-preview-4", settings.enabledIconPackPackages, settings.iconDesign, settings.darkMode,
+            settings.useDynamicColors, settings.themeColor, settings.paletteStyle, settings.amoledMode,
+            preferences.themedIcons, catalogConfiguration(),
+            launcherThemeSeed(getApplication<Application>().resources, true, settings.themeColor),
+        ).joinToString("\n"))
+    }
+
+    private fun previewEntryKeys(): Map<String, String> = buildMap {
+        itemsSnapshot.icons.forEach { (key, choice) -> put(key, choice.encode()) }
+        itemsSnapshot.shortcuts.forEach { put(it.itemKey, "${get(it.itemKey).orEmpty()}:$it") }
+        (_uiState.value.folders + _uiState.value.workFolder + _uiState.value.privateFolder).forEach {
+            // Profile-folder membership changes as each preview batch arrives.
+            // Only the folder's own appearance belongs in its icon cache stamp.
+            put(it.key, "${get(it.key).orEmpty()}:${it.name}:${it.isAppStack}")
+        }
+    }
+
+    /** Stored visibility/shortcut choices always win over disposable cached rows. */
+    private fun publishPreview(entries: List<LauncherApp>) {
+        val state = _uiState.value
+        if (state.isLoadingSettings || state.settingsLoadFailed) return
+        val savedShortcuts = itemsSnapshot.shortcuts.map { it.itemKey }.toSet()
+        val renames = preferences.renames()
+        val folders = state.folders.associateBy(LauncherFolder::id)
+        val preview = entries.filter { app ->
+            !app.isPrivateSpace && app.shortcut?.isPrivateSpace != true &&
+                (app.shortcut == null || (state.hasShortcutAccess && app.key in savedShortcuts)) &&
+                (app.folderId == null || app.folderId in folders || app.folderId in setOf(
+                    RecentlyInstalledFolderId, WorkProfileFolderId, PrivateSpaceFolderId))
+        }.map { app ->
+            val original = folders[app.folderId]?.name ?: app.originalLabel
+            app.copy(label = renames[app.key] ?: original, originalLabel = original,
+                showWorkIndicator = state.settings.workProfile.showIndicator)
+        }
+        val apps = preview.filter { it.folderId == null && !it.isGraceButton &&
+            (it.shortcut == null || it.key in state.shownShortcutKeys) }.sortedWith(LauncherAppOrder)
+        val favorites = categoryFavoriteOrder(state.settings, favoritesStore.savedFavorites().orEmpty())
+        _uiState.update { it.copy(apps = apps,
+            shortcutApps = preview.filter { app -> app.shortcut != null } + it.shortcutApps.filter(LauncherApp::isPrivateSpace),
+            folderApps = preview.filter { app -> app.folderId != null &&
+                app.folderId != WorkProfileFolderId && app.folderId != PrivateSpaceFolderId },
+            workFolderApp = preview.firstOrNull { app -> app.folderId == WorkProfileFolderId } ?: it.workFolderApp,
+            privateFolderApp = preview.firstOrNull { app -> app.folderId == PrivateSpaceFolderId } ?: it.privateFolderApp,
+            workProfiles = preview.filter(LauncherApp::isWorkProfile).mapNotNull { app ->
+                app.user?.let { user -> app.userSerial?.let { serial -> WorkProfile(user, serial) } }
+            }.distinct(),
+            graceButtonApp = preview.firstOrNull { app -> app.isGraceButton } ?: it.graceButtonApp,
+            favoriteKeys = favorites.toSet(), favoriteOrder = favorites) }
+    }
+
+    private suspend fun restoreStartupPreview() {
+        if (!startupPreviewPending) return
+        val key = startupCacheKey()
+        val entryKeys = previewEntryKeys()
+        val repositoryRevision = appRepository.revision.value
+        val favorites = favoritesStore.savedFavorites().orEmpty().toSet()
+        val priority = favorites + _uiState.value.folders.filter { it.key in favorites }.flatMap { it.appKeys }
+        suspend fun publish(entries: List<LauncherApp>) = withContext(Dispatchers.Main.immediate) {
+            if (repositoryRevision == appRepository.revision.value && key == startupCacheKey() &&
+                entryKeys == previewEntryKeys()) publishPreview(entries)
+        }
+        try {
+            val memory = LauncherCatalogMemory.read(key)
+            if (memory != null) {
+                val entries = memory.entries.filter { memory.entryKeys[it.key] == entryKeys[it.key] }
+                publish(entries.filter { it.user == null && it.userSerial == null })
+                publish(appCache.validatePublicApps(entries))
+            } else {
+                appCache.load(key, priorityKeys = priority, entryKeys = entryKeys, onPreview = ::publish)?.let {
+                    publish(it)
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            Log.w("LauncherViewModel", "Unable to restore launcher preview", error)
+        }
+        // A setting change during IO gets another attempt with its own key.
+        if (repositoryRevision == appRepository.revision.value && key == startupCacheKey() &&
+            entryKeys == previewEntryKeys()) startupPreviewPending = false
+    }
+
+    private fun refreshIconPackChoices() {
+        if (iconPackDiscoveryJob?.isActive == true) return
+        iconPackDiscoveryJob = viewModelScope.launch {
+            _uiState.update { it.copy(isLoadingIconPacks = true) }
+            try {
+                val installed = iconPacks.installedPacks()
+                _uiState.update { it.copy(iconPacks = installed, isLoadingIconPacks = false, iconPacksLoadFailed = false) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                _uiState.update { it.copy(isLoadingIconPacks = false, iconPacksLoadFailed = true) }
+            }
+        }
+    }
+
+    private fun refreshCatalog() {
         if (!itemsReady || _uiState.value.isLoadingSettings || _uiState.value.settingsLoadFailed) return
         if (appLoadJob?.isActive == true || catalogRefresh.pending(catalogInputs()) == null) return
         appLoadJob = viewModelScope.launch {
@@ -532,47 +702,28 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 val iconSettings = _uiState.value.settings
                 val snapshot = itemsSnapshot
                 val inputs = request.inputs
-                val context = getApplication<Application>()
-                // Non-visual settings no longer rebuild the catalog, so they must
-                // not invalidate its startup preview after the process restarts.
-                val cacheKey = LauncherAppCache.key(listOf(
-                    iconSettings.enabledIconPackPackages, iconSettings.iconDesign, iconSettings.darkMode,
-                    iconSettings.useDynamicColors, iconSettings.themeColor, iconSettings.paletteStyle,
-                    snapshot.icons.toSortedMap(), snapshot.shortcuts.sortedBy { it.itemKey },
-                    _uiState.value.folders, inputs.renames.toSortedMap(), inputs.themedIcons,
-                    inputs.configuration, inputs.day,
-                    launcherThemeSeed(context.resources, true, iconSettings.themeColor),
-                    context.applicationInfo.sourceDir, inputs.shortcutAccess,
-                ).joinToString("\n"))
-                var incomplete = false
+                val cacheKey = startupCacheKey()
+                val entryKeys = previewEntryKeys()
                 refreshPrivateApps()
-                _uiState.update {
-                    it.copy(isLoadingApps = true, appLoadFailed = false, isLoadingIconPacks = true, hasShortcutAccess = shortcutRepository.hasAccess())
-                }
-                if (startupPreviewPending) {
-                    startupPreviewPending = false
-                    val preview = try { appCache.load(cacheKey, appRepository.launchableComponents()) }
-                    catch (cancelled: CancellationException) { throw cancelled }
-                    catch (_: Exception) { null }
+                val memory = LauncherCatalogMemory.read(cacheKey)
+                if (memory != null && memory.complete && memory.repositoryRevision == inputs.repositoryRevision &&
+                    memory.iconPackRevision == inputs.iconPackRevision &&
+                    memory.profiles == inputs.profiles && memory.day == inputs.day && memory.entryKeys == entryKeys &&
+                    memory.shortcutAccess == inputs.shortcutAccess) {
+                    val preview = appCache.validatePublicApps(memory.entries)
                     if (!catalogRefresh.isCurrent(request, catalogInputs())) continue
-                    if (preview != null) {
-                        val apps = preview.filter { it.folderId == null && !it.isGraceButton &&
-                            (it.shortcut == null || it.key in _uiState.value.shownShortcutKeys) }
-                        val favorites = favoritesStore.favoritesFor(apps)
-                        _uiState.update { it.copy(apps = apps,
-                            shortcutApps = preview.filter { app -> app.shortcut != null } + it.shortcutApps.filter(LauncherApp::isPrivateSpace),
-                            folderApps = preview.filter { app -> app.folderId != null },
-                            graceButtonApp = preview.firstOrNull { app -> app.isGraceButton } ?: it.graceButtonApp,
-                            favoriteKeys = favorites.toSet(), favoriteOrder = favorites) }
-                    }
+                    publishPreview(preview)
+                    _uiState.update { it.copy(isLoadingApps = false, appLoadFailed = false, iconPackStatus = memory.iconPackStatus,
+                        privateFolderApp = memory.entries.firstOrNull { app -> app.folderId == PrivateSpaceFolderId },
+                        workProfiles = inputs.profiles.profiles.filter { profile ->
+                            profile.type == com.galaxyrio.gracelauncher.data.LauncherProfileType.Work
+                        }.map { profile -> WorkProfile(profile.user, profile.serial) }) }
+                    catalogRefresh.complete(request, inputs)
+                    refreshIconPackChoices()
+                    continue
                 }
-                try {
-                    val installed = iconPacks.installedPacks()
-                    _uiState.update { it.copy(iconPacks = installed, isLoadingIconPacks = false, iconPacksLoadFailed = false) }
-                } catch (error: Exception) {
-                    if (error is CancellationException) throw error
-                    incomplete = true
-                    _uiState.update { it.copy(isLoadingIconPacks = false, iconPacksLoadFailed = true) }
+                _uiState.update {
+                    it.copy(isLoadingApps = true, appLoadFailed = false, hasShortcutAccess = inputs.shortcutAccess)
                 }
                 val selectedPacks = iconSettings.enabledIconPackPackages
                 val availablePacks = selectedPacks.mapNotNull { iconPacks.load(it) }
@@ -581,22 +732,30 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     availablePacks.isNotEmpty() -> IconPackStatus.Ready
                     else -> IconPackStatus.Unavailable
                 }
+                val packsComplete = availablePacks.size == selectedPacks.size
+                retryIconPacksAfter = if (packsComplete) 0L else SystemClock.elapsedRealtime() + 30_000L
                 try {
-                    val workProfiles = try { appRepository.workProfiles() } catch (error: Exception) {
-                        if (error is CancellationException) throw error
-                        incomplete = true
-                        _uiState.value.workProfiles
-                    }
-                    val apps = appRepository.loadApps(selectedPacks) + workProfiles.flatMap { profile ->
-                        try { appRepository.loadWorkApps(profile, selectedPacks) } catch (error: Exception) {
-                            if (error is CancellationException) throw error
-                            incomplete = true
-                            emptyList()
-                        }
-                    }
                     val renames = inputs.renames
                     suspend fun decorate(app: LauncherApp): LauncherApp = itemIcons.applyDesign(app, snapshot.icons[app.key], iconSettings.iconDesign, iconSettings, inputs.themedIcons)
                         .copy(label = renames[app.key] ?: app.originalLabel, showWorkIndicator = iconSettings.workProfile.showIndicator)
+                    val needsPersonalPreview = _uiState.value.apps.isEmpty()
+                    val personalPreview: suspend (List<LauncherApp>) -> Unit = { personal ->
+                        val favorites = favoritesStore.savedFavorites().orEmpty().toSet()
+                        val preview = mutableListOf<LauncherApp>()
+                        val ordered = personal.sortedBy { it.key !in favorites }
+                        for ((index, app) in ordered.withIndex()) {
+                            preview += decorate(app)
+                            if (index == ordered.lastIndex || (app.key in favorites && ordered.getOrNull(index + 1)?.key !in favorites)) {
+                                withContext(Dispatchers.Main.immediate) {
+                                    if (catalogRefresh.isCurrent(request, catalogInputs())) publishPreview(preview.toList())
+                                }
+                            }
+                        }
+                    }
+                    val catalog = appRepository.loadCatalog(inputs.profiles, selectedPacks,
+                        onPersonalApps = personalPreview.takeIf { needsPersonalPreview })
+                    val workProfiles = catalog.workProfiles
+                    val apps = catalog.apps
                     val shortcuts = snapshot.shortcuts.mapNotNull { saved ->
                         // Package names alone cannot distinguish personal and work installations.
                         val owners = apps.filter { app -> if (app.userSerial == null) !saved.itemKey.startsWith("profile:")
@@ -624,7 +783,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                         GraceButtonIcon.choice(snapshot.icons[GraceButtonIcon.key]), iconSettings)
                     // Do not publish a theme/package revision superseded while IO was running.
                     if (!catalogRefresh.isCurrent(request, catalogInputs())) continue
-                    val favorites = favoritesStore.favoritesFor(displayedApps)
+                    val legacyFavorites = favoritesStore.favoritesFor(displayedApps)
+                    val favorites = categoryFavoriteOrder(_uiState.value.settings, legacyFavorites)
                     _uiState.update {
                         it.copy(
                             apps = displayedApps,
@@ -646,12 +806,20 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                             isLoadingApps = false,
                         )
                     }
-                    // Retry incomplete sections on the next resume, without spinning here.
-                    if (incomplete) return@launch
+                    if (_uiState.value.settings.appCategories == null) {
+                        persistSettings { settingsRepository.migrateAppCategories(legacyFavorites) }
+                    }
+                    // Optional profile failures are retried by the shared repository. Successful
+                    // personal/public rows still become a valid UI revision and disk preview.
                     catalogRefresh.complete(request, request.inputs)
+                    val entries = displayedApps + shortcuts + folderApps + privateFolderApp + workFolderApp + graceButtonApp
+                    LauncherCatalogMemory.publish(LauncherCatalogMemory.Snapshot(cacheKey, entryKeys,
+                        inputs.repositoryRevision, inputs.iconPackRevision, inputs.profiles, inputs.day, inputs.shortcutAccess, entries, status,
+                        catalog.complete && packsComplete))
+                    refreshIconPackChoices()
                     followRenamedApps(apps.map { it.key }, favorites)
                     // Publish first; PNG encoding and disk I/O run on Dispatchers.IO.
-                    appCache.save(cacheKey, displayedApps + shortcuts + folderApps + graceButtonApp)
+                    appCache.save(cacheKey, entries, entryKeys = entryKeys)
                     shortcutRepository.prefetch(_uiState.value.favoriteApps)
                 } catch (error: Exception) {
                     if (error is CancellationException) throw error
@@ -819,7 +987,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val settings = _uiState.value.settings
         val resources = getApplication<Application>().resources
         return listOf(result, app, settings.iconDesign, settings.enabledIconPackPackages,
-            settings.darkMode, settings.useDynamicColors, settings.themeColor, settings.paletteStyle,
+            settings.darkMode, settings.useDynamicColors, settings.themeColor, settings.paletteStyle, settings.amoledMode,
             result.shortcuts.map { itemsSnapshot.icons[it.key] }, preferences.themedIcons,
             Configuration(resources.configuration), LocalDate.now(), launcherThemeSeed(resources, true, settings.themeColor))
     }
@@ -862,11 +1030,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     override fun onCleared() {
-        launcherApps.unregisterCallback(packageChanges)
         getApplication<Application>().unregisterReceiver(dateReceiver)
         shortcutRepository.close()
         mediaRepository.close()
-        headphoneMonitor.close()
     }
 
     fun controlMedia(sessionId: String, command: MediaCommand): Boolean = mediaRepository.command(sessionId, command)
@@ -1016,6 +1182,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val state = _uiState.value
         if (state.isLoadingSettings || state.settingsLoadFailed) return
         val settings = state.settings.digitalWellbeing
+        val needOpenCounts = state.needsCategoryOpenCounts
         val access = usageRepository.hasAccess()
         if (!settings.enabled || !access) {
             usageLoadJob?.cancel()
@@ -1024,8 +1191,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (forceRanking) usageLoadJob?.cancel()
         if (settings.enabled && access) _uiState.update { it.copy(usage = it.usage.copy(hasAccess = true, loading = true)) }
         usageLoadJob = viewModelScope.launch {
-            val result = usageRepository.refresh(settings, forceRanking)
-            if (_uiState.value.settings.digitalWellbeing == settings) _uiState.update { it.copy(usage = result) }
+            val result = usageRepository.refresh(settings, forceRanking, needOpenCounts)
+            if (_uiState.value.settings.digitalWellbeing == settings && _uiState.value.needsCategoryOpenCounts == needOpenCounts)
+                _uiState.update { it.copy(usage = result) }
         }
     }
 
@@ -1196,14 +1364,11 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             persistSettings { settingsRepository.setFolderFavorites(mapOf(folder.id to favorite)) }
             return favorite
         }
-        if (app.shortcut != null && app.key !in _uiState.value.favoriteKeys) {
-            viewModelScope.launch {
-                if (rememberShortcut(app)) {
-                    val updated = favoritesStore.toggle(app.key, currentFavoriteOrder())
-                    _uiState.update { it.copy(favoriteKeys = updated.toSet(), favoriteOrder = updated) }
-                }
-            }
-            return true
+        if (profileAvailable == null) {
+            val selected = app.key !in state.favoriteKeys
+            toggleCategoryItem(FavoritesCategoryId, app)
+            if (selected && app.shortcut == null) prepareShortcuts(app)
+            return selected
         }
         val updated = favoritesStore.toggle(app.key, currentFavoriteOrder())
         _uiState.update { it.copy(favoriteKeys = updated.toSet(), favoriteOrder = updated) }
@@ -1212,14 +1377,43 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun reorderFavorites(keys: List<String>) {
-        val updated = favoritesStore.reorder(keys, currentFavoriteOrder())
-        _uiState.update { it.copy(favoriteOrder = updated) }
         val visibleOrder = _uiState.value.homeItems.map { it.key }
         persistSettings {
             settingsRepository.mutateSettings { current -> current.copy(homeLayout = current.homeLayout.copy(
                 homeOrder = com.galaxyrio.gracelauncher.data.mergeHomeOrder(keys, current.homeLayout.homeOrder ?: visibleOrder))) }
         }
     }
+
+    fun saveAppCategory(category: AppCategory) = persistSettings {
+        settingsRepository.mutateAppCategories(currentFavoriteOrder()) { categories ->
+            if (categories.any { it.id == category.id }) categories else categories + category
+        }
+    }
+
+    fun updateAppCategory(id: String, transform: (AppCategory) -> AppCategory) = persistSettings {
+        settingsRepository.mutateAppCategories(currentFavoriteOrder()) { categories ->
+            categories.map { if (it.id == id) transform(it).copy(id = id) else it }
+        }
+    }
+
+    fun deleteAppCategory(id: String) {
+        if (id in BuiltInCategoryIds) return
+        persistSettings { settingsRepository.mutateAppCategories(currentFavoriteOrder()) { it.filterNot { category -> category.id == id } } }
+    }
+
+    fun toggleCategoryItem(id: String, app: LauncherApp) = persistSettings {
+        rememberPopupItems(listOf(app))
+        if (app.shortcut != null) _uiState.update { it.copy(shortcutApps = it.shortcutApps.filterNot { item -> item.key == app.key } + app) }
+        settingsRepository.mutateAppCategories(currentFavoriteOrder()) { categories -> categories.map { category ->
+            if (category.id != id || category.inclusion != CategoryInclusion.Manual) category else category.copy(itemKeys =
+                if (app.key in category.itemKeys) category.itemKeys - app.key else category.itemKeys + app.key)
+        } }
+    }
+
+    private fun categoryFavoriteOrder(settings: LauncherSettings, legacy: List<String>): List<String> =
+        settings.appCategories?.firstOrNull { it.id == FavoritesCategoryId }?.let { category ->
+            (category.itemKeys + legacy.filter { it == PrivateSpaceFolderKey || it == WorkProfileFolderKey }).distinct()
+        } ?: legacy
 
     private fun currentFavoriteOrder(): List<String> = _uiState.value.let { state ->
         (state.favoriteOrder + state.favoriteItems.map(LauncherApp::key)).distinct()

@@ -11,12 +11,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.BlendMode
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawOutline
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
@@ -67,14 +64,15 @@ internal fun GraceButtonPositionSettings(uiState: LauncherUiState, actions: Laun
         val placement = draft
         actions.updateSettings { it.copy(graceButton = it.graceButton.copy(layout = placement)) }
     }
-    SettingsScaffold(stringResource(R.string.grace_button_position_size), "grace_button_position_page", onBack,
-        fixedCollapsed = true) { padding ->
+    SettingsPreviewScaffold(uiState, stringResource(R.string.grace_button_position_size), "grace_button_position_page", onBack,
+        wallpaperNavigationBar = true, controlsAbovePreview = true) { padding ->
         BoxWithConstraints(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
           // A roughly 2:1 window onto the desktop; only the mask changes, never the button scale.
           val previewHeight = ((maxWidth - 32.dp) / 2f).coerceIn(0.dp, maxHeight / 2f)
           Column(Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.fillMaxWidth().weight(1f).testTag("grace_button_position_controls"),
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            Box(Modifier.fillMaxWidth().weight(1f).settingsPreviewScrim(previewBelow = true).padding(horizontal = 16.dp)) {
+              LazyColumn(Modifier.fillMaxSize().clip(settingsPreviewControlsShape()).testTag("grace_button_position_controls"),
+                contentPadding = PaddingValues(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
                 item {
                     DesignerSegment(0, 4, "grace_button_alignment") {
@@ -126,10 +124,11 @@ internal fun GraceButtonPositionSettings(uiState: LauncherUiState, actions: Laun
                     Text(stringResource(R.string.grace_button_position_hint), Modifier.padding(horizontal = 4.dp, vertical = 12.dp),
                         style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+              }
             }
             GraceButtonPositionPreview(uiState, draft, viewportLeft, viewportWidth, viewportHeight, topInset, bottomInset, enabled,
                 onCommit = { commit(it) },
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                modifier = Modifier.fillMaxWidth()
                     .padding(top = 12.dp, bottom = 12.dp + LocalSettingsBottomInset.current).height(previewHeight))
           }
         }
@@ -168,7 +167,6 @@ private fun GraceButtonPositionPreview(uiState: LauncherUiState, layout: GraceBu
     // on release, rather than rebuilding the page at pointer-event frequency.
     var dragLayout by remember { mutableStateOf<GraceButtonLayout?>(null) }
     val density = LocalDensity.current
-    val shape = ListItemDefaults.segmentedShapes(0, 1).shape
     val description = stringResource(R.string.grace_button_position_hint)
     val artwork = uiState.graceButtonApp?.icon.takeIf { GraceButtonIcon.key in uiState.itemIcons }
     val design = GraceButtonIcon.choice(uiState.itemIcons[GraceButtonIcon.key]).design ?: GraceButtonIcon.defaults
@@ -181,10 +179,7 @@ private fun GraceButtonPositionPreview(uiState: LauncherUiState, layout: GraceBu
             .onGloballyPositioned { coordinates ->
                 previewOrigin = coordinates.positionInWindow() / pixelsPerDp
             }
-            .drawWithContent {
-                drawOutline(shape.createOutline(size, layoutDirection, this), Color.Transparent, blendMode = BlendMode.Clear)
-                drawContent()
-            }.clip(shape)
+            .clipToBounds()
             .pointerInput(viewportLeft, viewportWidth, viewportHeight, topInset, bottomInset, pixelsPerDp, enabled) {
                 if (!enabled) return@pointerInput
                 var dragging = false

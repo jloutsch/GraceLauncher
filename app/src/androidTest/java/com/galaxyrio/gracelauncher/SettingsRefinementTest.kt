@@ -116,7 +116,7 @@ class SettingsRefinementTest {
         screenshot("settings-stable-switches-${if (dark) "dark" else "light"}.png")
     }
 
-    @Test fun bothChoiceDialogsUsePlainAccessibleRadioRows() {
+    @Test fun darkModeUsesAccessibleRadioRowsAndFontColorsOpenTheirOwnPage() {
         showSettings()
         clickSetting("settings_category_themes")
         compose.onNodeWithText("Use wallpaper colors").assertExists()
@@ -127,11 +127,20 @@ class SettingsRefinementTest {
         compose.onNodeWithTag("theme_mode:Dark").performClick()
         compose.runOnIdle { assertEquals(1, edits) }
         compose.onNodeWithTag("theme_mode:Dark").assertDoesNotExist()
-        clickSetting("settings_wallpaper_text")
-        assertRadioRows("wallpaper_text", listOf("Auto", "Light", "Dark"))
-        screenshot("settings-standard-text-color-dialog-dark.png")
-        compose.onNodeWithText(context.getString(R.string.settings_cancel)).performClick()
-        compose.runOnIdle { assertEquals("Cancel must not change a value", 1, edits) }
+        clickSetting("settings_font")
+        compose.waitUntil(5_000) {
+            compose.onAllNodes(hasTestTag("font_colors") and isEnabled()).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNodeWithTag("font_colors").performClick()
+        compose.onNodeWithTag("font_color:default").assertIsDisplayed()
+            .assertTextContains(context.getString(R.string.font_color_default))
+        compose.onNodeWithTag("font_color:theme").assertIsDisplayed()
+            .assertTextContains(context.getString(R.string.font_color_theme))
+        compose.onNodeWithTag("font_color:wallpaper").assertIsDisplayed()
+            .assertTextContains(context.getString(R.string.font_color_wallpaper))
+        compose.onNodeWithTag("font_color_add").assertIsDisplayed()
+        screenshot("settings-font-colors-dark.png")
+        compose.runOnIdle { assertEquals("Opening font colors must not change a value", 1, edits) }
     }
 
     private fun assertRadioRows(prefix: String, keys: List<String>) {

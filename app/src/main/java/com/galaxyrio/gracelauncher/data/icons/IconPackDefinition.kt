@@ -16,6 +16,11 @@ internal data class IconPackDefinition(
     private val packageIcons = uniquePackageEntries(icons)
     private val packageCalendars = uniquePackageEntries(calendars)
 
+    fun hasCalendarFor(component: String): Boolean {
+        val key = normalizeIconComponent(component) ?: return false
+        return key in calendars || key.substringBefore('/') in packageCalendars
+    }
+
     fun candidates(component: String, dayOfMonth: Int): List<String> {
         val key = normalizeIconComponent(component) ?: return emptyList()
         val pkg = key.substringBefore('/')

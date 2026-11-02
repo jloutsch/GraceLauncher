@@ -3,7 +3,6 @@
 package com.galaxyrio.gracelauncher.ui.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.pager.HorizontalPager
@@ -11,7 +10,6 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -20,13 +18,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -44,7 +40,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.ThemeMode
-import com.galaxyrio.gracelauncher.data.WallpaperTextMode
 import com.galaxyrio.gracelauncher.data.icons.IconPackStatus
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
@@ -54,13 +49,13 @@ import com.materialkolor.PaletteStyle
 import com.materialkolor.dynamiccolor.ColorSpec
 import com.materialkolor.ktx.toDynamicScheme
 import com.materialkolor.ktx.toneColor
-import kotlin.math.roundToInt
 
 @Composable
 internal fun ThemeSettings(
     uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit,
-    onClockStyle: () -> Unit, onIconPacks: () -> Unit, onFonts: () -> Unit, onListAppearance: () -> Unit, onAlphabet: () -> Unit,
-    onGraceButton: () -> Unit = {}, onCalendar: () -> Unit = {}, onWeather: () -> Unit = {}, onMediaPlayer: () -> Unit = {},
+    onClockStyle: () -> Unit, onIconPacks: () -> Unit, onFonts: () -> Unit, onWallpaper: () -> Unit,
+    onListAppearance: () -> Unit, onAlphabet: () -> Unit,
+    onGraceButton: () -> Unit = {}, onAgenda: () -> Unit = {}, onSearch: () -> Unit = {}, onMediaPlayer: () -> Unit = {},
 ) {
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
     val settings = uiState.settings
@@ -79,12 +74,6 @@ internal fun ThemeSettings(
             onSelect = { mode -> actions.updateSettings { current -> current.copy(darkMode = mode) }; dialog = null },
             onDismiss = { dialog = null },
         )
-        "text" -> SettingsSelectionDialog(
-            title = stringResource(R.string.settings_wallpaper_text),
-            items = WallpaperTextMode.entries, selectedItem = uiState.textMode,
-            tag = "wallpaper_text", itemKey = { it.name }, itemLabel = { it.label() },
-            onSelect = { actions.textMode(it); dialog = null }, onDismiss = { dialog = null },
-        )
     }
     SettingsScaffold(stringResource(R.string.settings_themes), "settings_themes", onBack) { padding ->
         SettingsList(padding) {
@@ -97,29 +86,23 @@ internal fun ThemeSettings(
             item {
                 SettingsToggleItem(
                     stringResource(R.string.settings_dynamic_colors), stringResource(R.string.settings_dynamic_colors_summary),
-                    settings.useDynamicColors, 1, 6, "settings_dynamic_colors",
+                    settings.useDynamicColors, 1, 5, "settings_dynamic_colors",
                 ) { value -> actions.updateSettings { current -> current.copy(useDynamicColors = value) } }
             }
             item {
-                SettingsActionItem(stringResource(R.string.settings_palette_style), settings.paletteStyle.label(), 2, 6,
+                SettingsActionItem(stringResource(R.string.settings_palette_style), settings.paletteStyle.label(), 2, 5,
                     "settings_palette_style") { dialog = "palette" }
             }
             item {
-                SettingsActionItem(stringResource(R.string.settings_theme_mode), settings.darkMode.label(), 3, 6, "settings_theme_mode") { dialog = "theme" }
+                SettingsActionItem(stringResource(R.string.settings_theme_mode), settings.darkMode.label(), 3, 5, "settings_theme_mode") { dialog = "theme" }
             }
             item {
                 SettingsToggleItem(
                     stringResource(R.string.settings_amoled_mode), stringResource(R.string.settings_amoled_mode_summary),
-                    settings.amoledMode, 4, 6, "settings_amoled_mode",
+                    settings.amoledMode, 4, 5, "settings_amoled_mode",
                 ) { value -> actions.updateSettings { it.copy(amoledMode = value) } }
             }
-            item {
-                SettingsActionItem(stringResource(R.string.settings_wallpaper_text), uiState.textMode.label(), 5, 6, "settings_wallpaper_text") { dialog = "text" }
-            }
             item { SettingsHeading(stringResource(R.string.settings_personalization)) }
-            item {
-                SettingsActionItem(stringResource(R.string.settings_clock_style), uiState.settings.clockStyle.layout.label(), 0, 9, "settings_clock_style", onClick = onClockStyle)
-            }
             item {
                 val packs = settings.enabledIconPackPackages
                 val packNames = packs.map { pkg -> uiState.iconPacks.firstOrNull { it.packageName == pkg }?.label ?: pkg }
@@ -128,38 +111,47 @@ internal fun ThemeSettings(
                     uiState.iconPackStatus == IconPackStatus.Unavailable -> stringResource(R.string.icon_pack_unavailable)
                     else -> packNames.joinToString(" → ")
                 }
-                SettingsActionItem(stringResource(R.string.settings_icons), summary, 1, 9, "settings_icon_pack") {
+                SettingsActionItem(stringResource(R.string.settings_icons), summary, 0, 3, "settings_icon_pack") {
                     onIconPacks()
                     actions.refreshIconPacks()
                 }
             }
             item {
-                SettingsActionItem(stringResource(R.string.settings_favorites_app_list), null, 2, 9, "settings_list_appearance", onClick = onListAppearance)
-            }
-            item {
-                SettingsActionItem(stringResource(R.string.settings_alphabet), null, 3, 9, "settings_alphabet", onClick = onAlphabet)
-            }
-            item {
                 val fonts = settings.fontLibrary.selected.map { appFontLabel(it) }
                 val systemFont = appFontLabel("system")
                 SettingsActionItem(stringResource(R.string.settings_font), fonts.joinToString(" → ").ifEmpty { systemFont },
-                    4, 9, "settings_font", onClick = onFonts)
+                    1, 3, "settings_font", onClick = onFonts)
             }
             item {
-                SettingsActionItem(stringResource(R.string.settings_grace_button), null, 5, 9,
+                SettingsActionItem(stringResource(R.string.settings_wallpaper), null, 2, 3,
+                    "settings_wallpaper", onClick = onWallpaper)
+            }
+            item { SettingsHeading(stringResource(R.string.settings_components)) }
+            item {
+                SettingsActionItem(stringResource(R.string.settings_clock_style), uiState.settings.clockStyle.layout.label(),
+                    0, 7, "settings_clock_style", onClick = onClockStyle)
+            }
+            item {
+                SettingsActionItem(stringResource(R.string.settings_agenda), null, 1, 7,
+                    "settings_agenda_appearance", onClick = onAgenda)
+            }
+            item {
+                SettingsActionItem(stringResource(R.string.settings_media_player), null, 2, 7,
+                    "settings_media_appearance", onClick = onMediaPlayer)
+            }
+            item {
+                SettingsActionItem(stringResource(R.string.settings_search), null, 3, 7,
+                    "settings_search_appearance", onClick = onSearch)
+            }
+            item {
+                SettingsActionItem(stringResource(R.string.settings_grace_button), null, 4, 7,
                     "settings_grace_button_appearance", onClick = onGraceButton)
             }
             item {
-                SettingsActionItem(stringResource(R.string.widget_calendar), null, 6, 9,
-                    "settings_calendar_appearance", onClick = onCalendar)
+                SettingsActionItem(stringResource(R.string.settings_alphabet), null, 5, 7, "settings_alphabet", onClick = onAlphabet)
             }
             item {
-                SettingsActionItem(stringResource(R.string.settings_weather), null, 7, 9,
-                    "settings_weather_appearance", onClick = onWeather)
-            }
-            item {
-                SettingsActionItem(stringResource(R.string.settings_media_player), null, 8, 9,
-                    "settings_media_appearance", onClick = onMediaPlayer)
+                SettingsActionItem(stringResource(R.string.settings_favorites_app_list), null, 6, 7, "settings_list_appearance", onClick = onListAppearance)
             }
             item { SettingsHeading(stringResource(R.string.settings_misc)) }
             item {
@@ -173,7 +165,7 @@ internal fun ThemeSettings(
 }
 
 @Composable
-internal fun AppearancePlaceholder(title: String, tag: String, onBack: () -> Unit) {
+internal fun SettingsPlaceholder(title: String, tag: String, onBack: () -> Unit) {
     SettingsScaffold(title, tag, onBack) { padding ->
         SettingsList(padding) {
             item {
@@ -190,7 +182,7 @@ private fun AccentColorItem(isDynamic: Boolean, selectedColor: Int, style: Palet
     val initialPage = (AccentColors.indexOfFirst { it.toArgb() == selectedColor }.coerceAtLeast(0) / 5)
     val pager = rememberPagerState(initialPage = initialPage, pageCount = { pages.size })
     SegmentedListItem(
-        shapes = ListItemDefaults.segmentedShapes(0, 6),
+        shapes = ListItemDefaults.segmentedShapes(0, 5),
         colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceBright),
         modifier = Modifier.testTag("settings_accent_color"),
         content = {
@@ -216,54 +208,6 @@ private fun AccentColorItem(isDynamic: Boolean, selectedColor: Int, style: Palet
                         Box(Modifier.size(8.dp).clip(CircleShape).background(
                             if (pager.settledPage == page) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest,
                         ))
-                    }
-                }
-            }
-        },
-    )
-}
-
-/** Keep the toggle and its expanding controls in one unchanged segmented outline. */
-@Composable
-internal fun WallpaperEffectItem(
-    title: String, summary: String, checked: Boolean, amount: Int, range: IntRange,
-    sliderLabel: String, index: Int, tag: String, defaultAmount: Int,
-    count: Int = 3, amountEnabled: Boolean = true, suffix: String = "%",
-    onToggle: (Boolean) -> Unit, onAmount: (Int) -> Unit,
-    extraContent: @Composable ColumnScope.() -> Unit = {},
-) {
-    val enabled = LocalSettingsStorageState.current.canEdit
-    var draft by remember(amount) { mutableFloatStateOf(amount.coerceIn(range).toFloat()) }
-    SegmentedListItem(
-        shapes = ListItemDefaults.segmentedShapes(index, count),
-        colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceBright),
-        content = {
-            Column(Modifier.fillMaxWidth()) {
-                Row(
-                    Modifier.fillMaxWidth().testTag(tag)
-                        .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onToggle),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text(title)
-                        Text(summary, Modifier.padding(top = 4.dp), style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Switch(checked = checked, onCheckedChange = null, enabled = enabled,
-                        modifier = Modifier.testTag("${tag}_switch"))
-                }
-                AnimatedVisibility(visible = checked) {
-                    Column {
-                        DesignerSlider(
-                            label = sliderLabel, value = draft, default = defaultAmount.coerceIn(range).toFloat(),
-                            // Do not enqueue a Room transaction for every drag frame.
-                            onFinished = { onAmount(it.roundToInt().coerceIn(range)) },
-                            range = range.first.toFloat()..range.last.toFloat(),
-                            enabled = enabled && amountEnabled, tag = "${tag}_amount", suffix = suffix,
-                            onChange = { draft = it },
-                        )
-                        extraContent()
                     }
                 }
             }
@@ -302,13 +246,15 @@ private fun PaletteOption(seed: Color, style: PaletteStyle, selected: Boolean, i
 internal fun <T> SettingsSelectionDialog(
     title: String,
     items: List<T>,
-    selectedItem: T,
+    selectedItem: T?,
     tag: String,
     itemKey: (T) -> String,
     itemLabel: @Composable (T) -> String,
     onSelect: (T) -> Unit,
     onDismiss: () -> Unit,
     footer: @Composable () -> Unit = {},
+    itemLeading: (@Composable (T) -> Unit)? = null,
+    leadingButton: (@Composable () -> Unit)? = null,
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -330,6 +276,7 @@ internal fun <T> SettingsSelectionDialog(
                             horizontalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
                             RadioButton(selected = item == selectedItem, onClick = null, enabled = enabled)
+                            itemLeading?.invoke(item)
                             Text(itemLabel(item), style = MaterialTheme.typography.bodyLarge)
                         }
                     }
@@ -337,8 +284,16 @@ internal fun <T> SettingsSelectionDialog(
                 footer()
             }
         },
-        confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) } },
+        confirmButton = {
+            if (leadingButton != null) Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                leadingButton()
+                Spacer(Modifier.weight(1f))
+                TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) }
+            }
+        },
+        dismissButton = if (leadingButton == null) ({
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) }
+        }) else null,
     )
 }
 
@@ -360,13 +315,6 @@ private fun ThemeMode.label(): String = stringResource(when (this) {
     ThemeMode.System -> R.string.settings_follow_system
     ThemeMode.Light -> R.string.settings_light_mode
     ThemeMode.Dark -> R.string.settings_dark_mode
-})
-
-@Composable
-private fun WallpaperTextMode.label(): String = stringResource(when (this) {
-    WallpaperTextMode.Auto -> R.string.settings_text_auto
-    WallpaperTextMode.Light -> R.string.settings_text_light
-    WallpaperTextMode.Dark -> R.string.settings_text_dark
 })
 
 internal val AccentColors = listOf(

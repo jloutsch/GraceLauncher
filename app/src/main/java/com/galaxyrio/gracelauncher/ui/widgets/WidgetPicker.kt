@@ -143,7 +143,7 @@ private suspend fun loadWidgetGroups(context: Context, providers: List<AppWidget
     val launcherApps = context.getSystemService(LauncherApps::class.java)
     val iconSize = (48 * context.resources.displayMetrics.density).toInt().coerceIn(48, 192)
     val englishLabels = EnglishLabelReader(context)
-    val repository = AppRepository(context, IconPackRepository(context))
+    val repository = AppRepository.get(context, IconPackRepository.get(context))
     return providers.groupBy { it.provider.packageName to it.profile }.map { (identity, widgets) ->
         val (packageName, profile) = identity
         val appInfo = runCatching { launcherApps.getApplicationInfo(packageName, 0, profile) }.getOrNull()

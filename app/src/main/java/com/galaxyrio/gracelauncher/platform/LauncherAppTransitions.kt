@@ -17,6 +17,7 @@ import android.os.Message
 import android.os.Messenger
 import android.os.ParcelUuid
 import android.os.Process
+import android.os.UserHandle
 import android.provider.Settings
 import android.util.Log
 import android.view.SurfaceHolder
@@ -45,6 +46,7 @@ internal class LauncherIconTarget(
     val view: View,
     val boundsInWindow: () -> Rect?,
     val capture: suspend () -> Bitmap?,
+    val user: UserHandle = Process.myUserHandle(),
 ) {
     var hidden by mutableStateOf(false)
 
@@ -99,7 +101,7 @@ internal class LauncherAppTransitions(private val activity: Activity, private va
 
 /** Prefer a real HOME icon, then its HOME folder. Never use a dismissed popup. */
 internal fun selectHomeTarget(targets: Collection<LauncherIconTarget>, component: ComponentName): LauncherIconTarget? =
-    targets.asSequence().filter { it.home && it.screenBounds()?.isUsable() == true }
+    targets.asSequence().filter { it.home && it.user == Process.myUserHandle() && it.screenBounds()?.isUsable() == true }
         .mapNotNull { target ->
             val exact = component in target.components
             val samePackage = target.components.any { it.packageName == component.packageName }
@@ -133,7 +135,7 @@ private class HomeReturnAnimation(
     private val timeout = Runnable { close() }
 
     fun prepare(icon: LauncherIconTarget?, image: Bitmap?) {
-        preparedTarget = icon?.takeIf { it.home }
+        preparedTarget = icon?.takeIf { it.home && it.user == Process.myUserHandle() }
         preparedBitmap = image.takeIf { preparedTarget != null }
     }
 
@@ -141,7 +143,7 @@ private class HomeReturnAnimation(
         close()
         val incoming = GestureNavContract.fromIntent(intent) ?: return
         // Only personal-profile HOME targets participate in this return animation.
-        // A private/work app must not animate into a personal icon of the same package.
+        // A private/work/clone app must not animate into a personal icon of the same package.
         if (incoming.user != Process.myUserHandle()) return
         contract = incoming
         token = ParcelUuid(UUID.randomUUID())

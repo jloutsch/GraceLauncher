@@ -2,7 +2,9 @@
 
 package com.galaxyrio.gracelauncher.ui.settings
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -15,7 +17,9 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.layout.fillMaxSize
@@ -27,6 +31,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.LargeFlexibleTopAppBar
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
@@ -41,15 +47,19 @@ import androidx.compose.material3.rememberTopAppBarState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.galaxyrio.gracelauncher.R
 
@@ -59,8 +69,13 @@ internal data class SettingsStorageState(val loading: Boolean = false, val loadF
 
 internal val LocalSettingsStorageState = staticCompositionLocalOf { SettingsStorageState() }
 
+/** The current navigation entry owns the guarded route to shared font colors. */
+internal val LocalOpenFontColors = staticCompositionLocalOf<(() -> Unit)?> { null }
+internal val LocalOpenDigitalWellbeing = staticCompositionLocalOf<(() -> Unit)?> { null }
+
 /** Scrollable content includes this inset; fixed bottom controls stay above it. */
 internal val LocalSettingsBottomInset = staticCompositionLocalOf { 0.dp }
+private val LocalSettingsHeaderButtonSize = staticCompositionLocalOf { 48.dp }
 
 @Composable
 internal fun SettingsAppearanceAction(onClick: () -> Unit) {
@@ -76,9 +91,21 @@ internal fun SettingsScaffold(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     fixedCollapsed: Boolean = false,
+    wallpaperBackground: Boolean = false,
+    wallpaperNavigationBar: Boolean = false,
+    controlsAbovePreview: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
 ) {
+    val reportSystemBarBackground = LocalSettingsSystemBarBackground.current
+    SideEffect {
+        reportSystemBarBackground(when {
+            !wallpaperBackground -> SettingsSystemBarBackground.Surface
+            controlsAbovePreview -> SettingsSystemBarBackground.WallpaperWithTopScrim
+            wallpaperNavigationBar -> SettingsSystemBarBackground.Wallpaper
+            else -> SettingsSystemBarBackground.WallpaperWithBottomScrim
+        })
+    }
     val collapsedOffset = with(LocalDensity.current) {
         (TopAppBarDefaults.LargeAppBarCollapsedHeight -
             TopAppBarDefaults.LargeFlexibleAppBarWithoutSubtitleExpandedHeight).toPx()
@@ -100,23 +127,49 @@ internal fun SettingsScaffold(
         if (fixedCollapsed) scrollBehavior.state.heightOffset = scrollBehavior.state.heightOffsetLimit
     }
     val storage = LocalSettingsStorageState.current
+    val containerColor = if (wallpaperBackground) Color.Transparent else MaterialTheme.colorScheme.surfaceContainer
+    val wallpaperHeaderColor = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = SettingsPreviewSurfaceAlpha)
+    val appBarColor = if (wallpaperBackground && controlsAbovePreview) wallpaperHeaderColor else containerColor
+    val backButtonColor = if (wallpaperBackground) wallpaperHeaderColor
+        else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = SettingsPreviewSurfaceAlpha)
+    val titleHeight = rememberTextMeasurer().measure(title, style = MaterialTheme.typography.titleLarge, maxLines = 1).size.height
+    val headerButtonSize = (with(LocalDensity.current) { titleHeight.toDp() } + 16.dp).coerceAtLeast(48.dp)
     Scaffold(
         modifier = modifier.fillMaxSize().testTag(tag).then(
             if (fixedCollapsed) Modifier else Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         ),
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        containerColor = containerColor,
         topBar = {
             LargeFlexibleTopAppBar(
-                title = { Text(title, Modifier.padding(start = 4.dp)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack, modifier = Modifier.testTag("settings_back")) {
-                        Icon(painterResource(R.drawable.ms_arrow_back), stringResource(R.string.settings_back))
+                title = {
+                    if (wallpaperBackground) Surface(
+                        modifier = Modifier.padding(start = 4.dp).height(headerButtonSize),
+                        shape = CircleShape,
+                        color = wallpaperHeaderColor,
+                        contentColor = MaterialTheme.colorScheme.onSurface,
+                    ) {
+                        Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), contentAlignment = Alignment.Center) {
+                            Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    } else {
+                        // Match the capsule's text inset when collapsed, retaining the expanded title's original margin.
+                        Text(title, Modifier.padding(start = 4.dp + 16.dp * scrollBehavior.state.collapsedFraction))
                     }
                 },
-                actions = actions,
+                navigationIcon = {
+                    IconButton(onClick = onBack, modifier = Modifier.testTag("settings_back")
+                        // Material's navigation slot already adds 4dp at the safe start edge.
+                        .padding(start = 12.dp).size(headerButtonSize).background(backButtonColor, CircleShape)) {
+                        Icon(painterResource(R.drawable.ms_arrow_back), stringResource(R.string.settings_back),
+                            tint = MaterialTheme.colorScheme.onSurface)
+                    }
+                },
+                actions = {
+                    CompositionLocalProvider(LocalSettingsHeaderButtonSize provides headerButtonSize) { actions() }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    containerColor = appBarColor,
+                    scrolledContainerColor = appBarColor,
                 ),
                 scrollBehavior = scrollBehavior,
             )
@@ -153,6 +206,26 @@ internal fun SettingsScaffold(
             }
         },
     )
+}
+
+@Composable
+internal fun SettingsApplyAction(
+    contentDescription: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+) {
+    FilledIconButton(
+        onClick = onClick, enabled = enabled,
+        modifier = modifier.padding(end = 12.dp).size(LocalSettingsHeaderButtonSize.current),
+        shape = CircleShape,
+        colors = IconButtonDefaults.filledIconButtonColors(
+            containerColor = MaterialTheme.colorScheme.primary.copy(alpha = SettingsPreviewSurfaceAlpha),
+            contentColor = MaterialTheme.colorScheme.onPrimary,
+        ),
+    ) {
+        Icon(painterResource(R.drawable.ms_check), contentDescription, Modifier.size(24.dp))
+    }
 }
 
 @Composable

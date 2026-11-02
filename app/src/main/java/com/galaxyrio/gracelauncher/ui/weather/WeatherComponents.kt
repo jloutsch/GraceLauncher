@@ -3,6 +3,8 @@ package com.galaxyrio.gracelauncher.ui.weather
 import android.text.format.DateFormat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +24,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -35,6 +38,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.onClick as semanticOnClick
+import androidx.compose.ui.semantics.onLongClick as semanticOnLongClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
@@ -66,12 +72,28 @@ fun HomeWeather(
     color: Color,
     textStyle: TextStyle,
     modifier: Modifier = Modifier,
+    onClick: (() -> Unit)? = null,
+    onLongClick: (() -> Unit)? = null,
+    iconColor: Color = color,
 ) {
     val temperature = current.temperature ?: return
     val description = weatherDescription(current.condition, current.description)
     val summary = stringResource(R.string.weather_current_description, description, temperature.format(showUnit = true))
     Box(
-        modifier.testTag("home_weather").clearAndSetSemantics { contentDescription = summary },
+        modifier.testTag("home_weather")
+            .clip(MaterialTheme.shapes.small)
+            .then(if (onClick != null) Modifier.combinedClickable(
+                interactionSource = remember { MutableInteractionSource() }, indication = ripple(color = color),
+                role = Role.Button, onClick = onClick, onLongClick = onLongClick,
+            ) else Modifier)
+            .clearAndSetSemantics {
+                contentDescription = summary
+                if (onClick != null) {
+                    role = Role.Button
+                    semanticOnClick { onClick(); true }
+                    if (onLongClick != null) semanticOnLongClick { onLongClick(); true }
+                }
+            },
     ) {
         // Align to the font's text metrics, not the line box (which includes
         // leading). An em-sized icon also follows the user's font-size setting.
@@ -82,7 +104,7 @@ fun HomeWeather(
                 Placeholder(1.15.em, 1.15.em, PlaceholderVerticalAlign.TextCenter),
             ) {
                 WeatherIcon(current.condition, current.isDaylight,
-                    Modifier.fillMaxSize().testTag("home_weather_icon"), tint = color)
+                    Modifier.fillMaxSize().testTag("home_weather_icon"), tint = iconColor)
             }),
             style = textStyle, color = color, maxLines = 1,
         )

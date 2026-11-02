@@ -5,6 +5,8 @@ import android.database.DatabaseErrorHandler
 import android.database.sqlite.SQLiteDatabase
 import androidx.room.Room
 import androidx.room.withTransaction
+import com.galaxyrio.gracelauncher.data.stringSetField
+import com.galaxyrio.gracelauncher.data.WidgetStackFoldersField
 import com.galaxyrio.gracelauncher.data.AppPopupEntity
 import com.galaxyrio.gracelauncher.data.FavoritesStore
 import com.galaxyrio.gracelauncher.data.HiddenAppEntity
@@ -120,7 +122,9 @@ class BackupImporter(
     private suspend fun read(dir: File): BackupContents {
         val manifest = runCatching { BackupManifest.decode(File(dir, BackupArchive.MANIFEST).readText()) }.getOrNull()
             ?: throw Rejection(BackupProblem.NotABackup)
-        checkCompatible(manifest, supportedSchema = LauncherDatabase.SCHEMA_VERSION)?.let { throw Rejection(it) }
+        // Old fork backups say schema 30; the database check below converts or rejects them.
+        checkCompatible(manifest, supportedSchema = maxOf(LauncherDatabase.SCHEMA_VERSION, ForkLegacyBackup.VERSION))
+            ?.let { throw Rejection(it) }
         val sections = manifest.sections
         val preferences = if (PreferenceSections.keys.none { it in sections }) emptyMap() else parse {
             val json = JSONObject(File(dir, BackupArchive.PREFERENCES).readText())
@@ -137,7 +141,11 @@ class BackupImporter(
         val contents = BackupContents(manifest, preferences = preferences, labels = labels)
         if (DatabaseSections.none { it in sections }) return contents
         val file = File(dir, BackupArchive.DATABASE)
-        val version = databaseVersion(file) ?: throw Rejection(BackupProblem.NotABackup)
+        var version = databaseVersion(file) ?: throw Rejection(BackupProblem.NotABackup)
+        if (version > LauncherDatabase.SCHEMA_VERSION && ForkLegacyBackup.isLegacy(file)) {
+            runCatching { ForkLegacyBackup.convert(context, file) }.onFailure { throw Rejection(BackupProblem.NotABackup) }
+            version = databaseVersion(file) ?: throw Rejection(BackupProblem.NotABackup)
+        }
         if (version > LauncherDatabase.SCHEMA_VERSION) throw Rejection(BackupProblem.NewerSchema(version))
         val copy = Room.databaseBuilder(context, LauncherDatabase::class.java, file.absolutePath)
             .addMigrations(*LauncherDatabase.Migrations).build()
@@ -164,7 +172,11 @@ class BackupImporter(
             section(BackupSection.Settings) { dao.clearSettings(); dao.insertSettings(backup.settings) }
             section(BackupSection.HiddenApps) { dao.clearHiddenApps(); dao.insertHiddenApps(backup.hiddenApps) }
             // A widget stack is always a stack; a file that says otherwise would open as a folder without its app list.
-            section(BackupSection.Folders) { dao.clearFolders(); dao.insertFolders(backup.folders.map { it.copy(isAppStack = it.isAppStack || it.isWidgetStack) }) }
+            section(BackupSection.Folders) {
+                val widgetStacks = stringSetField((backup.settings.firstOrNull { it.id == 0 } ?: database.settingsDao().readSettings())
+                    ?.shortcutsFoldersJson, WidgetStackFoldersField)
+                dao.clearFolders(); dao.insertFolders(backup.folders.map { it.copy(isAppStack = it.isAppStack || it.id in widgetStacks) })
+            }
             section(BackupSection.ItemIcons) { dao.clearItemIcons(); dao.insertItemIcons(backup.itemIcons) }
             section(BackupSection.SavedShortcuts) { dao.clearSavedShortcuts(); dao.insertSavedShortcuts(backup.savedShortcuts) }
             section(BackupSection.Popups) { dao.clearPopups(); dao.insertPopups(backup.popups) }
@@ -288,12 +300,13 @@ private fun BackupContents.remapped(serials: Map<Long, Long>, renames: Map<Strin
         settings = settings.map {
             it.copy(iconPackPackage = json(it.iconPackPackage), iconPackPackagesJson = json(it.iconPackPackagesJson),
                 iconDesignJson = json(it.iconDesignJson), mediaAppKey = json(it.mediaAppKey), graceButtonJson = json(it.graceButtonJson),
-                weatherLocationId = json(it.weatherLocationId), weatherAppKey = json(it.weatherAppKey), clockAppKey = json(it.clockAppKey), clockStyleJson = json(it.clockStyleJson),
+                weatherLocationId = json(it.weatherLocationId), clockAppKey = json(it.clockAppKey), clockStyleJson = json(it.clockStyleJson),
                 homeLayoutJson = json(it.homeLayoutJson), appFontId = json(it.appFontId), fontLibraryJson = json(it.fontLibraryJson),
                 listAppearanceJson = json(it.listAppearanceJson), privateSpaceJson = json(it.privateSpaceJson),
                 workProfileJson = json(it.workProfileJson), homeGesturesJson = json(it.homeGesturesJson), searchJson = json(it.searchJson),
                 shortcutsFoldersJson = json(it.shortcutsFoldersJson), digitalWellbeingJson = json(it.digitalWellbeingJson),
-                widgetScreenJson = json(it.widgetScreenJson), headphoneAppsJson = json(it.headphoneAppsJson))
+                widgetScreenJson = json(it.widgetScreenJson), fontColorsJson = json(it.fontColorsJson),
+                appCategoriesJson = json(it.appCategoriesJson))
         },
         hiddenApps = hiddenApps.map { HiddenAppEntity(key(it.appKey)) },
         itemIcons = itemIcons.map { it.copy(itemKey = key(it.itemKey)) },

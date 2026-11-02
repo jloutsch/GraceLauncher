@@ -1,3 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="clock_enable">時計を有効にする</string>
 </resources>

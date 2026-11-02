@@ -219,7 +219,6 @@
     <string name="font_apply_settings">Schriftart auf Einstellungen anwenden</string>
     <string name="font_apply_settings_summary">Ausgewählte Schriftart in den Grace-Einstellungen verwenden</string>
     <string name="font_import_error">Diese Schriftart konnte nicht importiert werden. Wähle eine gültige TTF-, OTF- oder TTC-Datei mit maximal 20 MB aus.</string>
-    <string name="settings_wallpaper_text">Textfarbe</string>
     <string name="settings_text_auto">Automatisch</string>
     <string name="settings_text_light">Heller Text</string>
     <string name="settings_text_dark">Dunkler Text</string>
@@ -228,8 +227,6 @@
     <string name="settings_misc">Sonstiges</string>
     <string name="settings_hide_status_bar">Statusleiste ausblenden</string>
     <string name="settings_hide_status_bar_summary">Auf dem Startbildschirm und in der App-Liste ausblenden</string>
-    <string name="settings_hide_alphabet">Alphabet ausblenden</string>
-    <string name="settings_hide_alphabet_summary">Auf dem Startbildschirm ausblenden, bis du über das Alphabet wischst</string>
     <string name="settings_hide_favorite_names">Namen der Favoriten ausblenden</string>
     <string name="settings_hide_favorite_names_summary">Namen in der App-Liste weiterhin anzeigen</string>
     <string name="settings_dim_wallpaper">Hintergrund abdunkeln</string>
@@ -525,7 +522,6 @@
     <string name="grace_button_show_both">Beides</string>
     <string name="grace_button_show_on">Anzeigen in</string>
     <string name="hide_recently_installed">\"Kürzlich installiert\" verstecken</string>
-    <string name="settings_recently_installed_summary">Zeige die acht zuletzt installierten Apps in der App-Liste an</string>
     <string name="favorites_shortcuts_app_group">Verknüpfungen und App-Gruppe</string>
     <string name="favorites_add_shortcut">Verknüpfung hinzufügen</string>
     <string name="favorites_add_folder">Ordner hinzufügen</string>
@@ -640,17 +636,12 @@
     <string name="list_font_color">Schriftfarbe</string>
     <string name="list_color_default">Nutzt die Farbe des Hintergrundbildes</string>
     <string name="list_show_names">App-Namen anzeigen</string>
-    <string name="list_names_both">Favoriten und App-Liste</string>
-    <string name="list_names_favorites">Nur in Favoriten</string>
-    <string name="list_names_app_list">Nur in der App-Liste</string>
-    <string name="list_names_neither">Weder noch</string>
     <string name="list_names_in_folders">Auch innerhalb von Ordnern anwenden</string>
     <string name="icon_dot_color_custom">Benutzerdefiniert</string>
     <string name="icon_suggestion_list">Liste</string>
     <string name="icon_suggestion_power">Ein-/Ausschalter</string>
     <string name="popup_widget_content_scale">Inhaltsskalierung · %1$d%%</string>
     <string name="list_left_alphabet">Alphabet links nutzen</string>
-    <string name="list_left_alphabet_summary">Am linken Rand entlang gleiten, um das Alphabet rechts zu kontrollieren</string>
     <string name="settings_alphabet">A-Z-Liste</string>
     <string name="alphabet_letter_color">Buchstabenfarbe</string>
     <string name="alphabet_indicator_shape">Form der Positionsanzeige</string>
@@ -659,7 +650,6 @@
     <string name="settings_none">Keine</string>
     <string name="favorites_add_app_stack">App-Leiste hinzufügen</string>
     <string name="alphabet_free_movement">Frei bewegen</string>
-    <string name="alphabet_free_movement_summary">An einem Ende ziehen, um das Alphabet zu bewegen. Loslassen, um zurück zu kehren.</string>
     <string name="alphabet_automatic_spacing">Automatisch · %1$d dp Abstand</string>
     <string name="settings_palette_style">Farbpaletten-Stil</string>
     <string name="palette_tonal_spot">Farbfleck</string>
@@ -675,7 +665,6 @@
     <string name="settings_folder_auto_hide">Enthaltende Apps automatisch verstecken</string>
     <string name="settings_folder_auto_hide_summary">Aktuellen und zukünftigen Inhalt in der App-Liste verstecken. Manuell versteckte Apps bleiben auch nach Entfernen aus dem Ordner versteckt.</string>
     <string name="hidden_from_folder">Durch Ordner versteckt</string>
-    <string name="settings_additional_screen">Zusätzliche Seite</string>
     <string name="widget_screen_title">Widget-Seite</string>
     <string name="widget_screen_enable">Widget-Seite aktivieren</string>
     <string name="widget_screen_swipe">Auf dem Startbildschirm nach links wischen</string>

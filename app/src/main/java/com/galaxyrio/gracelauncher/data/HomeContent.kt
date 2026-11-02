@@ -6,31 +6,45 @@ const val HomeContentKey = "com.galaxyrio.gracelauncher/home-content"
 fun homeContentOwner() = LauncherApp(requireNotNull(ComponentName.unflattenFromString(HomeContentKey)), "Home", null)
 
 enum class GraceWidget(val key: String) {
-    Clock("grace:clock"), Calendar("grace:calendar"), Media("grace:media"), Baseline("grace:baseline");
+    ClockCalendar("grace:clock-calendar"), Media("grace:media"), Baseline("grace:baseline");
 
     fun enabled(settings: LauncherSettings): Boolean = when (this) {
-        Clock -> settings.clockEnabled
-        Calendar -> settings.calendarAgenda
+        ClockCalendar -> settings.homeLayout.clockCalendarEnabled &&
+            (settings.clockEnabled || settings.calendarAgenda || settings.weatherEnabled)
         Media -> settings.mediaPlayer
         Baseline -> settings.homeLayout.baselineEnabled
     }
 
     fun setEnabled(settings: LauncherSettings, value: Boolean): LauncherSettings = when (this) {
-        Clock -> settings.copy(clockEnabled = value)
-        Calendar -> settings.copy(calendarAgenda = value)
+        ClockCalendar -> {
+            val restoreParts = value && !settings.clockEnabled && !settings.calendarAgenda && !settings.weatherEnabled
+            settings.copy(
+                homeLayout = settings.homeLayout.copy(clockCalendarEnabled = value),
+                clockEnabled = settings.clockEnabled || restoreParts,
+                calendarAgenda = settings.calendarAgenda || restoreParts,
+            )
+        }
         Media -> settings.copy(mediaPlayer = value)
         Baseline -> settings.copy(homeLayout = settings.homeLayout.copy(baselineEnabled = value))
     }
 
     companion object {
-        fun fromKey(key: String) = entries.firstOrNull { it.key == key }
+        fun fromKey(key: String) = entries.firstOrNull { it.key == normalizedGraceWidgetKey(key) }
     }
 }
 
-/** Old data is interpreted without rewriting IDs, replacing widgets, or resetting favorites. */
+private fun normalizedGraceWidgetKey(key: String): String = when (key) {
+    "grace:clock", "grace:calendar" -> GraceWidget.ClockCalendar.key
+    else -> key
+}
+
+/** Collapse the old separate clock/calendar slots at their first position. */
+internal fun normalizeHomeOrder(keys: List<String>): List<String> = keys.map(::normalizedGraceWidgetKey).distinct()
+
+/** Keep the legacy widget/favorites arrangement; calendar order is now internal to the combined widget. */
 internal fun legacyHomeOrder(settings: LauncherSettings): List<String> = buildList {
-    if (settings.calendarAboveClock) { add(GraceWidget.Calendar.key); add(GraceWidget.Baseline.key); add(GraceWidget.Clock.key) }
-    else { add(GraceWidget.Clock.key); add(GraceWidget.Baseline.key); add(GraceWidget.Calendar.key) }
+    add(GraceWidget.ClockCalendar.key)
+    add(GraceWidget.Baseline.key)
     if (settings.homeLayout.hasWidget) add("widget:${settings.homeLayout.widgetId}")
     add(GraceWidget.Media.key)
 }
@@ -43,23 +57,26 @@ internal fun orderedHomeItems(settings: LauncherSettings, favorites: List<String
         addAll(widgets.filter { it.widget != null })
         addAll(favorites.map { PopupItem(it) })
     }.associateBy { it.key }
-    return ((settings.homeLayout.homeOrder ?: legacyHomeOrder(settings)) + contents.keys)
-        .distinct().mapNotNull(contents::get)
+    return normalizeHomeOrder((settings.homeLayout.homeOrder ?: legacyHomeOrder(settings)) + contents.keys)
+        .mapNotNull(contents::get)
 }
 
 /** Both feature banners and the homepage editor use this same activation rule. */
 internal fun synchronizeGraceWidgetOrder(previous: LauncherSettings, next: LauncherSettings): LauncherSettings {
-    val added = GraceWidget.entries.filter { !it.enabled(previous) && it.enabled(next) }.map { it.key }
-    if (added.isEmpty()) return next
-    val order = (added + (next.homeLayout.homeOrder ?: legacyHomeOrder(previous))).distinct()
-    return next.copy(homeLayout = next.homeLayout.copy(homeOrder = order))
+    val partActivated = (!previous.clockEnabled && next.clockEnabled) ||
+        (!previous.calendarAgenda && next.calendarAgenda) || (!previous.weatherEnabled && next.weatherEnabled)
+    val activated = if (partActivated) next.copy(homeLayout = next.homeLayout.copy(clockCalendarEnabled = true)) else next
+    val added = GraceWidget.entries.filter { !it.enabled(previous) && it.enabled(activated) }.map { it.key }
+    val order = if (added.isEmpty()) activated.homeLayout.homeOrder?.let(::normalizeHomeOrder)
+        else normalizeHomeOrder(added + (activated.homeLayout.homeOrder ?: legacyHomeOrder(previous)))
+    return activated.copy(homeLayout = activated.homeLayout.copy(homeOrder = order))
 }
 
 /** Keep temporarily unavailable favorites in place when reordering the visible mixed list. */
 internal fun mergeHomeOrder(requested: List<String>, previous: List<String>): List<String> {
-    val order = requested.distinct()
+    val order = normalizeHomeOrder(requested)
     val moving = order.toSet()
     val replacements = order.iterator()
-    return (previous.distinct().map { if (it in moving && replacements.hasNext()) replacements.next() else it } +
+    return (normalizeHomeOrder(previous).map { if (it in moving && replacements.hasNext()) replacements.next() else it } +
         replacements.asSequence().toList()).distinct()
 }

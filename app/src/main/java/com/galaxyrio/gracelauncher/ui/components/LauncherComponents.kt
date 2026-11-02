@@ -1,5 +1,7 @@
 package com.galaxyrio.gracelauncher.ui.components
 
+import android.os.Process
+import android.os.UserHandle
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -65,6 +67,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.semantics.CustomAccessibilityAction
@@ -75,6 +78,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.stringResource
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.ShortcutsFoldersSettings
+import com.galaxyrio.gracelauncher.data.CategoryIcon
 import com.galaxyrio.gracelauncher.data.IconDisplaySettings
 import com.galaxyrio.gracelauncher.data.IconDisplayStyle
 import com.galaxyrio.gracelauncher.data.IconShape
@@ -101,12 +105,20 @@ private val FallbackIconColors = listOf(
 private fun fallbackIconColor(key: String): Color =
     FallbackIconColors[(key.hashCode() and Int.MAX_VALUE) % FallbackIconColors.size]
 
+internal val LauncherApp.showsProfileBadge: Boolean
+    get() = (isPrivateSpace && showPrivateIndicator) || (isWorkProfile && showWorkIndicator) || isCloneProfile
+
 @Composable
 internal fun IconBadge(app: LauncherApp, badgeSize: Dp, modifier: Modifier = Modifier) {
-    Box(modifier.size(badgeSize).testTag("${if (app.isWorkProfile) "work" else "private"}_indicator:${app.key}")
+    val (profile, symbol) = when {
+        app.isWorkProfile -> "work" to LauncherSymbol.Work
+        app.isPrivateSpace -> "private" to LauncherSymbol.Encrypted
+        else -> "clone" to LauncherSymbol.SplitscreenLandscape
+    }
+    Box(modifier.size(badgeSize).testTag("${profile}_indicator:${app.key}")
         .background(MaterialTheme.colorScheme.surface, CircleShape)
         .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.2f), CircleShape), contentAlignment = Alignment.Center) {
-        LauncherIcon(if (app.isWorkProfile) LauncherSymbol.Work else LauncherSymbol.Encrypted,
+        LauncherIcon(symbol,
             Modifier.size(badgeSize * 0.68f), MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -117,8 +129,9 @@ fun AppIcon(app: LauncherApp, modifier: Modifier = Modifier, size: Dp = 38.dp, a
     val appearance = LocalLauncherAppearance.current
     val displaySize = size * if (applyDisplaySize) appearance.iconSize / 100f else 1f
     val style = display.style
-    val iconModifier = if (app.folderId == null) modifier.launcherAnimationTarget(listOf(app.componentName)) else modifier
-    val showBadge = (app.isPrivateSpace && app.showPrivateIndicator) || (app.isWorkProfile && app.showWorkIndicator)
+    val iconModifier = if (app.folderId == null) modifier.launcherAnimationTarget(
+        listOf(app.componentName), user = app.user ?: Process.myUserHandle()) else modifier
+    val showBadge = app.showsProfileBadge
     Box(iconModifier.size(displaySize)) {
         when {
             style == IconDisplayStyle.Hidden -> Unit
@@ -133,7 +146,8 @@ fun AppIcon(app: LauncherApp, modifier: Modifier = Modifier, size: Dp = 38.dp, a
                     }
                 }
                 // Decorative only; rows keep their own label semantics.
-                val dotColor = Color(display.color.resolve(MaterialTheme.colorScheme.primary.toArgb(), app.originalIconColor))
+                val dotColor = Color(display.color.resolve(MaterialTheme.colorScheme.primary.toArgb(), app.originalIconColor,
+                    colorScheme = MaterialTheme.colorScheme))
                 Box(Modifier.align(Alignment.Center).size(dotSize)) {
                     Box(Modifier.fillMaxSize().background(dotColor, dotShape))
                     if (showBadge) IconBadge(app, (dotSize * 0.55f).coerceAtLeast(9.dp), Modifier.align(Alignment.BottomEnd))
@@ -208,6 +222,7 @@ fun LauncherAppRow(
     notifications: List<AppNotification> = emptyList(),
     showLabel: Boolean = true,
     usageText: String? = null,
+    categoryIcon: CategoryIcon = CategoryIcon.None,
 ) {
     val display = app.effectiveDisplay(LocalLauncherAppearance.current)
     LauncherRow(
@@ -227,8 +242,10 @@ fun LauncherAppRow(
         highlighted = highlighted,
         notifications = if (app.shortcut == null && app.user == null) notifications else emptyList(),
         usageText = usageText,
+        categoryIcon = categoryIcon,
         showLabel = showLabel,
         animationComponents = listOf(app.componentName),
+        animationUser = app.user ?: Process.myUserHandle(),
         hiddenIcon = display.style == IconDisplayStyle.Hidden,
     ) { iconModifier -> AppIcon(app, modifier = iconModifier, size = 40.dp, display = display) }
 }
@@ -247,8 +264,15 @@ fun FolderRow(
     app: LauncherApp = folder.asApp(),
     trailing: (@Composable () -> Unit)? = null,
     notifications: List<AppNotification> = emptyList(),
+    categoryIcon: CategoryIcon = CategoryIcon.None,
 ) {
     val display = app.effectiveDisplay(LocalLauncherAppearance.current)
+    // Return contracts currently support the personal user only. A foreign installation must
+    // not make its folder a target for the personal installation of the same package.
+    val animationComponents = remember(folder.appKeys) {
+        folder.appKeys.filterNot { it.startsWith("profile:") }
+            .mapNotNull(android.content.ComponentName::unflattenFromString)
+    }
     LauncherRow(
         rowKey = "folder:${folder.id}",
         label = folder.name,
@@ -266,12 +290,13 @@ fun FolderRow(
         showLabel = showLabel,
         trailing = trailing,
         notifications = notifications,
-        animationComponents = folder.appKeys.mapNotNull(android.content.ComponentName::unflattenFromString),
+        categoryIcon = categoryIcon,
+        animationComponents = animationComponents,
         animationFolder = true,
         hiddenIcon = display.style == IconDisplayStyle.Hidden,
     ) { iconModifier ->
         AppIcon(app, modifier = iconModifier.launcherAnimationTarget(
-            folder.appKeys.mapNotNull(android.content.ComponentName::unflattenFromString), folder = true),
+            animationComponents, folder = true),
             size = 40.dp, display = display)
     }
 }
@@ -298,8 +323,10 @@ private fun LauncherRow(
     trailing: (@Composable () -> Unit)? = null,
     animationComponents: List<android.content.ComponentName> = emptyList(),
     animationFolder: Boolean = false,
+    animationUser: UserHandle = Process.myUserHandle(),
     hiddenIcon: Boolean? = null,
     usageText: String? = null,
+    categoryIcon: CategoryIcon = CategoryIcon.None,
     icon: @Composable (Modifier) -> Unit,
 ) {
     val appearance = LocalLauncherAppearance.current
@@ -421,12 +448,13 @@ private fun LauncherRow(
                 if (hideIcon) Modifier
                     .onGloballyPositioned { iconCoordinates = it }
                     .then(if (animationComponents.isNotEmpty())
-                        Modifier.launcherAnimationTarget(animationComponents, animationFolder) else Modifier)
+                        Modifier.launcherAnimationTarget(animationComponents, animationFolder, animationUser) else Modifier)
                 else Modifier)) {
                 AppNotificationLabel(label, notifications, labelVisible,
                     usageText = usageText,
                     labelModifier = Modifier.testTag("$rowKey:label"),
-                    notificationBodyLines = if (popupSettings.singleLineNotificationPreviews) 1 else 2)
+                    notificationBodyLines = if (popupSettings.singleLineNotificationPreviews) 1 else 2,
+                    categoryIcon = if (showLabel) categoryIcon else CategoryIcon.None)
             }
             trailing?.invoke()
             if (notifications.isNotEmpty()) {
@@ -457,26 +485,37 @@ internal fun AppNotificationLabel(
     maxLines: Int = 1,
     notificationBodyLines: Int = 1,
     usageText: String? = null,
+    categoryIcon: CategoryIcon = CategoryIcon.None,
 ) {
     val style = listLabelStyle(onWallpaper)
     val list = LocalListAppearance.current
     Column(modifier) {
         if (showLabel) {
             val notificationAgeText = notifications.firstOrNull()?.let { " · ${notificationAge(it.postedAt)}" }.orEmpty()
-            if (usageText == null) {
-                Text(label + notificationAgeText, modifier = labelModifier, style = style,
-                    maxLines = maxLines, overflow = TextOverflow.Ellipsis)
-            } else Box(Modifier.testTag("favorite_usage")) {
-                Text(buildAnnotatedString {
-                    append(label)
-                    withStyle(SpanStyle(fontSize = (list.fontSize - 3).sp)) {
-                        withStyle(SpanStyle(color = style.color.copy(alpha = style.color.alpha * 0.65f))) {
-                            append(" · $usageText")
+            val labelContent: @Composable (Modifier) -> Unit = { contentModifier ->
+                if (usageText == null) {
+                    Text(label + notificationAgeText, modifier = contentModifier.then(labelModifier), style = style,
+                        maxLines = maxLines, overflow = TextOverflow.Ellipsis)
+                } else Box(contentModifier.testTag("favorite_usage")) {
+                    Text(buildAnnotatedString {
+                        append(label)
+                        withStyle(SpanStyle(fontSize = (list.fontSize - 3).sp)) {
+                            withStyle(SpanStyle(color = style.color.copy(alpha = style.color.alpha * 0.65f))) {
+                                append(" · $usageText")
+                            }
+                            append(notificationAgeText)
                         }
-                        append(notificationAgeText)
-                    }
-                }, modifier = labelModifier, style = style,
-                    maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                    }, modifier = labelModifier, style = style,
+                        maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                }
+            }
+            if (categoryIcon == CategoryIcon.None) labelContent(Modifier)
+            else Row(verticalAlignment = Alignment.CenterVertically) {
+                // Shrink to the label while reserving room for the small category symbol.
+                labelContent(Modifier.weight(1f, fill = false))
+                Spacer(Modifier.width(4.dp))
+                CategoryIndicator(categoryIcon,
+                    Modifier.size(16.dp).testTag("category_indicator:${categoryIcon.name}"), tint = style.color)
             }
         }
         notifications.forEachIndexed { index, notification ->
@@ -489,7 +528,9 @@ internal fun AppNotificationLabel(
                 if (notification.text.isNotBlank()) Text(
                     text = if (notificationBodyLines > 1) notification.text else notification.text.replace('\n', ' '),
                     modifier = Modifier.testTag("notification_preview:${notification.key}:body"),
-                    style = previewStyle, maxLines = notificationBodyLines, overflow = TextOverflow.Ellipsis)
+                    // Use the body's font metrics instead of the larger app label's line height.
+                    style = previewStyle.copy(lineHeight = TextUnit.Unspecified),
+                    maxLines = notificationBodyLines, overflow = TextOverflow.Ellipsis)
             }
         }
     }

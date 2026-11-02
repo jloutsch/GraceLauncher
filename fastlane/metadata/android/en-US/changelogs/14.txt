@@ -1,0 +1,11 @@
+Grace Launcher 1.2.2
+Bug fixes:
+• Fixed issues adding or editing some widgets.
+• Fixed lag from app reloads when returning home.
+• Attempted fix for missing cloned apps (untested).
+Improvements:
+• Reorganized Settings; reserved future feature entries.
+• Centralized per-element font color management.
+• App Categories: conditionally show apps on the home screen or in the app list.
+• Customizable clock widget colors.
+• More UI customization options.
