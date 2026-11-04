@@ -28,6 +28,5 @@ class SettingsActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         launcherViewModel.refreshOnResume()
-        launcherViewModel.refreshSchedule()
     }
 }

@@ -826,4 +826,5 @@
     <string name="category_dynamic">Selezione dinamica</string>
     <string name="category_dynamic_rule">Regola dinamica</string>
     <string name="category_rule_notifications">App con notifiche</string>
+    <string name="calendar_reading">Dati del calendario</string>
 </resources>

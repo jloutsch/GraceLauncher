@@ -10,6 +10,8 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
@@ -35,6 +37,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.LookaheadScope
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -42,16 +45,20 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.ClockColorPart
-import com.galaxyrio.gracelauncher.data.ClockVisibility
-import com.galaxyrio.gracelauncher.data.ClockFaceStyle
+import com.galaxyrio.gracelauncher.data.ClockElement
+import com.galaxyrio.gracelauncher.data.ClockRegions
+import com.galaxyrio.gracelauncher.data.ClockRegion
 import com.galaxyrio.gracelauncher.data.ClockFontFile
 import com.galaxyrio.gracelauncher.data.ClockFontStore
 import com.galaxyrio.gracelauncher.data.ClockLayout
 import com.galaxyrio.gracelauncher.data.ClockStyle
+import com.galaxyrio.gracelauncher.data.ScheduleEvent
+import com.galaxyrio.gracelauncher.data.visibleAgendaEvents
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.components.endPadding
@@ -65,7 +72,13 @@ import com.galaxyrio.gracelauncher.ui.theme.resolvedFontColor
 import com.galaxyrio.gracelauncher.data.weather.WeatherCurrent
 import com.galaxyrio.gracelauncher.data.weather.WeatherCondition
 import com.galaxyrio.gracelauncher.data.weather.WeatherTemperature
+import com.galaxyrio.gracelauncher.data.weather.WeatherDay
+import com.galaxyrio.gracelauncher.data.weather.WeatherLocation
+import com.galaxyrio.gracelauncher.data.weather.WeatherMeasure
+import com.galaxyrio.gracelauncher.data.weather.WeatherSnapshot
+import com.galaxyrio.gracelauncher.data.weather.WeatherWind
 import java.time.Instant
+import java.time.ZoneId
 import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -75,12 +88,15 @@ import kotlinx.coroutines.launch
 private val ClockStyleDraftSaver = Saver<ClockStyle, String>(save = { it.encode() }, restore = { ClockStyle.decode(it) })
 
 private enum class ClockEditorPage { Presets, Style, Color }
+private enum class ClockContentPage { Agenda, Weather }
 
 private val ClockColorGroups = listOf(
     R.string.settings_clock to listOf(ClockColorPart.HourTens, ClockColorPart.HourOnes,
         ClockColorPart.MinuteTens, ClockColorPart.MinuteOnes),
     R.string.clock_color_date_group to listOf(ClockColorPart.Weekday, ClockColorPart.Month, ClockColorPart.Day),
-    R.string.settings_misc to listOf(ClockColorPart.Battery, ClockColorPart.Weather),
+    R.string.settings_weather to listOf(ClockColorPart.Weather, ClockColorPart.WeatherIcon),
+    R.string.clock_color_battery to listOf(ClockColorPart.Battery, ClockColorPart.BatteryIcon),
+    R.string.settings_agenda to listOf(ClockColorPart.Agenda),
 )
 
 @Composable
@@ -88,90 +104,147 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var draft by rememberSaveable(stateSaver = ClockStyleDraftSaver) {
-        mutableStateOf(uiState.settings.clockStyle.applyPresetToBase())
+        mutableStateOf(uiState.settings.clockStyle.withRegions(
+            uiState.settings.clockStyle.resolvedRegions(uiState.settings.calendarAboveClock)))
     }
+    var baseline by rememberSaveable(stateSaver = ClockStyleDraftSaver) { mutableStateOf(draft) }
+    var confirmExit by rememberSaveable { mutableStateOf(false) }
     var page by rememberSaveable { mutableStateOf(ClockEditorPage.Style) }
-    var baseLayout by rememberSaveable { mutableStateOf(draft.layout.baseLayout) }
     var presetLayout by rememberSaveable {
-        mutableStateOf(uiState.settings.clockStyle.layout.takeIf { !it.allowsCustomFont } ?: ClockLayout.Sacramento)
+        mutableStateOf(uiState.settings.clockStyle.layout.takeIf {
+            uiState.settings.clockStyle.regions == null && !it.allowsCustomFont
+        })
     }
     var editingColor by rememberSaveable { mutableStateOf<ClockColorPart?>(null) }
-    val face = draft.face
-    fun changeFace(transform: (ClockFaceStyle) -> ClockFaceStyle) { draft = draft.withFace(transform(draft.face)) }
-    fun changeVisibility(transform: (ClockVisibility) -> ClockVisibility) { draft = draft.copy(visibility = transform(draft.visibility)) }
-    fun selectPage(destination: ClockEditorPage) {
-        if (destination == page) return
-        draft = when (destination) {
-            ClockEditorPage.Style -> draft.copy(layout = baseLayout)
-            ClockEditorPage.Presets -> draft.copy(layout = presetLayout)
-            ClockEditorPage.Color -> draft
-        }
-        page = destination
-    }
-    var dialog by rememberSaveable { mutableStateOf<String?>(null) }
+    var editingContent by rememberSaveable { mutableStateOf<ClockContentPage?>(null) }
+    var editingFont by rememberSaveable { mutableStateOf<ClockElement?>(null) }
+    var editingRegionFont by rememberSaveable { mutableStateOf<ClockRegion?>(null) }
+    var weatherIcons by rememberSaveable { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     val enabled = !saving && LocalSettingsStorageState.current.canEdit
+    val regions = draft.resolvedRegions()
+    // Explicit default faces and migrated legacy slots should not make an untouched editor dirty.
+    fun comparableRegions(style: ClockStyle): ClockRegions = style.resolvedRegions().let { value ->
+        value.copy(primaryFaces = ClockElement.entries.associateWith(value::face))
+    }
+    val dirty = comparableRegions(draft) != comparableRegions(baseline) || draft.colors != baseline.colors
+    fun updateRegions(transform: (ClockRegions) -> ClockRegions) {
+        draft = draft.withRegions(transform(draft.resolvedRegions()))
+        presetLayout = null
+    }
+    fun saveAndExit() {
+        if (!enabled) return
+        val applied = draft.withRegions()
+        saving = true
+        scope.launch {
+            try {
+                if (actions.applyClockStyle(applied)) {
+                    baseline = applied
+                    confirmExit = false
+                    onBack()
+                } else Toast.makeText(context, R.string.settings_storage_save_error, Toast.LENGTH_LONG).show()
+            } finally { saving = false }
+        }
+    }
+    val back: () -> Unit = {
+        if (!saving) when {
+            editingColor != null -> editingColor = null
+            editingContent != null -> editingContent = null
+            dirty -> confirmExit = true
+            else -> onBack()
+        }
+    }
     val store = remember(context) { ClockFontStore(context) }
     val fonts by produceState<List<ClockFontFile>?>(null, store) { value = store.list() }
     LaunchedEffect(fonts) {
         val available = fonts?.map { it.id }?.toSet() ?: return@LaunchedEffect
         val current = draft
-        val missing = (listOf(current.singleLine, current.twoLines) + current.presets.values).mapNotNull { it.fontId }
+        val fontIds = listOf(current, baseline).flatMap { style ->
+            val regions = style.resolvedRegions()
+            (listOf(style.singleLine, style.twoLines) + style.presets.values + regions.primaryFaces.values).mapNotNull { it.fontId } +
+                listOfNotNull(regions.secondary.typography.fontId, regions.tertiary.typography.fontId, regions.agenda.typography.fontId)
+        }
+        val missing = fontIds
             .filter { ClockFontStore.displayName(it) != null && it !in available }.toSet()
-        if (missing.isNotEmpty()) draft = current.withoutFonts(missing)
+        if (missing.isNotEmpty()) {
+            draft = current.withoutFonts(missing)
+            baseline = baseline.withoutFonts(missing)
+        }
     }
-    if (dialog == "font" && draft.layout.allowsCustomFont) {
-        FontPickerDialog(uiState.settings.fontLibrary, face.fontId,
-            onSelect = { id -> changeFace { it.copy(fontId = id) }; dialog = null },
-            onManage = { dialog = null; onManageFonts() }, onDismiss = { dialog = null }, tag = "clock_font")
+    editingFont?.let { element ->
+        FontPickerDialog(uiState.settings.fontLibrary, regions.face(element).fontId,
+            onSelect = { id ->
+                updateRegions { current -> current.copy(primaryFaces = current.primaryFaces +
+                    (element to current.face(element).copy(fontId = id))) }
+                editingFont = null
+            }, onManage = { editingFont = null; onManageFonts() }, onDismiss = { editingFont = null }, tag = "clock_font")
     }
-    if (dialog == "weather_icons") {
-        SettingsSelectionDialog(stringResource(R.string.clock_weather_icons), listOf("monochrome"), "monochrome",
-            "clock_weather_icons", { it }, { stringResource(R.string.clock_weather_icons_monochrome) },
-            { dialog = null }, { dialog = null })
+    editingRegionFont?.let { region ->
+        val fontId = when (region) {
+            ClockRegion.Secondary -> regions.secondary.typography.fontId
+            ClockRegion.Tertiary -> regions.tertiary.typography.fontId
+            ClockRegion.Agenda -> regions.agenda.typography.fontId
+            ClockRegion.Primary -> null
+        }
+        FontPickerDialog(uiState.settings.fontLibrary, fontId,
+            onSelect = { id ->
+                updateRegions { current -> when (region) {
+                    ClockRegion.Secondary -> current.copy(secondary = current.secondary.copy(
+                        typography = current.secondary.typography.copy(fontId = id)))
+                    ClockRegion.Tertiary -> current.copy(tertiary = current.tertiary.copy(
+                        typography = current.tertiary.typography.copy(fontId = id)))
+                    ClockRegion.Agenda -> current.copy(agenda = current.agenda.copy(
+                        typography = current.agenda.typography.copy(fontId = id)))
+                    ClockRegion.Primary -> current
+                } }
+                editingRegionFont = null
+            }, onManage = { editingRegionFont = null; onManageFonts() }, onDismiss = { editingRegionFont = null },
+            tag = "clock_${region.name.lowercase()}_font")
     }
-    BackHandler(editingColor != null) { editingColor = null }
-    val fontLabel = appFontLabel(face.fontId)
-    val stylePage = page == ClockEditorPage.Style
-    val allowsFont = draft.layout.allowsCustomFont
-    val showsColon = !draft.layout.stacked
-    val fontIndex = 1 + if (stylePage) 5 else 0
-    val weightIndex = fontIndex + if (allowsFont) 1 else 0
-    val leadingZeroIndex = weightIndex + 5
-    val separationIndex = leadingZeroIndex + 1
-    val orderIndex = separationIndex + 1 + if (showsColon) 1 else 0
-    val count = orderIndex + 1 + if (stylePage) 1 else 0
-    val defaults = ClockStyle.defaults(draft.layout)
+    if (weatherIcons) SettingsSelectionDialog(stringResource(R.string.clock_weather_icons), listOf("monochrome"), "monochrome",
+        "clock_weather_icons", { it }, { stringResource(R.string.clock_weather_icons_monochrome) },
+        { weatherIcons = false }, { weatherIcons = false })
+    BackHandler(onBack = back)
+    if (confirmExit) AlertDialog(
+        onDismissRequest = { if (!saving) confirmExit = false },
+        title = { Text(stringResource(R.string.icon_designer_unsaved_title)) },
+        text = { Text(stringResource(R.string.clock_unsaved_message)) },
+        confirmButton = {
+            TextButton(onClick = ::saveAndExit, enabled = enabled, modifier = Modifier.testTag("clock_unsaved_save")) {
+                Text(stringResource(R.string.save))
+            }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = { confirmExit = false }, enabled = !saving,
+                    modifier = Modifier.testTag("clock_unsaved_cancel")) { Text(stringResource(R.string.cancel)) }
+                TextButton(onClick = { confirmExit = false; onBack() }, enabled = !saving,
+                    modifier = Modifier.testTag("clock_unsaved_discard")) { Text(stringResource(R.string.icon_designer_discard)) }
+            }
+        },
+        modifier = Modifier.testTag("clock_unsaved"),
+    )
     val heroSpec = MaterialTheme.motionScheme.slowSpatialSpec<Rect>()
     val heroBounds = remember(heroSpec) { BoundsTransform { _, _ -> heroSpec } }
     val styleListState = rememberLazyListState()
     val presetsListState = rememberLazyListState()
     val colorsListState = rememberLazyListState()
     SettingsPreviewScaffold(uiState, stringResource(R.string.settings_clock_style), "settings_clock_style_editor",
-        { if (editingColor != null) editingColor = null else onBack() },
+        back,
         actions = {
             SettingsApplyAction(
                 contentDescription = stringResource(R.string.clock_style_apply),
                 modifier = Modifier.testTag("clock_style_apply"), enabled = enabled,
-                onClick = {
-                    val applied = draft.applyPresetToBase()
-                    saving = true
-                    scope.launch {
-                        try {
-                            if (actions.applyClockStyle(applied)) onBack()
-                            else Toast.makeText(context, R.string.settings_storage_save_error, Toast.LENGTH_LONG).show()
-                        } finally { saving = false }
-                    }
-                },
+                onClick = ::saveAndExit,
             )
         },
     ) { padding ->
         LookaheadScope {
             Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()) {
                 Column(Modifier.fillMaxSize()) {
-                    ClockStylePreview(draft, uiState, this@LookaheadScope, heroBounds,
-                        Modifier.padding(top = 8.dp))
+                    ClockStylePreview(draft, uiState, this@LookaheadScope, heroBounds, Modifier.padding(top = 8.dp))
                     val activeColor = editingColor
+                    val activeContent = editingContent
                     val controlsModifier = Modifier.weight(1f).fillMaxWidth()
                         .animateBounds(this@LookaheadScope, boundsTransform = heroBounds)
                         .settingsPreviewScrim()
@@ -184,6 +257,40 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
                                 if (color == null) draft.colors - activeColor else draft.colors + (activeColor to color)) },
                             onClose = { editingColor = null }, modifier = controlsModifier.padding(bottom = 16.dp),
                             fallback = resolvedFontColor(onWallpaper = true).toArgb(), fontColors = uiState.settings.fontColors)
+                    } else if (activeContent != null) key(activeContent) {
+                        when (activeContent) {
+                            ClockContentPage.Agenda -> ClockContentPicker(
+                                stringResource(R.string.clock_agenda_contents), regions.agenda.order, regions.agenda.selected,
+                                enabled, uiState.settings.allowHapticFeedback, "clock_agenda_field", label = { it.label() },
+                                onSelect = { field, checked -> if (enabled) updateRegions { current ->
+                                    current.copy(agenda = current.agenda.copy(selected = if (checked)
+                                        current.agenda.selected + field else current.agenda.selected - field))
+                                } },
+                                onReorder = { order -> if (enabled) updateRegions { current ->
+                                    current.copy(agenda = current.agenda.copy(order = order))
+                                } },
+                                onClose = { editingContent = null }, modifier = controlsModifier.padding(bottom = 16.dp),
+                            )
+                            ClockContentPage.Weather -> ClockContentPicker(
+                                stringResource(R.string.clock_weather_contents), regions.weather.order, regions.weather.selected,
+                                enabled, uiState.settings.allowHapticFeedback, "clock_weather_field", label = { it.label() },
+                                onSelect = { field, checked -> if (enabled) updateRegions { current ->
+                                    current.copy(weather = current.weather.copy(selected = if (checked)
+                                        current.weather.selected + field else current.weather.selected - field))
+                                } },
+                                onReorder = { order -> if (enabled) updateRegions { current ->
+                                    current.copy(weather = current.weather.copy(order = order))
+                                } },
+                                onClose = { editingContent = null }, modifier = controlsModifier.padding(bottom = 16.dp),
+                                labelShown = { field ->
+                                    if (field.supportsLabel) field in regions.weather.labeledFields else null
+                                },
+                                onLabelChange = { field, shown -> if (enabled) updateRegions { current ->
+                                    current.copy(weather = current.weather.copy(labeledFields = if (shown)
+                                        current.weather.labeledFields + field else current.weather.labeledFields - field))
+                                } },
+                            )
+                        }
                     } else LazyColumn(
                         controlsModifier.testTag("clock_style_controls"),
                         state = when (page) {
@@ -195,8 +302,8 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
                         contentPadding = PaddingValues(bottom = 96.dp + LocalSettingsBottomInset.current),
                         userScrollEnabled = !saving,
                     ) {
-                        if (page == ClockEditorPage.Color) {
-                            ClockColorGroups.forEach { (title, parts) ->
+                        when (page) {
+                            ClockEditorPage.Color -> ClockColorGroups.forEach { (title, parts) ->
                                 item("clock_color_heading:${parts.first().name}") { SettingsHeading(stringResource(title)) }
                                 itemsIndexed(parts, key = { _, part -> part.name }) { index, part ->
                                     SettingsActionItem(part.label(), fontColorSummary(draft.colors[part], onWallpaper = true),
@@ -207,123 +314,34 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
                                         }) { editingColor = part }
                                 }
                             }
-                        } else {
-                            clockSetting("layout") {
-                                ClockLayoutSelector(draft,
-                                    ClockLayout.entries.filter { it.allowsCustomFont == stylePage }, count, enabled) {
-                                    draft = draft.copy(layout = it)
-                                    if (stylePage) baseLayout = it else presetLayout = it
+                            ClockEditorPage.Presets -> clockSetting("presets") {
+                                ClockLayoutSelector(draft, ClockLayout.entries.filter { !it.allowsCustomFont },
+                                    1, enabled, selectedLayout = presetLayout) { layout ->
+                                    draft = draft.selectPreset(layout)
+                                    presetLayout = layout
                                 }
                             }
-                            if (stylePage) {
-                                clockSetting("show_clock") {
-                                    SettingsToggleItem(stringResource(R.string.clock_show_clock), null,
-                                        draft.visibility.showClock, 1, count, "clock_show_clock", enabled) { value ->
-                                        changeVisibility { it.copy(showClock = value) }
-                                    }
-                                }
-                                clockSetting("show_weekday") {
-                                    SettingsToggleItem(stringResource(R.string.clock_show_weekday), null,
-                                        draft.visibility.showWeekday, 2, count, "clock_show_weekday", enabled) { value ->
-                                        changeVisibility { it.copy(showWeekday = value) }
-                                    }
-                                }
-                                clockSetting("show_date") {
-                                    SettingsToggleItem(stringResource(R.string.clock_show_date), null,
-                                        draft.visibility.showDate, 3, count, "clock_show_date", enabled) { value ->
-                                        changeVisibility { it.copy(showDate = value) }
-                                    }
-                                }
-                                clockSetting("show_battery") {
-                                    SettingsToggleItem(stringResource(R.string.clock_show_battery), null,
-                                        draft.visibility.showBattery, 4, count, "clock_show_battery", enabled) { value ->
-                                        changeVisibility { it.copy(showBattery = value) }
-                                    }
-                                }
-                                clockSetting("show_weather") {
-                                    SettingsToggleItem(stringResource(R.string.clock_show_weather), null,
-                                        draft.visibility.showWeather, 5, count, "clock_show_weather", enabled) { value ->
-                                        changeVisibility { it.copy(showWeather = value) }
-                                    }
-                                }
-                            }
-                            if (allowsFont) clockSetting("font") {
-                                SettingsActionItem(stringResource(R.string.settings_font), fontLabel, fontIndex, count,
-                                    "clock_font_selector", enabled = enabled) { dialog = "font" }
-                            }
-                            clockSetting("weight") {
-                                ClockSlider(stringResource(R.string.clock_weight), face.weight, defaults.weight,
-                                    100..face.maxWeight(draft.layout), step = 100,
-                                    index = weightIndex, count = count, tag = "clock_weight", enabled = enabled,
-                                    onChange = { value -> changeFace { it.copy(weight = value) } })
-                            }
-                            clockSetting("size") {
-                                ClockSlider(stringResource(R.string.clock_size), face.size, defaults.size, 32..144, step = 1,
-                                    index = weightIndex + 1, count = count, tag = "clock_size", enabled = enabled,
-                                    onChange = { value -> changeFace { it.copy(size = value) } })
-                            }
-                            clockSetting("spacing") {
-                                ClockSlider(stringResource(if (draft.layout.week) R.string.clock_letter_spacing else R.string.clock_digit_spacing),
-                                    face.letterSpacing, defaults.letterSpacing, -16..16, step = 1,
-                                    index = weightIndex + 2, count = count, tag = "clock_letter_spacing", enabled = enabled,
-                                    onChange = { value -> changeFace { it.copy(letterSpacing = value) } })
-                            }
-                            clockSetting("hour_minute_spacing") {
-                                ClockSlider(stringResource(R.string.clock_hour_minute_spacing), face.hourMinuteSpacing, defaults.hourMinuteSpacing,
-                                    -16..64, step = 1, index = weightIndex + 3, count = count,
-                                    tag = "clock_hour_minute_spacing", enabled = enabled,
-                                    onChange = { value -> changeFace { it.copy(hourMinuteSpacing = value) } })
-                            }
-                            clockSetting("font_shadow") {
-                                ClockSlider(stringResource(R.string.clock_font_shadow), face.fontShadow, defaults.fontShadow,
-                                    0..24, step = 1, index = weightIndex + 4, count = count,
-                                    tag = "clock_font_shadow", enabled = enabled,
-                                    onChange = { value -> changeFace { it.copy(fontShadow = value) } })
-                            }
-                            clockSetting("leading_zero") {
-                                SettingsToggleItem(stringResource(R.string.clock_show_leading_zero), null,
-                                    face.showLeadingZero, leadingZeroIndex, count, "clock_show_leading_zero", enabled) { value ->
-                                    changeFace { it.copy(showLeadingZero = value) }
-                                }
-                            }
-                            clockSetting("separation") {
-                                SettingsToggleItem(stringResource(R.string.clock_separate_digits), stringResource(R.string.clock_separate_digits_summary),
-                                    face.separateDigits, separationIndex, count, "clock_separate_digits", enabled) { value ->
-                                    changeFace { it.copy(separateDigits = value) }
-                                }
-                            }
-                            if (showsColon) clockSetting("colon") {
-                                SettingsToggleItem(stringResource(R.string.clock_show_colon), stringResource(R.string.clock_show_colon_summary),
-                                    face.showColon, separationIndex + 1, count, "clock_show_colon", enabled) { value ->
-                                    changeFace { it.copy(showColon = value) }
-                                }
-                            }
-                            clockSetting("calendar_above_clock") {
-                                SettingsToggleItem(stringResource(R.string.calendar_above_clock), null,
-                                    uiState.settings.calendarAboveClock, orderIndex, count, "calendar_above_clock", enabled) { value ->
-                                    actions.updateSettings { it.copy(calendarAboveClock = value) }
-                                }
-                            }
-                            if (stylePage) clockSetting("weather_icons") {
-                                SettingsActionItem(stringResource(R.string.clock_weather_icons), stringResource(R.string.clock_weather_icons_monochrome),
-                                    count - 1, count, "clock_weather_icons", enabled = enabled) { dialog = "weather_icons" }
-                            }
+                            ClockEditorPage.Style -> clockRegionSettings(regions, enabled, uiState.settings.allowHapticFeedback,
+                                onChange = ::updateRegions, onFont = { editingFont = it }, onWeatherIcons = { weatherIcons = true },
+                                onWeatherContent = { editingContent = ClockContentPage.Weather },
+                                onAgendaContent = { editingContent = ClockContentPage.Agenda },
+                                onRegionFont = { editingRegionFont = it })
                         }
                     }
                 }
-                if (editingColor == null) SettingsModeToolbar(
+                if (editingColor == null && editingContent == null) SettingsModeToolbar(
                     listOf(stringResource(R.string.clock_tab_presets), stringResource(R.string.clock_tab_style), stringResource(R.string.icon_designer_color)),
                     page.ordinal, enabled, "clock_style_toolbar",
                     ClockEditorPage.entries.map { "clock_tab:${it.name}" },
                     Modifier.align(Alignment.BottomCenter)
                         .padding(bottom = FloatingToolbarDefaults.ScreenOffset + LocalSettingsBottomInset.current),
-                ) { selectPage(ClockEditorPage.entries[it]) }
+                ) { page = ClockEditorPage.entries[it] }
             }
         }
     }
 }
 
-private fun LazyListScope.clockSetting(key: String, content: @Composable () -> Unit) {
+internal fun LazyListScope.clockSetting(key: String, content: @Composable () -> Unit) {
     item(key = key) {
         // Retain item identity and animate the rows when a preset adds/removes controls.
         Box(Modifier.animateItem(
@@ -335,9 +353,10 @@ private fun LazyListScope.clockSetting(key: String, content: @Composable () -> U
 }
 
 @Composable
-private fun ClockLayoutSelector(style: ClockStyle, layouts: List<ClockLayout>, count: Int, enabled: Boolean, onSelect: (ClockLayout) -> Unit) {
+private fun ClockLayoutSelector(style: ClockStyle, layouts: List<ClockLayout>, count: Int, enabled: Boolean,
+    selectedLayout: ClockLayout? = style.layout, onSelect: (ClockLayout) -> Unit) {
     // Restore a useful initial viewport, but never reorder or auto-scroll on selection.
-    val listState = key(layouts) { rememberLazyListState(initialFirstVisibleItemIndex = (layouts.indexOf(style.layout) - 1).coerceAtLeast(0)) }
+    val listState = key(layouts) { rememberLazyListState(initialFirstVisibleItemIndex = (layouts.indexOf(selectedLayout) - 1).coerceAtLeast(0)) }
     SegmentedListItem(
         shapes = ListItemDefaults.segmentedShapes(0, count),
         colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceBright),
@@ -350,7 +369,7 @@ private fun ClockLayoutSelector(style: ClockStyle, layouts: List<ClockLayout>, c
                 contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp),
             ) {
                 items(layouts, key = { it.name }) { layout ->
-                    ClockLayoutOption(style.copy(layout = layout), selected = layout == style.layout,
+                    ClockLayoutOption(style.copy(layout = layout), selected = layout == selectedLayout,
                         enabled = enabled, onSelect = onSelect)
                 }
             }
@@ -430,35 +449,70 @@ private fun ClockStylePreview(
     val now by produceState(Instant.now()) {
         while (true) { value = Instant.now(); delay(60_000 - System.currentTimeMillis() % 60_000) }
     }
+    val sampleEvent = ScheduleEvent(
+        id = -1L, title = stringResource(R.string.clock_agenda_preview_title),
+        startsAt = now.plusSeconds(3600), endsAt = now.plusSeconds(7200), isAllDay = false,
+        location = stringResource(R.string.clock_agenda_preview_location),
+        calendarColor = MaterialTheme.colorScheme.primary.toArgb(),
+        calendarName = stringResource(R.string.clock_agenda_preview_calendar),
+    )
+    val events = visibleAgendaEvents(uiState.events, now, 0).ifEmpty {
+        List(9) { index -> sampleEvent.copy(
+            id = -(index + 1L),
+            title = if (index == 0) sampleEvent.title else stringResource(R.string.clock_agenda_preview_event, index + 1),
+            startsAt = sampleEvent.startsAt.plusSeconds(index * 7200L),
+            endsAt = sampleEvent.endsAt.plusSeconds(index * 7200L),
+        ) }
+    }
+    val zone = ZoneId.systemDefault()
+    val weatherSnapshot = uiState.weather.snapshot ?: WeatherSnapshot(
+        location = WeatherLocation("preview", stringResource(R.string.clock_weather_preview_location), zone),
+        current = WeatherCurrent(
+            WeatherTemperature(22.0, "c"), WeatherCondition.Clear, true, stringResource(R.string.weather_clear),
+            feelsLike = WeatherTemperature(23.0, "c"), humidity = WeatherMeasure(60.0, "percent"),
+            wind = WeatherWind(90.0, WeatherMeasure(8.0, "kph")), airQuality = WeatherMeasure(35.0, "aqi"),
+            uv = WeatherMeasure(3.0, "uvi"),
+        ),
+        hourly = emptyList(),
+        daily = listOf(WeatherDay(now.atZone(zone).toLocalDate(), WeatherTemperature(25.0, "c"),
+            WeatherTemperature(17.0, "c"), WeatherCondition.Clear, null)),
+        updatedAt = now, attribution = "",
+    )
+    val maximumPreviewHeight = (LocalConfiguration.current.screenHeightDp.dp * .45f).coerceIn(168.dp, 320.dp)
+    val minimumPreviewHeight = minOf(maximumPreviewHeight,
+        if (style.resolvedRegions().let { it.primary == ClockElement.Clock && it.stackedClock }) 232.dp else 168.dp)
     Box(modifier.fillMaxWidth().testTag("clock_style_preview")
         .animateBounds(
             lookaheadScope = lookaheadScope,
-            modifier = Modifier.heightIn(min = if (style.layout.stacked) 232.dp else 168.dp),
+            modifier = Modifier.heightIn(min = minimumPreviewHeight, max = maximumPreviewHeight),
             boundsTransform = boundsTransform,
         ).clipToBounds(), contentAlignment = Alignment.CenterStart) {
         CompositionLocalProvider(LocalLauncherAppearance provides appearance) {
-          MaterialTheme(typography = LocalLauncherTypography.current) {
-            HomeClockHeader(
-                now = now, event = null, onDateClick = {}, onClockClick = {},
-                showBattery = true, clockStyle = style,
-                showClock = true, showCalendar = true,
-                calendarAboveClock = uiState.settings.calendarAboveClock,
-                weather = uiState.weather.snapshot?.current?.takeIf { it.temperature != null }
-                    ?: WeatherCurrent(WeatherTemperature(22.0, "c"), WeatherCondition.Clear, true, null),
-                modifier = Modifier.fillMaxWidth().padding(
-                    start = uiState.settings.listAppearance.startPadding,
-                    end = uiState.settings.listAppearance.endPadding, top = 12.dp, bottom = 12.dp),
-                interactive = false, clockTag = "clock_style_preview_text", dateTag = "clock_style_preview_date",
-            )
-          }
+            MaterialTheme(typography = LocalLauncherTypography.current) {
+                Box(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                    HomeClockHeader(
+                        now = now, event = events.firstOrNull(), onDateClick = {}, onClockClick = {}, agendaEvents = events,
+                        showBattery = true, clockStyle = style,
+                        showClock = true, showCalendar = true,
+                        calendarAboveClock = uiState.settings.calendarAboveClock,
+                        weather = weatherSnapshot.current,
+                        weatherSnapshot = weatherSnapshot,
+                        modifier = Modifier.fillMaxWidth().padding(
+                            start = uiState.settings.listAppearance.startPadding,
+                            end = uiState.settings.listAppearance.endPadding, top = 12.dp, bottom = 12.dp),
+                        interactive = false, clockTag = "clock_style_preview_text", dateTag = "clock_style_preview_date",
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-private fun ClockSlider(
+internal fun ClockSlider(
     title: String, value: Int, default: Int, range: IntRange, step: Int,
-    index: Int, count: Int, tag: String, enabled: Boolean, onChange: (Int) -> Unit,
+    index: Int, count: Int, tag: String, enabled: Boolean, valueLabel: String? = null,
+    discrete: Boolean = false, onChange: (Int) -> Unit,
 ) {
     SegmentedListItem(
         shapes = ListItemDefaults.segmentedShapes(index, count),
@@ -466,13 +520,20 @@ private fun ClockSlider(
         modifier = Modifier.testTag("${tag}_item"),
         content = {
             Column {
-                Text(title)
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Text(title, Modifier.weight(1f))
+                    if (valueLabel != null) Text(valueLabel, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Slider(value = value.toFloat(), onValueChange = {
                         onChange((range.first + ((it - range.first) / step).roundToInt() * step).coerceIn(range))
                     }, valueRange = range.first.toFloat()..range.last.toFloat(),
-                        steps = if (step > 1) (range.last - range.first) / step - 1 else 0,
-                        enabled = enabled, modifier = Modifier.weight(1f).testTag(tag).semantics { contentDescription = title })
+                        steps = if (discrete || step > 1) ((range.last - range.first) / step - 1).coerceAtLeast(0) else 0,
+                        enabled = enabled, modifier = Modifier.weight(1f).testTag(tag).semantics {
+                            contentDescription = title
+                            if (valueLabel != null) stateDescription = valueLabel
+                        })
                     IconButton(onClick = { onChange(default) }, enabled = enabled && value != default,
                         modifier = Modifier.size(48.dp).clip(CircleShape).testTag("${tag}_reset")) {
                         Icon(painterResource(R.drawable.ms_restart_alt), stringResource(R.string.clock_reset_value, title))
@@ -506,6 +567,9 @@ private fun ClockColorPart.label(): String = stringResource(when (this) {
     ClockColorPart.Weekday -> R.string.clock_color_weekday
     ClockColorPart.Month -> R.string.clock_color_month
     ClockColorPart.Day -> R.string.clock_color_day
-    ClockColorPart.Battery -> R.string.clock_color_battery
+    ClockColorPart.Battery -> R.string.clock_color_battery_percentage
     ClockColorPart.Weather -> R.string.clock_color_weather
+    ClockColorPart.Agenda -> R.string.clock_color_agenda
+    ClockColorPart.WeatherIcon -> R.string.clock_color_weather_icons
+    ClockColorPart.BatteryIcon -> R.string.clock_color_battery_icons
 })

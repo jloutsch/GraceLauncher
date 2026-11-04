@@ -14,6 +14,8 @@ data class ScheduleEvent(
     val isAllDay: Boolean,
     val location: String?,
     val calendarColor: Int?,
+    val displayColor: Int? = null,
+    val calendarName: String? = null,
 )
 
 enum class CountdownUnit { LessThanMinute, Minutes, Hours, Days, Ongoing, AllDay }
@@ -45,13 +47,25 @@ fun agendaDays(
     return days
 }
 
+/** Ongoing and upcoming occurrences, with zero meaning no display limit. */
+fun visibleAgendaEvents(
+    events: List<ScheduleEvent>,
+    now: Instant,
+    limit: Int,
+    zone: ZoneId = ZoneId.systemDefault(),
+): List<ScheduleEvent> = events
+    .asSequence()
+    .filter { it.localBoundary(it.endsAt, zone).isAfter(now) }
+    .sortedBy { it.localBoundary(it.startsAt, zone) }
+    .distinctBy { it.id to it.startsAt }
+    .let { if (limit > 0) it.take(limit) else it }
+    .toList()
+
 fun nextVisibleEvent(
     events: List<ScheduleEvent>,
     now: Instant,
     zone: ZoneId = ZoneId.systemDefault(),
-): ScheduleEvent? = events
-    .filter { it.localBoundary(it.endsAt, zone).isAfter(now) }
-    .minByOrNull { it.localBoundary(it.startsAt, zone) }
+): ScheduleEvent? = visibleAgendaEvents(events, now, limit = 1, zone = zone).firstOrNull()
 
 fun eventCountdown(
     event: ScheduleEvent,

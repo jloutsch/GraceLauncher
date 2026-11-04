@@ -34,7 +34,7 @@ data class WeatherSnapshot(
     val sourceLinks: Map<String, String> = emptyMap(),
 )
 
-/** The unit is sent by Breezy Weather in the user's preferred scale. */
+/** Provider units are preserved; Gadgetbridge's kelvin values are converted to the selected scale. */
 data class WeatherTemperature(val value: Double, val unit: String) {
     fun format(showUnit: Boolean = false): String = when (unit) {
         "c" -> "${value.roundToInt()}°${if (showUnit) "C" else ""}"
@@ -53,7 +53,17 @@ data class WeatherCurrent(
     val condition: WeatherCondition,
     val isDaylight: Boolean,
     val description: String?,
+    val feelsLike: WeatherTemperature? = null,
+    val humidity: WeatherMeasure? = null,
+    val wind: WeatherWind? = null,
+    val airQuality: WeatherMeasure? = null,
+    val uv: WeatherMeasure? = null,
 )
+
+/** Keep the provider's unit and description rather than assuming a regional scale. */
+data class WeatherMeasure(val value: Double, val unit: String, val description: String? = null)
+
+data class WeatherWind(val degree: Double? = null, val speed: WeatherMeasure? = null)
 
 data class WeatherHour(
     val at: Instant,

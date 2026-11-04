@@ -169,6 +169,29 @@ class BackupRoundTripTest {
         assertTrue(ids.all(::isWidgetPlaceholder))
     }
 
+    /** Upstream now also uses version 30, so a backup from the old fork build is older than the app, not newer. */
+    @Test
+    fun oldForkBackupImportsWithWidgetStacksAndWeatherApp() = runBlocking {
+        seed()
+        LauncherSettingsRepository(database).saveFolder(LauncherFolder("ws", "Widgets", emptyList(), FolderPlacement.Favorites, isAppStack = true))
+        val legacy = mutateDatabase(rezip(export()) { it.copy(schemaVersion = ForkLegacyBackup.VERSION) }) { db ->
+            db.execSQL("ALTER TABLE folders ADD COLUMN isWidgetStack INTEGER NOT NULL DEFAULT 0")
+            db.execSQL("ALTER TABLE launcher_settings ADD COLUMN weatherAppKey TEXT DEFAULT NULL")
+            db.execSQL("UPDATE folders SET isWidgetStack = 1 WHERE id = 'ws'")
+            db.execSQL("UPDATE launcher_settings SET weatherAppKey = 'a/a.Main'")
+            db.version = ForkLegacyBackup.VERSION
+        }
+        wipe()
+
+        assertTrue(importer().import(legacy.inputStream(), allApps, setOf("w/w.Provider", "v/v.Provider")) is ImportResult.Success)
+
+        val snapshot = LauncherSettingsRepository(database).snapshots.first()
+        assertEquals("a/a.Main", snapshot.settings.weatherAppKey)
+        assertEquals(setOf("ws"), snapshot.settings.widgetStackFolderIds)
+        assertTrue(snapshot.folders.single { it.id == "ws" }.isWidgetStack)
+        assertEquals(LauncherDatabase.SCHEMA_VERSION, database.openHelper.readableDatabase.version)
+    }
+
     @Test
     fun missingSectionLeavesStateUnchanged() = runBlocking {
         seed()

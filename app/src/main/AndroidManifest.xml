@@ -51,6 +51,16 @@
                 <action android:name="org.breezyweather.ACTION_UPDATE_NOTIFIER" />
             </intent-filter>
         </receiver>
+        <!-- GenericWeather senders discover this exported receiver. Data is accepted only
+             in Gadgetbridge mode and decoded with bounded input before caching locally. -->
+        <receiver
+            android:name=".platform.GadgetbridgeWeatherReceiver"
+            android:exported="true"
+            tools:ignore="ExportedReceiver">
+            <intent-filter>
+                <action android:name="nodomain.freeyourgadget.gadgetbridge.ACTION_GENERIC_WEATHER" />
+            </intent-filter>
+        </receiver>
         <!-- Explicit, user-authorized lock-screen and system-panel actions only. -->
         <service
             android:name=".platform.GraceAccessibilityService"

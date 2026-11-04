@@ -49,8 +49,21 @@ internal object BreezyWeatherParser {
             val temperature = item.temperature()
             val condition = condition(item.string("weatherCode"))
             val description = item.string("weatherText")
-            if (temperature == null && condition == WeatherCondition.Unknown && description == null) null
-            else WeatherCurrent(temperature, condition, currentDaylight, description)
+            val feelsLike = item.temperature("sourceFeelsLike") ?: item.temperature("computedApparent")
+            val humidity = item.measure("relativeHumidity", setOf("percent"))?.takeIf { it.value in 0.0..100.0 }
+            val wind = item.optJSONObject("wind")?.let { value ->
+                val degree = (value.opt("degree") as? Number)?.toDouble()?.takeIf {
+                    it.isFinite() && (it == -1.0 || it in 0.0..360.0)
+                }
+                val speed = value.measure("speed", setOf("mps", "kph", "kn", "mph", "ftps", "bf"))
+                    ?.takeIf { it.value >= 0 }
+                if (degree != null || speed != null) WeatherWind(degree, speed) else null
+            }
+            val airQuality = item.optJSONObject("airQuality")?.measure("index", setOf("aqi"))?.takeIf { it.value >= 0 }
+            val uv = item.measure("uV", setOf("uvi"))?.takeIf { it.value >= 0 }
+            if (temperature == null && condition == WeatherCondition.Unknown && description == null &&
+                feelsLike == null && humidity == null && wind == null && airQuality == null && uv == null) null
+            else WeatherCurrent(temperature, condition, currentDaylight, description, feelsLike, humidity, wind, airQuality, uv)
         }
         val daily = json.optJSONArray("daily").objects().mapNotNull { item ->
             val date = item.instant("date")?.atZone(location.timeZone)?.toLocalDate() ?: return@mapNotNull null
@@ -66,9 +79,10 @@ internal object BreezyWeatherParser {
         }.distinctBy(WeatherDay::date).sortedBy(WeatherDay::date)
         if (current == null && hourly.isEmpty() && daily.isEmpty()) return null
 
-        // Only credit the current/forecast features displayed by this integration.
+        // Include separate air-quality attribution when its current index is available.
         val sources = json.optJSONObject("sources")
-        val credits = listOfNotNull(sources?.optJSONObject("current"), sources?.optJSONObject("forecast"))
+        val credits = listOfNotNull(sources?.optJSONObject("current"), sources?.optJSONObject("forecast"),
+            sources?.optJSONObject("airQuality")?.takeIf { current?.airQuality != null })
         val attribution = credits.mapNotNull { it.string("text") }.distinct().joinToString(" · ")
         val links = buildMap {
             credits.forEach { source ->
@@ -104,13 +118,14 @@ internal object BreezyWeatherParser {
         else -> WeatherCondition.Unknown
     }
 
-    private fun JSONObject.temperature(): WeatherTemperature? {
-        val measure = optJSONObject("temperature")?.optJSONObject("temperature") ?: return null
-        val value = (measure.opt("value") as? Number)?.toDouble()?.takeIf(Double::isFinite) ?: return null
-        val unit = measure.string("unit")?.lowercase(Locale.ROOT) ?: return null
-        // Never silently label an unknown/missing scale as Celsius.
-        if (unit !in setOf("c", "f", "k")) return null
-        return WeatherTemperature(value, unit)
+    private fun JSONObject.temperature(part: String = "temperature"): WeatherTemperature? =
+        optJSONObject("temperature")?.measure(part, setOf("c", "f", "k"))?.let { WeatherTemperature(it.value, it.unit) }
+
+    private fun JSONObject.measure(key: String, units: Set<String>): WeatherMeasure? {
+        val data = optJSONObject(key) ?: return null
+        val value = (data.opt("value") as? Number)?.toDouble()?.takeIf(Double::isFinite) ?: return null
+        val unit = data.string("unit")?.lowercase(Locale.ROOT)?.takeIf { it in units } ?: return null
+        return WeatherMeasure(value, unit, data.string("description"))
     }
 
     private fun JSONObject.instant(key: String): Instant? = (opt(key) as? Number)?.toLong()?.let {

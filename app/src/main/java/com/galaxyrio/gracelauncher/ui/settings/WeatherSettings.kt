@@ -2,8 +2,12 @@ package com.galaxyrio.gracelauncher.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -11,10 +15,13 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.ToggleButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,9 +33,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.weather.WeatherStatus
+import com.galaxyrio.gracelauncher.data.weather.GadgetbridgeTemperatureUnit
+import com.galaxyrio.gracelauncher.data.weather.WeatherConnectionMode
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.weather.WeatherAttribution
@@ -37,22 +49,30 @@ import com.galaxyrio.gracelauncher.ui.weather.WeatherAttribution
 internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit,
     onWeatherApp: () -> Unit = {}) {
     val settings = uiState.settings
+    val connection = settings.weatherConnection
+    val gadgetbridge = connection.mode == WeatherConnectionMode.Gadgetbridge
+    val preferredLocationId = if (gadgetbridge) connection.gadgetbridgeLocationId else settings.weatherLocationId
+    val firstLocation = stringResource(if (gadgetbridge) R.string.weather_gadgetbridge_first_location else R.string.weather_settings_first_location)
     val weather = uiState.weather
     val status = if (settings.weatherEnabled) weather.status else WeatherStatus.Disabled
-    var dialog by rememberSaveable { mutableStateOf<String?>(null) }
-    val locationName = weather.locations.firstOrNull { it.id == settings.weatherLocationId }?.name
-        ?: stringResource(R.string.weather_settings_first_location)
+    var dialog by rememberSaveable(connection.mode) { mutableStateOf<String?>(null) }
+    val locationName = weather.locations.firstOrNull { it.id == preferredLocationId }?.name ?: firstLocation
+    // Forecast days and the fork's weather app are always shown.
+    val displayCount = 2 + (if (weather.locations.isNotEmpty()) 1 else 0) + (if (gadgetbridge) 1 else 0)
 
     when (dialog) {
         "location" -> WeatherChoiceDialog(
             title = stringResource(R.string.weather_settings_location),
             choices = listOf<String?>(null) + weather.locations.map { it.id },
-            selected = settings.weatherLocationId.takeIf { id -> weather.locations.any { it.id == id } },
+            selected = preferredLocationId.takeIf { id -> weather.locations.any { it.id == id } },
             tag = "weather_location",
-            label = { id -> weather.locations.firstOrNull { it.id == id }?.name ?: stringResource(R.string.weather_settings_first_location) },
+            label = { id -> weather.locations.firstOrNull { it.id == id }?.name ?: firstLocation },
             key = { it ?: "automatic" },
             onSelect = { id ->
-                actions.updateSettings { it.copy(weatherLocationId = id) }
+                actions.updateSettings {
+                    if (gadgetbridge) it.copy(weatherConnection = it.weatherConnection.copy(gadgetbridgeLocationId = id))
+                    else it.copy(weatherLocationId = id)
+                }
                 dialog = null
             },
             onDismiss = { dialog = null },
@@ -70,6 +90,19 @@ internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions,
             },
             onDismiss = { dialog = null },
         )
+        "temperature" -> WeatherChoiceDialog(
+            title = stringResource(R.string.weather_temperature_unit),
+            choices = GadgetbridgeTemperatureUnit.entries,
+            selected = connection.temperatureUnit,
+            tag = "weather_temperature_unit",
+            label = { it.label() },
+            key = { it.name },
+            onSelect = { unit ->
+                actions.updateSettings { it.copy(weatherConnection = it.weatherConnection.copy(temperatureUnit = unit)) }
+                dialog = null
+            },
+            onDismiss = { dialog = null },
+        )
     }
 
     SettingsScaffold(stringResource(R.string.settings_weather), "settings_weather_page", onBack) { padding ->
@@ -79,27 +112,32 @@ internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions,
                     stringResource(R.string.weather_settings_enable), settings.weatherEnabled, "weather_enabled",
                 ) { enabled ->
                     actions.updateSettings { it.copy(weatherEnabled = enabled) }
-                    if (enabled) actions.requestWeatherAccess()
+                    if (enabled && !gadgetbridge) actions.requestWeatherAccess()
                 }
             }
-            item { SettingsHeading(stringResource(R.string.weather_settings_connection)) }
+            item {
+                WeatherConnectionButtons(connection.mode) { mode ->
+                    actions.updateSettings { it.copy(weatherConnection = it.weatherConnection.copy(mode = mode)) }
+                }
+            }
+            item { SettingsHeading(stringResource(if (gadgetbridge) R.string.weather_mode_gadgetbridge else R.string.weather_settings_connection)) }
             if (status != WeatherStatus.Ready && status != WeatherStatus.Disabled) item {
                 Text(
-                    stringResource(status.messageResource()),
+                    stringResource(status.messageResource(gadgetbridge)),
                     Modifier.padding(horizontal = 4.dp, vertical = 12.dp).testTag("weather_connection_status"),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (status == WeatherStatus.Ready) item {
+            if (settings.weatherEnabled && (gadgetbridge || status == WeatherStatus.Ready)) item {
                 Text(
-                    stringResource(R.string.weather_settings_update_notifier),
+                    stringResource(if (gadgetbridge) R.string.weather_gadgetbridge_setup else R.string.weather_settings_update_notifier),
                     Modifier.padding(horizontal = 4.dp, vertical = 8.dp).testTag("weather_update_notifier_hint"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (settings.weatherEnabled) {
+            if (settings.weatherEnabled && !gadgetbridge) {
                 when (status) {
                     WeatherStatus.NotInstalled -> item {
                         SettingsActionItem(
@@ -135,14 +173,14 @@ internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions,
             if (weather.locations.isNotEmpty()) item {
                 SettingsActionItem(
                     stringResource(R.string.weather_settings_location), locationName,
-                    0, offset + 2, "weather_location",
+                    0, displayCount, "weather_location",
                 ) { dialog = "location" }
             }
             item {
                 SettingsActionItem(
                     stringResource(R.string.weather_settings_forecast_days),
                     pluralStringResource(R.plurals.weather_settings_days_value, settings.weatherForecastDays, settings.weatherForecastDays),
-                    offset, offset + 2, "weather_forecast_days",
+                    offset, displayCount, "weather_forecast_days",
                 ) { dialog = "days" }
             }
             item {
@@ -150,8 +188,14 @@ internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions,
                 SettingsActionItem(
                     stringResource(R.string.weather_settings_app),
                     app?.label ?: stringResource(if (settings.weatherAppKey == null) R.string.settings_none else R.string.weather_settings_app_missing),
-                    offset + 1, offset + 2, "weather_app", onClick = onWeatherApp,
+                    offset + 1, displayCount, "weather_app", onClick = onWeatherApp,
                 )
+            }
+            if (gadgetbridge) item {
+                SettingsActionItem(
+                    stringResource(R.string.weather_temperature_unit), connection.temperatureUnit.label(),
+                    displayCount - 1, displayCount, "weather_temperature_unit",
+                ) { dialog = "temperature" }
             }
             if (settings.weatherEnabled && weather.snapshot != null) {
                 item { SettingsHeading(stringResource(R.string.weather_settings_attribution)) }
@@ -161,7 +205,11 @@ internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions,
     }
 }
 
-private fun WeatherStatus.messageResource(): Int = when (this) {
+private fun WeatherStatus.messageResource(gadgetbridge: Boolean): Int = if (gadgetbridge) when (this) {
+    WeatherStatus.Loading -> R.string.weather_gadgetbridge_loading
+    WeatherStatus.Error -> R.string.weather_gadgetbridge_unavailable
+    else -> R.string.weather_gadgetbridge_waiting
+} else when (this) {
     WeatherStatus.Disabled -> R.string.weather_settings_disabled
     WeatherStatus.Loading -> R.string.weather_settings_loading
     WeatherStatus.NotInstalled -> R.string.weather_settings_not_installed
@@ -171,6 +219,44 @@ private fun WeatherStatus.messageResource(): Int = when (this) {
     WeatherStatus.NoWeather -> R.string.weather_settings_no_data
     WeatherStatus.Ready -> R.string.weather_settings_ready
     WeatherStatus.Error -> R.string.weather_settings_unavailable
+}
+
+@Composable
+private fun GadgetbridgeTemperatureUnit.label(): String = stringResource(when (this) {
+    GadgetbridgeTemperatureUnit.System -> R.string.settings_follow_system
+    GadgetbridgeTemperatureUnit.Celsius -> R.string.weather_temperature_celsius
+    GadgetbridgeTemperatureUnit.Fahrenheit -> R.string.weather_temperature_fahrenheit
+})
+
+@Composable
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+private fun WeatherConnectionButtons(selected: WeatherConnectionMode, onSelect: (WeatherConnectionMode) -> Unit) {
+    val enabled = LocalSettingsStorageState.current.canEdit
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 8.dp).height(IntrinsicSize.Min)
+            .selectableGroup().testTag("weather_connection_mode"),
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween),
+    ) {
+        WeatherConnectionMode.entries.forEachIndexed { index, mode ->
+            ToggleButton(
+                checked = mode == selected,
+                onCheckedChange = { if (mode != selected) onSelect(mode) },
+                enabled = enabled,
+                shapes = if (index == 0) ButtonGroupDefaults.connectedLeadingButtonShapes()
+                    else ButtonGroupDefaults.connectedTrailingButtonShapes(),
+                modifier = Modifier.weight(1f).fillMaxHeight().heightIn(min = 48.dp)
+                    .testTag("weather_connection_mode:${mode.name}").semantics { role = Role.RadioButton },
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 10.dp),
+            ) {
+                Text(
+                    stringResource(if (mode == WeatherConnectionMode.Gadgetbridge) R.string.weather_mode_gadgetbridge
+                        else R.string.weather_mode_location_update_notifier),
+                    style = MaterialTheme.typography.labelMedium,
+                    textAlign = TextAlign.Center,
+                )
+            }
+        }
+    }
 }
 
 @Composable

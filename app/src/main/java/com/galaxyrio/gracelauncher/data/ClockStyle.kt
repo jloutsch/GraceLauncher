@@ -36,7 +36,11 @@ data class ClockVisibility(
     val showWeather: Boolean = true,
 )
 
-enum class ClockColorPart { HourTens, HourOnes, MinuteTens, MinuteOnes, Weekday, Month, Day, Battery, Weather }
+enum class ClockColorPart {
+    HourTens, HourOnes, MinuteTens, MinuteOnes, Weekday, Month, Day, Battery, Weather, Agenda, WeatherIcon, BatteryIcon,
+}
+
+private const val ClockColorVersion = 2
 
 data class ClockFaceStyle(
     val fontId: String? = null,
@@ -48,6 +52,10 @@ data class ClockFaceStyle(
     val hourMinuteSpacing: Int = 12,
     val fontShadow: Int = 0,
     val showLeadingZero: Boolean = true,
+    val showSeconds: Boolean = false,
+    val equalWidthDigits: Boolean = false,
+    val centerDigits: Boolean = false,
+    val useLatinLetters: Boolean = false,
 ) {
     fun maxWeight(layout: ClockLayout) = if (layout.presetFont == null && fontId == null) 700 else 900
 
@@ -69,6 +77,7 @@ data class ClockStyle(
     val presets: Map<ClockLayout, ClockFaceStyle> = emptyMap(),
     val visibility: ClockVisibility = ClockVisibility(),
     val colors: Map<ClockColorPart, IconColor> = emptyMap(),
+    val regions: ClockRegions? = null,
 ) {
     val effectiveVisibility: ClockVisibility get() = if (layout.presetFont != null) ClockVisibility() else visibility
 
@@ -89,7 +98,19 @@ data class ClockStyle(
 
     fun withoutFonts(ids: Set<String>): ClockStyle {
         fun ClockFaceStyle.clean() = if (fontId in ids) copy(fontId = null) else this
-        return copy(singleLine = singleLine.clean(), twoLines = twoLines.clean(), presets = presets.mapValues { it.value.clean() })
+        return copy(singleLine = singleLine.clean(), twoLines = twoLines.clean(), presets = presets.mapValues { it.value.clean() },
+            regions = regions?.withoutFonts(ids))
+    }
+
+    fun resolvedRegions(calendarAboveClock: Boolean = false): ClockRegions =
+        regions?.normalized() ?: ClockRegions.fromLegacy(this, calendarAboveClock)
+
+    fun withRegions(regions: ClockRegions = resolvedRegions()): ClockStyle = copy(regions = regions.normalized())
+
+    /** Selecting a preset replaces the regions; merely opening the editor never does. */
+    fun selectPreset(layout: ClockLayout): ClockStyle {
+        val preset = copy(layout = layout, regions = null)
+        return preset.applyPresetToBase().withRegions(ClockRegions.fromPreset(preset))
     }
 
     /** Copy the active preset into its editable base slot, keeping every preset draft. */
@@ -115,9 +136,11 @@ data class ClockStyle(
             put("showBattery", visibility.showBattery)
             put("showWeather", visibility.showWeather)
         })
+        put("colorVersion", ClockColorVersion)
         put("colors", JSONObject().apply {
             colors.forEach { (part, color) -> put(part.name, color.json()) }
         })
+        regions?.let { put("regions", it.json()) }
         fun encodeFace(face: ClockFaceStyle, layout: ClockLayout) = JSONObject().apply {
             val safe = face.normalized(layout)
             put("fontId", safe.fontId ?: JSONObject.NULL)
@@ -129,6 +152,10 @@ data class ClockStyle(
             put("showColon", safe.showColon)
             put("separateDigits", safe.separateDigits)
             put("showLeadingZero", safe.showLeadingZero)
+            put("showSeconds", safe.showSeconds)
+            put("equalWidthDigits", safe.equalWidthDigits)
+            put("centerDigits", safe.centerDigits)
+            put("useLatinLetters", safe.useLatinLetters)
         }
         // Preserve the original keys so existing clocks keep their saved appearance.
         put("singleLine", encodeFace(singleLine, ClockLayout.SingleLine))
@@ -142,9 +169,9 @@ data class ClockStyle(
         fun defaults(layout: ClockLayout) = when (layout) {
             ClockLayout.SingleLine -> ClockFaceStyle(letterSpacing = 3)
             ClockLayout.TwoLines -> ClockFaceStyle(size = 88, letterSpacing = 3)
-            ClockLayout.Week -> ClockFaceStyle(letterSpacing = 3)
+            ClockLayout.Week -> ClockFaceStyle(letterSpacing = 3, useLatinLetters = true)
             ClockLayout.Sacramento -> ClockFaceStyle(size = 96, letterSpacing = -6, separateDigits = true)
-            ClockLayout.SacramentoWeek -> ClockFaceStyle(size = 96, letterSpacing = 0, separateDigits = true)
+            ClockLayout.SacramentoWeek -> ClockFaceStyle(size = 96, letterSpacing = 0, separateDigits = true, useLatinLetters = true)
             ClockLayout.DoublePlaster -> ClockFaceStyle(size = 88, letterSpacing = 0)
             ClockLayout.Bokor, ClockLayout.Plaster, ClockLayout.Monoton -> ClockFaceStyle(letterSpacing = 0)
             ClockLayout.Lucky -> ClockFaceStyle(letterSpacing = -6, separateDigits = true)
@@ -165,11 +192,23 @@ data class ClockStyle(
                     showColon = data.optBoolean("showColon", defaults.showColon),
                     separateDigits = data.optBoolean("separateDigits", defaults.separateDigits),
                     showLeadingZero = data.optBoolean("showLeadingZero", defaults.showLeadingZero),
+                    showSeconds = data.optBoolean("showSeconds", defaults.showSeconds),
+                    equalWidthDigits = data.optBoolean("equalWidthDigits", defaults.equalWidthDigits),
+                    centerDigits = data.optBoolean("centerDigits", defaults.centerDigits),
+                    useLatinLetters = data.optBoolean("useLatinLetters", defaults.useLatinLetters),
                 ).normalized(layout)
             }
             val presets = json.optJSONObject("presets")
             val visibility = json.optJSONObject("visibility")
             val colors = json.optJSONObject("colors")
+            val decodedColors = ClockColorPart.entries.mapNotNull { part ->
+                IconColor.decode(colors?.optJSONObject(part.name))?.let { part to it }
+            }.toMap().toMutableMap()
+            // Old battery icons shared the percentage color. Migrate that choice once;
+            // new saves may deliberately omit BatteryIcon to use the automatic color.
+            if (json.optInt("colorVersion", 1) < ClockColorVersion && colors?.has(ClockColorPart.BatteryIcon.name) != true) {
+                decodedColors[ClockColorPart.Battery]?.let { decodedColors[ClockColorPart.BatteryIcon] = it }
+            }
             ClockStyle(
                 layout = ClockLayout.entries.firstOrNull { it.name == json.optString("layout") } ?: ClockLayout.SingleLine,
                 singleLine = face(ClockLayout.SingleLine, json.optJSONObject("singleLine")),
@@ -183,9 +222,8 @@ data class ClockStyle(
                     showBattery = visibility.optBoolean("showBattery", true),
                     showWeather = visibility.optBoolean("showWeather", true),
                 ),
-                colors = ClockColorPart.entries.mapNotNull { part ->
-                    IconColor.decode(colors?.optJSONObject(part.name))?.let { part to it }
-                }.toMap(),
+                colors = decodedColors,
+                regions = ClockRegions.decode(json.optJSONObject("regions")),
             )
         }.getOrDefault(ClockStyle(visibility = ClockVisibility(showBattery = legacyShowBattery)))
     }

@@ -28,12 +28,14 @@ class ClockStyleWallpaperTest {
         val directory = requireNotNull(context.getExternalFilesDir("ui-verification")).also { it.mkdirs() }
         File(directory, "clock-style-real-wallpaper.png").outputStream().use { bitmap.compress(Bitmap.CompressFormat.PNG, 100, it) }
         // Exercise the same cutout with the taller two-line layout.
-        compose.onNodeWithTag("clock_layout:TwoLines").performScrollTo().performClick()
+        compose.onNodeWithTag("clock_style_controls").performScrollToNode(hasTestTag("clock_primary_lines:true"))
+        compose.onNodeWithTag("clock_primary_lines:true", useUnmergedTree = true).performClick()
         compose.onNodeWithTag("clock_style_preview").assertIsDisplayed()
         SystemClock.sleep(350)
         val stacked = InstrumentationRegistry.getInstrumentation().uiAutomation.takeScreenshot()
         File(directory, "clock-style-real-wallpaper-stacked.png").outputStream().use { stacked.compress(Bitmap.CompressFormat.PNG, 100, it) }
         compose.onNodeWithTag("settings_back").performClick()
+        compose.onNodeWithTag("clock_unsaved_discard").performClick()
         compose.onNodeWithTag("settings_themes").assertIsDisplayed()
     }
 }
