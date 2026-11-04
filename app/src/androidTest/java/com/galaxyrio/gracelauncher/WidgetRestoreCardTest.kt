@@ -1,6 +1,8 @@
 package com.galaxyrio.gracelauncher
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.getBoundsInRoot
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -12,6 +14,7 @@ import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.home.HomeScreen
 import com.galaxyrio.gracelauncher.ui.theme.GraceLauncherTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -32,6 +35,9 @@ class WidgetRestoreCardTest {
         var taps = 0
         showHome(pending = 3) { taps++ }
         compose.onNodeWithTag("widget_restore_card").assertIsDisplayed()
+        // The Grace button sits at the bottom of home, so the card must stay clear of it.
+        val card = compose.onNodeWithTag("widget_restore_card").getBoundsInRoot()
+        assertTrue("card at the top, got $card", card.bottom < compose.onRoot().getBoundsInRoot().bottom / 2)
         compose.onNodeWithText(context.resources.getQuantityString(R.plurals.widget_restore_count, 3, 3)).assertIsDisplayed()
         compose.onNodeWithTag("widget_restore_next").performClick()
         compose.runOnIdle { assertEquals(1, taps) }

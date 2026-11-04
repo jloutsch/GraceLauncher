@@ -435,7 +435,7 @@ fun HomeScreen(
                 .offset(y = (if (baselineIndex >= 0) baselineTop else resolvedTop) - 20.dp))
         if (uiState.pendingWidgetRestores > 0 && !editingLayout && selectedLayout == null)
             WidgetRestoreCard(uiState.pendingWidgetRestores, actions.restoreWidgets,
-                Modifier.align(androidx.compose.ui.Alignment.BottomCenter).padding(bottom = 16.dp + bottomInset).zIndex(3f))
+                Modifier.align(androidx.compose.ui.Alignment.TopCenter).padding(top = minimumTop).zIndex(3f))
     }
 }
 
