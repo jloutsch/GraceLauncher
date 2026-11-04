@@ -22,6 +22,7 @@ import com.galaxyrio.gracelauncher.data.backup.AutoBackupRunner
 import com.galaxyrio.gracelauncher.data.backup.BackupController
 import com.galaxyrio.gracelauncher.data.backup.BackupTask
 import com.galaxyrio.gracelauncher.data.backup.WidgetRestoreRepository
+import com.galaxyrio.gracelauncher.data.backup.nextToRestore
 import com.galaxyrio.gracelauncher.platform.LauncherAppTransitions
 import com.galaxyrio.gracelauncher.ui.LauncherAppTheme
 import com.galaxyrio.gracelauncher.ui.LauncherRoute
@@ -38,9 +39,9 @@ class MainActivity : ComponentActivity() {
     private val appTransitions by lazy { LauncherAppTransitions(this, lifecycleScope) }
     private var widgetRestoreInFlight = false
     private var autoBackupInFlight = false
-    // Placeholders whose setup failed with an error; retried by the next MainActivity instance, not on every resume.
+    // Placeholders whose setup failed with an error; the next tap tries another widget first.
     private val skippedRestores = mutableSetOf<Int>()
-    // The result arrives just before the next onResume, once WidgetSetupActivity has resolved its placeholder.
+    // The result arrives once WidgetSetupActivity has resolved its placeholder.
     private val widgetRestore = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == WidgetSetupActivity.RESULT_RESTORE_SKIPPED)
             result.data?.extras?.takeIf { it.containsKey(WidgetSetupActivity.EXTRA_RESTORE_PLACEHOLDER) }
@@ -58,19 +59,16 @@ class MainActivity : ComponentActivity() {
         setContent {
             CompositionLocalProvider(LocalAppTransitions provides appTransitions) {
                 LauncherAppTheme(launcherViewModel) {
-                    LauncherRoute(viewModel = launcherViewModel, widgetEditRequest = widgetEditRequest)
+                    LauncherRoute(viewModel = launcherViewModel, widgetEditRequest = widgetEditRequest,
+                        onRestoreWidgets = ::restoreNextWidget)
                 }
             }
         }
         appTransitions.onHomeIntent(intent)
         lifecycleScope.launch {
-            // Importing from the settings page inside home never pauses this activity, so onResume alone would not start restore.
-            var previous: BackupTask? = null
             BackupController.state.collect { current ->
                 // Each import numbers placeholders from -2 again, so earlier skips no longer name the same widgets.
                 if (current is BackupTask.Imported) skippedRestores.clear()
-                if (previous is BackupTask.Imported && current == null) restoreNextWidget()
-                previous = current
             }
         }
     }
@@ -78,18 +76,17 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         launcherViewModel.refreshOnResume()
-        restoreNextWidget()
         runAutoBackup()
     }
 
-    /** Binds one imported widget per home resume until no placeholders remain. */
+    /** Sets up one imported widget when the home card is tapped; nothing starts on its own. */
     private fun restoreNextWidget() {
         if (widgetRestoreInFlight) return
         widgetRestoreInFlight = true
         lifecycleScope.launch {
             val next = try {
                     WidgetRestoreRepository(LauncherDatabase.getInstance(this@MainActivity)).pending()
-                        .firstOrNull { it.placeholderId !in skippedRestores }
+                        .nextToRestore(skippedRestores)
                 } catch (error: Exception) {
                     if (error is CancellationException) throw error
                     Log.e("GraceWidgetSetup", "restore queue read failed", error); null

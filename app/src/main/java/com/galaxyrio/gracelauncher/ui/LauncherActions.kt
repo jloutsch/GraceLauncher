@@ -20,6 +20,8 @@ import com.galaxyrio.gracelauncher.data.media.MediaCommand
 /** Platform actions are injected so all launcher surfaces can be previewed and tested. */
 data class LauncherActions(
     val requestDefaultHome: () -> Unit = {},
+    /** Sets up the next imported widget (fork). */
+    val restoreWidgets: () -> Unit = {},
     val openHome: () -> Unit = {},
     val chooseWallpaper: () -> Unit = {},
     val requestUsageAccess: () -> Unit = {},
