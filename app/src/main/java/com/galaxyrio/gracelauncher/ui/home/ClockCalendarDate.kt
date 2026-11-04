@@ -6,10 +6,27 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import java.text.AttributedCharacterIterator
+import java.text.DateFormatSymbols
 import java.text.SimpleDateFormat
 import java.time.Instant
 import java.util.Date
 import java.util.Locale
+
+/** Inspect the actual names, so script variants such as sr-Latn keep their own language. */
+internal fun clockCalendarLocale(locale: Locale, useLatinLetters: Boolean): Locale {
+    if (!useLatinLetters) return locale
+    val symbols = DateFormatSymbols.getInstance(locale)
+    val names = symbols.shortWeekdays.asSequence() + symbols.shortMonths.asSequence()
+    val hasNonLatinLetters = names.any { name ->
+        name.codePoints().anyMatch { point ->
+            Character.isLetter(point) && when (Character.UnicodeScript.of(point)) {
+                Character.UnicodeScript.LATIN, Character.UnicodeScript.COMMON, Character.UnicodeScript.INHERITED -> false
+                else -> true
+            }
+        }
+    }
+    return if (hasNonLatinLetters) Locale.ENGLISH else locale
+}
 
 /** Keep locale-specific ordering and punctuation; field attributes identify each independently colored part. */
 internal fun clockCalendarDate(now: Instant, locale: Locale, showWeekday: Boolean, showDate: Boolean,

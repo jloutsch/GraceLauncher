@@ -14,7 +14,8 @@ import java.io.File
 /**
  * Fork builds before 2026-11 used their own database version 30 (widget stacks, headphone apps and
  * the weather app as columns). The fork now uses upstream's schema and keeps those values in JSON.
- * A backup from an old build is rebuilt in the current schema before it is read.
+ * A backup from an old build is rebuilt in the current schema before it is read. Upstream later used
+ * version 30 for a different layout; only the old fork layout has folders.isWidgetStack.
  */
 internal object ForkLegacyBackup {
     const val VERSION = 30

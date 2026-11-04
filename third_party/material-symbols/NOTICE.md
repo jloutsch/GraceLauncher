@@ -177,3 +177,73 @@ The None option draws no icon.
   (Official Material Symbols Outlined Android vector, optical size 24, weight 400,
   grade 0 and fill 0. The original path and 960px viewport are retained; the root
   tint is removed and the path fill is black, with Compose supplying its color.)
+
+### Clock region icons added 2026-11-03
+
+- `ms_view_week.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/view_week/materialsymbolsoutlined/view_week_24px.svg
+- `ms_battery_android_5.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_5/materialsymbolsoutlined/battery_android_5_24px.svg
+
+Official Material Symbols Outlined SVG paths retained using the 24dp conversion
+above (optical size 24, weight 400, grade 0, fill 0). Same Apache-2.0 license.
+
+### Clock content icons added 2026-11-04
+
+- `ms_label.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/label/materialsymbolsoutlined/label_24px.svg
+- `ms_label_off.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/label_off/materialsymbolsoutlined/label_off_24px.svg
+- `ms_humidity_percentage.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/humidity_percentage/materialsymbolsoutlined/humidity_percentage_24px.svg
+- `ms_location_on.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/location_on/materialsymbolsoutlined/location_on_24px.svg
+- `ms_mode_heat_cool.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/mode_heat_cool/materialsymbolsoutlined/mode_heat_cool_24px.svg
+- `ms_update.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/update/materialsymbolsoutlined/update_24px.svg
+
+Official Material Symbols Outlined SVG paths retained using the 24dp conversion
+above (optical size 24, weight 400, grade 0, fill 0). Same Apache-2.0 license.
+
+### Battery indicator icons added 2026-11-04
+
+These are official Material Symbols Outlined SVG paths, retained verbatim using
+the 24dp conversion above (optical size 24, weight 400, grade 0, fill 0), under
+the same Apache-2.0 license. Android and Android Frame each provide one charging
+symbol; Battery Bar uses the official charging-level symbols. Android Frame has
+no empty/zero symbol, so its lowest level uses `battery_android_frame_1`.
+
+- `ms_battery_android_0.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_0/materialsymbolsoutlined/battery_android_0_24px.svg
+- `ms_battery_android_1.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_1/materialsymbolsoutlined/battery_android_1_24px.svg
+- `ms_battery_android_2.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_2/materialsymbolsoutlined/battery_android_2_24px.svg
+- `ms_battery_android_3.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_3/materialsymbolsoutlined/battery_android_3_24px.svg
+- `ms_battery_android_4.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_4/materialsymbolsoutlined/battery_android_4_24px.svg
+- `ms_battery_android_6.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_6/materialsymbolsoutlined/battery_android_6_24px.svg
+- `ms_battery_android_full.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_full/materialsymbolsoutlined/battery_android_full_24px.svg
+- `ms_battery_android_bolt.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_bolt/materialsymbolsoutlined/battery_android_bolt_24px.svg
+- `ms_battery_android_frame_1.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_frame_1/materialsymbolsoutlined/battery_android_frame_1_24px.svg
+- `ms_battery_android_frame_2.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_frame_2/materialsymbolsoutlined/battery_android_frame_2_24px.svg
+- `ms_battery_android_frame_3.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_frame_3/materialsymbolsoutlined/battery_android_frame_3_24px.svg
+- `ms_battery_android_frame_4.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_frame_4/materialsymbolsoutlined/battery_android_frame_4_24px.svg
+- `ms_battery_android_frame_5.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_frame_5/materialsymbolsoutlined/battery_android_frame_5_24px.svg
+- `ms_battery_android_frame_6.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_frame_6/materialsymbolsoutlined/battery_android_frame_6_24px.svg
+- `ms_battery_android_frame_full.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_frame_full/materialsymbolsoutlined/battery_android_frame_full_24px.svg
+- `ms_battery_android_frame_bolt.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_android_frame_bolt/materialsymbolsoutlined/battery_android_frame_bolt_24px.svg
+- `ms_battery_0_bar.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_0_bar/materialsymbolsoutlined/battery_0_bar_24px.svg
+- `ms_battery_1_bar.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_1_bar/materialsymbolsoutlined/battery_1_bar_24px.svg
+- `ms_battery_2_bar.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_2_bar/materialsymbolsoutlined/battery_2_bar_24px.svg
+- `ms_battery_3_bar.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_3_bar/materialsymbolsoutlined/battery_3_bar_24px.svg
+- `ms_battery_4_bar.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_4_bar/materialsymbolsoutlined/battery_4_bar_24px.svg
+- `ms_battery_5_bar.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_5_bar/materialsymbolsoutlined/battery_5_bar_24px.svg
+- `ms_battery_6_bar.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_6_bar/materialsymbolsoutlined/battery_6_bar_24px.svg
+- `ms_battery_full.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_full/materialsymbolsoutlined/battery_full_24px.svg
+- `ms_battery_charging_full.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_charging_full/materialsymbolsoutlined/battery_charging_full_24px.svg
+- `ms_battery_charging_20.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_charging_20/materialsymbolsoutlined/battery_charging_20_24px.svg
+- `ms_battery_charging_30.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_charging_30/materialsymbolsoutlined/battery_charging_30_24px.svg
+- `ms_battery_charging_50.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_charging_50/materialsymbolsoutlined/battery_charging_50_24px.svg
+- `ms_battery_charging_60.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_charging_60/materialsymbolsoutlined/battery_charging_60_24px.svg
+- `ms_battery_charging_80.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_charging_80/materialsymbolsoutlined/battery_charging_80_24px.svg
+- `ms_battery_charging_90.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/battery_charging_90/materialsymbolsoutlined/battery_charging_90_24px.svg
+
+The existing `ms_battery_android_5.xml` and `ms_bolt.xml` are reused without
+modification; their official sources are listed above.
+
+### Percentage toggle icon added 2026-11-04
+
+- `ms_percent.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/web/percent/materialsymbolsoutlined/percent_24px.svg
+
+Official Material Symbols Outlined SVG path retained using the 24dp conversion
+above (optical size 24, weight 400, grade 0, fill 0). Same Apache-2.0 license.

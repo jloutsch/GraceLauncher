@@ -123,6 +123,7 @@ import com.galaxyrio.gracelauncher.ui.components.GraceButtonTransitionOverlay
 import com.galaxyrio.gracelauncher.ui.components.GraceSystemAccessDialog
 import com.galaxyrio.gracelauncher.ui.components.graceReveal
 import com.galaxyrio.gracelauncher.data.weather.BreezyWeatherRepository
+import com.galaxyrio.gracelauncher.data.weather.WeatherConnectionMode
 import com.galaxyrio.gracelauncher.ui.overlays.ShortcutRevealState
 import com.galaxyrio.gracelauncher.ui.components.LauncherIcon
 import com.galaxyrio.gracelauncher.ui.components.LauncherSymbol
@@ -187,6 +188,18 @@ fun LauncherRoute(
             viewModel.privateSpaceController.close()
         }
     }
+    DisposableEffect(lifecycle, viewModel) {
+        fun updateForeground() {
+            viewModel.setCalendarForeground(lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+        }
+        val observer = LifecycleEventObserver { _, _ -> updateForeground() }
+        lifecycle.addObserver(observer)
+        updateForeground()
+        onDispose {
+            lifecycle.removeObserver(observer)
+            viewModel.setCalendarForeground(false)
+        }
+    }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
     ) { viewModel.refreshSchedule() }
@@ -214,7 +227,6 @@ fun LauncherRoute(
         lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
             while (true) {
                 delay(60_000)
-                viewModel.refreshSchedule()
                 viewModel.refreshWeather(force = false)
             }
         }
@@ -337,6 +349,7 @@ fun LauncherRoute(
         refreshWeather = { viewModel.refreshWeather() },
         requestWeatherAccess = {
             when {
+                viewModel.uiState.value.settings.weatherConnection.mode == WeatherConnectionMode.Gadgetbridge -> viewModel.refreshWeather()
                 breezyRepository.installedPackage() == null -> viewModel.refreshWeather()
                 ContextCompat.checkSelfPermission(context, BreezyWeatherRepository.READ_PERMISSION) == PackageManager.PERMISSION_GRANTED ->
                     viewModel.refreshWeather()
@@ -517,6 +530,7 @@ fun LauncherRoute(
             uiState = uiState,
             widgetEditRequest = widgetEditRequest,
             returnHomeRequests = viewModel.returnHomeRequests,
+            onCalendarHomeVisible = viewModel::setCalendarHomeVisible,
             onDateClick = { permissionLauncher.launch(Manifest.permission.READ_CALENDAR) },
             onClockClick = {
                 val key = uiState.settings.clockAppKey
@@ -554,6 +568,7 @@ internal fun LauncherScreen(
     actions: LauncherActions = LauncherActions(),
     initialDrawerOpen: Boolean = false,
     widgetEditRequest: Int = 0,
+    onCalendarHomeVisible: (Boolean) -> Unit = {},
 ) {
     var drawerOpen by rememberSaveable { mutableStateOf(initialDrawerOpen) }
     val homePager = rememberPagerState { if (uiState.settings.widgetScreen.enabled) 2 else 1 }
@@ -622,6 +637,21 @@ internal fun LauncherScreen(
         uiState.settings.iconDesign?.design?.iconSize ?: 100, uiState.settings.iconDisplay)
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
+    val calendarHomeVisible = !drawerOpen && overlay == null && !systemActionAccess &&
+        homePager.settledPage == 0 && !homePager.isScrollInProgress
+    val reportCalendarHomeVisible by rememberUpdatedState(onCalendarHomeVisible)
+    DisposableEffect(lifecycle, calendarHomeVisible) {
+        fun updateHomeVisibility() {
+            reportCalendarHomeVisible(calendarHomeVisible && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
+        }
+        val observer = LifecycleEventObserver { _, _ -> updateHomeVisibility() }
+        lifecycle.addObserver(observer)
+        updateHomeVisibility()
+        onDispose {
+            lifecycle.removeObserver(observer)
+            reportCalendarHomeVisible(false)
+        }
+    }
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE) firstItemJob?.cancel()
@@ -1021,7 +1051,6 @@ internal fun LauncherScreen(
             }
             GraceButtonAction.Agenda -> {
                 actions.refreshWeather()
-                actions.refreshAgenda()
                 overlay = LauncherOverlay.Agenda
             }
             GraceButtonAction.LockScreen -> {
@@ -1099,7 +1128,6 @@ internal fun LauncherScreen(
                 onAppShortcuts = openAppPopup,
                 onDateClick = {
                     actions.refreshWeather()
-                    actions.refreshAgenda()
                     overlay = LauncherOverlay.Agenda
                 },
                 onClockClick = onClockClick,

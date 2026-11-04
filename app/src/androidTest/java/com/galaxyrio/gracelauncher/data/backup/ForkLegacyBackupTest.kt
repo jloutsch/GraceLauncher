@@ -76,4 +76,12 @@ class ForkLegacyBackupTest {
             .also { it.openHelper.writableDatabase }.close()
         assertFalse(ForkLegacyBackup.isLegacy(file))
     }
+
+    /** Upstream's own version 30 has no fork columns and must go through Room's migrations instead. */
+    @Test fun upstreamVersion30IsNotTreatedAsLegacy() {
+        Room.databaseBuilder(context, LauncherDatabase::class.java, file.absolutePath).build()
+            .also { it.openHelper.writableDatabase }.close()
+        SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READWRITE).use { it.version = ForkLegacyBackup.VERSION }
+        assertFalse(ForkLegacyBackup.isLegacy(file))
+    }
 }

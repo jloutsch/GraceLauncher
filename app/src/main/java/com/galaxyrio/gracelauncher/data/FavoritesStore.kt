@@ -69,6 +69,13 @@ class FavoritesStore internal constructor(private val preferences: SharedPrefere
         return updated
     }
 
+    /** Favorites follow an app whose launcher activity an update renamed. */
+    fun renameApps(renames: Map<String, String>) {
+        val saved = savedFavorites() ?: return
+        val renamed = saved.map { renames[it] ?: it }
+        if (renamed != saved) save(renamed)
+    }
+
     private fun save(keys: List<String>) {
         preferences.edit {
             putString(KEY_ORDER, JSONArray(keys.distinct()).toString())

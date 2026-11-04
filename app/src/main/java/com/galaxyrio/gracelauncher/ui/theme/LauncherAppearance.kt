@@ -69,22 +69,39 @@ fun rememberLauncherAppearance(mode: WallpaperTextMode, themedIcons: Boolean, ic
     )
 }
 
+data class LauncherBatteryState(val percent: Int, val isCharging: Boolean)
+
 @Composable
-fun rememberBatteryPercent(): Int? {
+fun rememberBatteryPercent(): Int? = rememberBatteryState()?.percent
+
+/** Read level and charging status together so a plug change updates the icon at the same level. */
+@Composable
+fun rememberBatteryState(): LauncherBatteryState? {
     val context = LocalContext.current
-    var percent by remember { mutableStateOf<Int?>(null) }
+    var battery by remember(context) { mutableStateOf<LauncherBatteryState?>(null) }
     DisposableEffect(context) {
+        fun update(intent: Intent?) {
+            if (intent?.action != Intent.ACTION_BATTERY_CHANGED) return
+            val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+            val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1)
+            val status = intent.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
+            val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
+            battery = if (level >= 0 && scale > 0) LauncherBatteryState(
+                percent = (100L * level / scale).coerceIn(0L, 100L).toInt(),
+                isCharging = status == BatteryManager.BATTERY_STATUS_CHARGING ||
+                    (status == BatteryManager.BATTERY_STATUS_FULL && plugged),
+            ) else null
+        }
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: Intent?) {
-                val level = intent?.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) ?: -1
-                val scale = intent?.getIntExtra(BatteryManager.EXTRA_SCALE, -1) ?: -1
-                percent = if (level >= 0 && scale > 0) (100 * level / scale) else null
+                update(intent)
             }
         }
-        ContextCompat.registerReceiver(context, receiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED), ContextCompat.RECEIVER_EXPORTED)
+        update(ContextCompat.registerReceiver(context, receiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED),
+            ContextCompat.RECEIVER_EXPORTED))
         onDispose { context.unregisterReceiver(receiver) }
     }
-    return percent
+    return battery
 }
 
 /** The system may disable cross-window blur at runtime (e.g. battery saver). */

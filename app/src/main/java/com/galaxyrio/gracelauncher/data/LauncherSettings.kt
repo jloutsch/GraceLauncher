@@ -1,6 +1,7 @@
 package com.galaxyrio.gracelauncher.data
 
 import com.materialkolor.PaletteStyle
+import com.galaxyrio.gracelauncher.data.weather.WeatherConnectionPreferences
 
 enum class ThemeMode { System, Light, Dark }
 
@@ -37,6 +38,7 @@ data class LauncherSettings(
     val weatherAppKey: String? = null,
     /** Folders shown as widget stacks (fork); the folder row itself has no column for this. */
     val widgetStackFolderIds: Set<String> = emptySet(),
+    val weatherConnection: WeatherConnectionPreferences = WeatherConnectionPreferences(),
     /** null delegates to Android's standard SHOW_ALARMS action. */
     val clockAppKey: String? = null,
     val clockStyle: ClockStyle = ClockStyle(),
@@ -66,6 +68,7 @@ data class LauncherSettings(
     /** Null until the legacy favorite order has been migrated. */
     val appCategories: List<AppCategory>? = null,
     val preferNonAccessibility: Boolean = false,
+    val calendar: CalendarPreferences = CalendarPreferences(),
 ) {
     /** Icon designer overrides precede this order; system icons always follow it. */
     val enabledIconPackPackages: List<String>

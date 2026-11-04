@@ -69,6 +69,8 @@ data class LauncherSettingsEntity(
     val widgetScreenJson: String? = null,
     val appCategoriesJson: String? = null,
     @ColumnInfo(defaultValue = "0") val preferNonAccessibility: Boolean = false,
+    @ColumnInfo(defaultValue = "NULL") val calendarPreferencesJson: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val weatherConnectionJson: String? = null,
 )
 
 @Entity(tableName = "hidden_apps")
@@ -94,6 +96,9 @@ abstract class LauncherSettingsDao {
 
     @Query("SELECT appKey FROM hidden_apps ORDER BY appKey")
     abstract fun observeHiddenApps(): Flow<List<String>>
+
+    @Query("SELECT appKey FROM hidden_apps ORDER BY appKey")
+    abstract suspend fun readHiddenApps(): List<String>
 
     @Query("SELECT * FROM folders ORDER BY name COLLATE NOCASE, id")
     abstract fun observeFolders(): Flow<List<LauncherFolderEntity>>
@@ -139,7 +144,7 @@ abstract class LauncherDatabase : RoomDatabase() {
     abstract fun backupDao(): BackupDao
 
     companion object {
-        const val SCHEMA_VERSION = 29
+        const val SCHEMA_VERSION = 31
 
         val Migration1To2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
@@ -346,7 +351,19 @@ abstract class LauncherDatabase : RoomDatabase() {
             }
         }
 
-        val Migrations: Array<Migration> = arrayOf(Migration1To2, Migration2To3, Migration3To4, Migration4To5, Migration5To6, Migration6To7, Migration7To8, Migration8To9, Migration9To10, Migration10To11, Migration11To12, Migration12To13, Migration13To14, Migration14To15, Migration15To16, Migration16To17, Migration17To18, Migration18To19, Migration19To20, Migration20To21, Migration21To22, Migration22To23, Migration23To24, Migration24To25, Migration25To26, Migration26To27, Migration27To28, Migration28To29)
+        val Migration29To30 = object : Migration(29, 30) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE launcher_settings ADD COLUMN calendarPreferencesJson TEXT DEFAULT NULL")
+            }
+        }
+
+        val Migration30To31 = object : Migration(30, 31) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE launcher_settings ADD COLUMN weatherConnectionJson TEXT DEFAULT NULL")
+            }
+        }
+
+        val Migrations: Array<Migration> = arrayOf(Migration1To2, Migration2To3, Migration3To4, Migration4To5, Migration5To6, Migration6To7, Migration7To8, Migration8To9, Migration9To10, Migration10To11, Migration11To12, Migration12To13, Migration13To14, Migration14To15, Migration15To16, Migration16To17, Migration17To18, Migration18To19, Migration19To20, Migration20To21, Migration21To22, Migration22To23, Migration23To24, Migration24To25, Migration25To26, Migration26To27, Migration27To28, Migration28To29, Migration29To30, Migration30To31)
 
         fun getInstance(context: Context): LauncherDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(

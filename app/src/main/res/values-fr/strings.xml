@@ -234,7 +234,7 @@
     <string name="settings_about_summary">Grace Launcher, mises à jour et licences</string>
     <string name="settings_instant_access">Accès rapide</string>
     <string name="settings_calendar_agenda">Agenda &amp; calendrier</string>
-    <string name="settings_calendar_agenda_summary">Afficher le prochain événement sur l\'écran d\'accueil</string>
+    <string name="settings_calendar_agenda_summary">Afficher les prochains événements sur l\'écran d\'accueil</string>
     <string name="settings_weather">Météo</string>
     <string name="settings_media_player">Lecteur multimédia</string>
     <string name="settings_coming_soon">Bientôt disponible</string>
@@ -534,7 +534,7 @@
     <string name="clock_separate_digits">Séparation des chiffres</string>
     <string name="clock_separate_digits_summary">Laisser un contour transparent entre les caractères qui se chevauchent</string>
     <string name="clock_show_colon">Afficher les deux-points</string>
-    <string name="clock_show_colon_summary">Séparer les heures et les minutes par deux-points</string>
+    <string name="clock_show_colon_summary">Séparer les unités temporaires en colonnes</string>
     <string name="clock_reset_value">Rétablir la valeur par défaut de %1$s</string>
     <string name="settings_search">Rechercher</string>
     <string name="search_settings_summary">Applications, contacts et suggestions</string>
@@ -612,7 +612,7 @@
     <string name="font_delete">Supprimer</string>
     <string name="font_delete_title">Supprimer les polices ?</string>
     <string name="font_delete_summary">Supprimer les %1$d polices importées ? Les composants qui les utilisent reviendront à la police par défaut.</string>
-    <string name="settings_favorites_app_list">Favoris et liste des applications</string>
+    <string name="settings_favorites_app_list">Liste des applications</string>
     <string name="list_app_spacing">Espacement des applications</string>
     <string name="list_side_padding">Marges latérales de la liste</string>
     <string name="list_icon_name_gap">Espacement entre l\'icône et le nom</string>
@@ -860,4 +860,22 @@
     <string name="list_symbol_horizontal_offset">Décalage horizontal du symbole</string>
     <string name="lab_dismiss_threshold">Dépasser le seuil</string>
     <string name="material_color_scrim">Scrim</string>
+    <string name="calendar_reading">Données de calendrier</string>
+    <string name="calendar_refresh_frequency">Fréquence de rafraîchissement</string>
+    <string name="calendar_refresh_minute">1 minute</string>
+    <string name="calendar_refresh_15_minutes">15 minutes</string>
+    <string name="calendar_refresh_hour">1 heure</string>
+    <string name="calendar_refresh_home">Uniquement lors du retour à l\'écran d\'acceuil</string>
+    <string name="calendar_refresh_manual">Uniquement manuellement</string>
+    <string name="calendar_refresh_now">Rafraîchir</string>
+    <string name="calendar_refreshing">Rafraîchissement…</string>
+    <plurals name="calendar_no_upcoming_events">
+        <item quantity="one">Pas d\'évènements le jour suivant %1$d</item>
+        <item quantity="many">Pas d\'évènements les %1$d prochains jours</item>
+        <item quantity="other">Pas d\'évènements les %1$d jours suivants</item>
+    </plurals>
+    <string name="list_appearance_tab_list">Liste</string>
+    <string name="list_appearance_tab_notification">Notification</string>
+    <string name="list_preview_folder">Dossier</string>
+    <string name="list_preview_notification_title">Test</string>
 </resources>

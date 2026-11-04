@@ -142,7 +142,8 @@ class BackupImporter(
         if (DatabaseSections.none { it in sections }) return contents
         val file = File(dir, BackupArchive.DATABASE)
         var version = databaseVersion(file) ?: throw Rejection(BackupProblem.NotABackup)
-        if (version > LauncherDatabase.SCHEMA_VERSION && ForkLegacyBackup.isLegacy(file)) {
+        // Upstream also uses version 30 now, so the old fork layout is recognized by its columns, not its version.
+        if (ForkLegacyBackup.isLegacy(file)) {
             runCatching { ForkLegacyBackup.convert(context, file) }.onFailure { throw Rejection(BackupProblem.NotABackup) }
             version = databaseVersion(file) ?: throw Rejection(BackupProblem.NotABackup)
         }
@@ -306,7 +307,8 @@ private fun BackupContents.remapped(serials: Map<Long, Long>, renames: Map<Strin
                 workProfileJson = json(it.workProfileJson), homeGesturesJson = json(it.homeGesturesJson), searchJson = json(it.searchJson),
                 shortcutsFoldersJson = json(it.shortcutsFoldersJson), digitalWellbeingJson = json(it.digitalWellbeingJson),
                 widgetScreenJson = json(it.widgetScreenJson), fontColorsJson = json(it.fontColorsJson),
-                appCategoriesJson = json(it.appCategoriesJson))
+                appCategoriesJson = json(it.appCategoriesJson), calendarPreferencesJson = json(it.calendarPreferencesJson),
+                weatherConnectionJson = json(it.weatherConnectionJson))
         },
         hiddenApps = hiddenApps.map { HiddenAppEntity(key(it.appKey)) },
         itemIcons = itemIcons.map { it.copy(itemKey = key(it.itemKey)) },

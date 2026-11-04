@@ -128,7 +128,7 @@ internal fun ThemeSettings(
             }
             item { SettingsHeading(stringResource(R.string.settings_components)) }
             item {
-                SettingsActionItem(stringResource(R.string.settings_clock_style), uiState.settings.clockStyle.layout.label(),
+                SettingsActionItem(stringResource(R.string.settings_clock_style), null,
                     0, 7, "settings_clock_style", onClick = onClockStyle)
             }
             item {

@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.ScheduleEvent
 import com.galaxyrio.gracelauncher.data.weather.WeatherStatus
+import com.galaxyrio.gracelauncher.data.weather.WeatherConnectionMode
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.ScheduleStatus
@@ -69,8 +71,9 @@ fun AgendaSheet(uiState: LauncherUiState, actions: LauncherActions, onRequestCal
         weather?.daily.orEmpty().filter { it.date >= today && it.date < today.plusDays(forecastDays.toLong()) }.associateBy { it.date }
     }
     val events = uiState.events.takeIf { uiState.settings.calendarAgenda }.orEmpty()
-    val groups = remember(events, forecasts, today, zone, forecastDays) {
-        weatherAgendaDays(events, forecasts.keys.toList(), today, forecastDays, zone)
+    val calendarDays = uiState.settings.calendar.daysAhead
+    val groups = remember(events, forecasts, today, zone, forecastDays, calendarDays) {
+        weatherAgendaDays(events, forecasts.keys.toList(), today, forecastDays, zone, calendarDayCount = calendarDays)
     }
     val dateFormat = remember(locale) { DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "MMMEd"), locale) }
     val compactDateFormat = remember(locale) { DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "MMMd"), locale) }
@@ -122,7 +125,8 @@ fun AgendaSheet(uiState: LauncherUiState, actions: LauncherActions, onRequestCal
                         WeatherSourceNote(weather, now, actions.openBreezyWeather)
                     }
                     else if (weatherEnabled && uiState.weather.status != WeatherStatus.Loading) item(key = "weather_unavailable") {
-                        WeatherConnectionNotice(uiState.weather.status, actions)
+                        WeatherConnectionNotice(uiState.weather.status, actions,
+                            gadgetbridge = uiState.settings.weatherConnection.mode == WeatherConnectionMode.Gadgetbridge)
                     }
                     // Calendar access is independent of weather access: keep the forecast visible
                     // when the user has not connected a calendar, or its provider fails.
@@ -150,14 +154,23 @@ fun AgendaSheet(uiState: LauncherUiState, actions: LauncherActions, onRequestCal
                 item(key = "space:$date") { Spacer(Modifier.height(20.dp)) }
             }
             if (uiState.settings.calendarAgenda && events.isEmpty() && uiState.scheduleStatus == ScheduleStatus.Ready) item {
-                Text(stringResource(R.string.no_upcoming_events), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(pluralStringResource(R.plurals.calendar_no_upcoming_events, calendarDays, calendarDays),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
 }
 
 @Composable
-private fun WeatherConnectionNotice(status: WeatherStatus, actions: LauncherActions) {
+private fun WeatherConnectionNotice(status: WeatherStatus, actions: LauncherActions, gadgetbridge: Boolean) {
+    if (gadgetbridge) {
+        if (status == WeatherStatus.Disabled || status == WeatherStatus.Loading) return
+        Text(stringResource(if (status == WeatherStatus.Error) R.string.weather_gadgetbridge_unavailable
+            else R.string.weather_gadgetbridge_waiting), color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+        Text(stringResource(R.string.weather_gadgetbridge_setup),
+            color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 13.sp)
+        return
+    }
     val (message, label, onClick) = when (status) {
         WeatherStatus.Disabled, WeatherStatus.Loading -> return
         WeatherStatus.NotInstalled -> Triple(R.string.weather_settings_not_installed, R.string.weather_settings_install, actions.installBreezyWeather)
