@@ -20,6 +20,7 @@ import com.galaxyrio.gracelauncher.data.AppRepository
 import com.galaxyrio.gracelauncher.data.backup.BackupImporter
 import com.galaxyrio.gracelauncher.data.backup.renamedAppKeys
 import com.galaxyrio.gracelauncher.data.backup.widgetIdsToDelete
+import com.galaxyrio.gracelauncher.data.backup.pendingWidgetCount
 import com.galaxyrio.gracelauncher.data.backup.withoutWidgetPlaceholders
 import com.galaxyrio.gracelauncher.data.AppCategory
 import com.galaxyrio.gracelauncher.data.FavoritesCategoryId
@@ -153,6 +154,8 @@ data class LauncherUiState(
     val folderApps: List<LauncherApp> = emptyList(),
     val graceButtonApp: LauncherApp? = null,
     val popups: Map<String, List<PopupItem>> = emptyMap(),
+    /** Imported widgets not set up yet (fork); home offers to set them up one tap at a time. */
+    val pendingWidgetRestores: Int = 0,
     val itemIcons: Map<String, ItemIcon> = emptyMap(),
     val itemRevision: Int = 0,
     val privateSpace: PrivateSpaceState = PrivateSpaceState(),
@@ -441,6 +444,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 itemsReady = true
                 itemsSnapshot = snapshot
                 _uiState.update { it.copy(popups = snapshot.popups.withoutWidgetPlaceholders(), itemIcons = snapshot.icons,
+                    pendingWidgetRestores = snapshot.popups.pendingWidgetCount(),
                     shownShortcutKeys = snapshot.shortcuts.filter { saved -> saved.showInAppList }.map { saved -> saved.itemKey }.toSet(),
                     itemRevision = it.itemRevision + 1) }
                 if (reload) refreshApps()

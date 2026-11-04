@@ -80,4 +80,19 @@ class WidgetPlaceholdersTest {
         assertEquals("app:one", result.popups.getValue(HomeContentKey).first().key)
         assertEquals(2, result.popups.getValue(HomeContentKey).size)
     }
+
+    @Test fun pendingCountIncludesEveryOwnerAndIgnoresBoundWidgets() {
+        val placeholders = layout().toPlaceholders().popups
+        assertEquals(3, placeholders.pendingWidgetCount())
+        assertEquals(0, layout().popups.pendingWidgetCount())
+        assertEquals(2, layout().toPlaceholders().replaceWidget(-2, 55).popups.pendingWidgetCount())
+    }
+
+    @Test fun nextRestoreSkipsFailedWidgetsUntilOnlyThoseRemain() {
+        val pending = listOf(PendingWidget("a", -2, "p/a"), PendingWidget("b", -3, "p/b"))
+        assertEquals(-2, pending.nextToRestore(emptySet())?.placeholderId)
+        assertEquals(-3, pending.nextToRestore(setOf(-2))?.placeholderId)
+        assertEquals("a tap after every widget failed retries the first", -2, pending.nextToRestore(setOf(-2, -3))?.placeholderId)
+        assertEquals(null, emptyList<PendingWidget>().nextToRestore(emptySet()))
+    }
 }

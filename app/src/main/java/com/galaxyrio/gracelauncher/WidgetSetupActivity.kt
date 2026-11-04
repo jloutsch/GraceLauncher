@@ -14,7 +14,13 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +74,9 @@ class WidgetSetupActivity : ComponentActivity() {
     private var saving by mutableStateOf(false)
     private var busy by mutableStateOf(true)
     private var providers by mutableStateOf<List<AppWidgetProviderInfo>?>(null)
+    // Fork: before Android's own bind prompt during restore, say that "Always allow" stops it repeating per widget.
+    private var bindNote by mutableStateOf<AppWidgetProviderInfo?>(null)
+    private var bindNoteShown = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,6 +89,7 @@ class WidgetSetupActivity : ComponentActivity() {
         expectedProfile = savedInstanceState?.getLong("expectedProfile", -1)?.takeIf { it >= 0 }
         restorePlaceholder = (savedInstanceState ?: intent.extras)?.takeIf { it.containsKey(EXTRA_RESTORE_PLACEHOLDER) }
             ?.getInt(EXTRA_RESTORE_PLACEHOLDER)
+        bindNoteShown = savedInstanceState?.getBoolean("bindNoteShown") ?: false
         setContent {
             LauncherAppTheme(viewModel) {
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -87,6 +97,15 @@ class WidgetSetupActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalLauncherAppearance provides rememberLauncherAppearance(state.textMode,
                     themedIcons = state.themedIcons, iconSize = state.settings.iconDesign?.design?.iconSize ?: 100)) {
                     WidgetPicker(providers, busy, state, onBack = { if (!saving) cancelSetup() }, onSelect = ::select)
+                    bindNote?.let { info ->
+                        val later = { bindNote = null; skipRestore() }
+                        AlertDialog(onDismissRequest = later, modifier = Modifier.testTag("widget_bind_note"),
+                            title = { Text(stringResource(R.string.widget_bind_note_title)) },
+                            text = { Text(stringResource(R.string.widget_bind_note_text)) },
+                            confirmButton = { TextButton({ bindNote = null; bindNoteShown = true; select(info) }) {
+                                Text(stringResource(R.string.widget_bind_note_continue)) } },
+                            dismissButton = { TextButton(later) { Text(stringResource(R.string.widget_bind_note_later)) } })
+                    }
                 }
             }
         }
@@ -169,6 +188,7 @@ class WidgetSetupActivity : ComponentActivity() {
                 "min=${info.minWidth}x${info.minHeight} resizeMode=${info.resizeMode} configure=${info.configure} " +
                 "size=${options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)}x${options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)}")
             if (manager.bindAppWidgetIdIfAllowed(pendingId, info.profile, info.provider, options)) configure()
+            else if (restorePlaceholder != null && !bindNoteShown) showBindNote(info)
             else startActivityForResult(Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingId)
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider)
@@ -176,6 +196,16 @@ class WidgetSetupActivity : ComponentActivity() {
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_OPTIONS, options)
             }, REQUEST_BIND)
         } catch (error: Exception) { fail(R.string.widget_bind_error, error) }
+    }
+
+    /** Releases the unbound ID first: the note may be left with "Not now", and Continue allocates again. */
+    private fun showBindNote(info: AppWidgetProviderInfo) {
+        runCatching { host.deleteAppWidgetId(pendingId) }
+        host.untrackPendingId(pendingId)
+        pendingId = -1
+        stage = "bind_note"
+        busy = false
+        bindNote = info
     }
 
     private fun configure() {
@@ -342,6 +372,7 @@ class WidgetSetupActivity : ComponentActivity() {
         outState.putBoolean("configuringExisting", configuringExisting)
         outState.putBoolean("saving", saving)
         outState.putString("stage", stage)
+        outState.putBoolean("bindNoteShown", bindNoteShown)
         expectedProfile?.let { outState.putLong("expectedProfile", it) }
         restorePlaceholder?.let { outState.putInt(EXTRA_RESTORE_PLACEHOLDER, it) }
         super.onSaveInstanceState(outState)

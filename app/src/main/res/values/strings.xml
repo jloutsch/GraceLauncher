@@ -618,6 +618,16 @@
     <string name="weather_settings_app_description">Tap the hourly forecast in your agenda to open this app.</string>
     <string name="weather_settings_app_missing">Selected app is unavailable</string>
     <string name="weather_open_app">Open %1$s</string>
+    <string name="widget_restore_title">Widgets to set up</string>
+    <plurals name="widget_restore_count">
+        <item quantity="one">%1$d widget from your backup is waiting</item>
+        <item quantity="other">%1$d widgets from your backup are waiting</item>
+    </plurals>
+    <string name="widget_restore_next">Set up next</string>
+    <string name="widget_bind_note_title">Allow Grace to add widgets</string>
+    <string name="widget_bind_note_text">Android will ask whether Grace can create widgets. Tick “Always allow” so it doesn\'t ask again for each widget from your backup.</string>
+    <string name="widget_bind_note_continue">Continue</string>
+    <string name="widget_bind_note_later">Not now</string>
     <string name="weather_mode_location_update_notifier">Location Update Notifier</string>
     <string name="weather_mode_gadgetbridge">Gadgetbridge</string>
     <string name="weather_gadgetbridge_setup">Enable Gadgetbridge sharing in your weather app. If it asks for a receiving app, select Grace Launcher, then refresh the weather. New data appears here automatically.</string>

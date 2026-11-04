@@ -166,6 +166,7 @@ fun LauncherRoute(
     settingsOnly: Boolean = false,
     onCloseSettings: () -> Unit = {},
     widgetEditRequest: Int = 0,
+    onRestoreWidgets: () -> Unit = {},
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -301,6 +302,7 @@ fun LauncherRoute(
     }
 
     val actions = LauncherActions(
+        restoreWidgets = onRestoreWidgets,
         requestPrivateSpace = { forceAuthentication, ready ->
             val settings = viewModel.uiState.value.settings.privateSpace
             if (settings.exposesApps && !forceAuthentication) ready()

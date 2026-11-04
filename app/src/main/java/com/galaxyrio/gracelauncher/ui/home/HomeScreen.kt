@@ -433,6 +433,9 @@ fun HomeScreen(
             }, onFinished = { onTopOffsetChange(topOffset) },
             modifier = Modifier.padding(start = uiState.settings.listAppearance.startPadding, end = uiState.settings.listAppearance.endPadding)
                 .offset(y = (if (baselineIndex >= 0) baselineTop else resolvedTop) - 20.dp))
+        if (uiState.pendingWidgetRestores > 0 && !editingLayout && selectedLayout == null)
+            WidgetRestoreCard(uiState.pendingWidgetRestores, actions.restoreWidgets,
+                Modifier.align(androidx.compose.ui.Alignment.TopCenter).padding(top = minimumTop).zIndex(3f))
     }
 }
 

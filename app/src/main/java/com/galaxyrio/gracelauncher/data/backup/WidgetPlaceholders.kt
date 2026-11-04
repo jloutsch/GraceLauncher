@@ -55,3 +55,11 @@ fun WidgetLayout.dropWidget(placeholderId: Int): WidgetLayout {
         homeOrder?.filterNot { it == oldKey },
     )
 }
+
+/** Imported widgets still waiting for setup, across home, the widget screen, widget stacks and pop-ups. */
+fun Map<String, List<PopupItem>>.pendingWidgetCount(): Int =
+    values.sumOf { items -> items.count { item -> item.widget?.let { isWidgetPlaceholder(it.widgetId) } == true } }
+
+/** The widget the next tap sets up: the first one not skipped after an error, or the first again once all were. */
+fun List<PendingWidget>.nextToRestore(skipped: Set<Int>): PendingWidget? =
+    firstOrNull { it.placeholderId !in skipped } ?: firstOrNull()
