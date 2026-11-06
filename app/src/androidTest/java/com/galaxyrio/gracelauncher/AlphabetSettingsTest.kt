@@ -58,6 +58,23 @@ class AlphabetSettingsTest {
         }
     }
 
+    @Test fun numbersFirstIsOffForOldSettingsAndSurvivesSaving() {
+        assertFalse(ListAppearance.decode("""{"alphabet":{"fontSize":22}}""").alphabet.numbersFirst)
+        val saved = ListAppearance(alphabet = AlphabetAppearance(numbersFirst = true))
+        assertTrue(ListAppearance.decode(saved.encode()).alphabet.numbersFirst)
+    }
+
+    @Test fun numbersFirstToggleChangesOnlyThatSetting() {
+        showSettings()
+        scrollTo("alphabet_numbers_first")
+        compose.onNodeWithTag("alphabet_numbers_first").assertIsOff().performClick()
+        compose.runOnIdle {
+            val list = state.settings.listAppearance
+            assertTrue(list.alphabet.numbersFirst)
+            assertEquals(ListAppearance().copy(alphabet = AlphabetAppearance(numbersFirst = true)), list)
+        }
+    }
+
     @Test fun previouslySavedRangesIncludingTheOldDefaultsAreNeverMigrated() {
         for (top in listOf(0, 20, 35, 60)) {
             val old = ListAppearance.decode("""{"alphabet":{"topPercent":$top,"bottomPercent":85,"fontSize":22}}""")

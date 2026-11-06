@@ -47,7 +47,8 @@ class AppListModel(apps: List<LauncherApp>, folders: List<LauncherFolder> = empt
     workFolder: LauncherFolder? = null, workExpanded: Boolean = false, workApps: List<LauncherApp> = emptyList(),
     usageRanking: Map<String, Long> = emptyMap(),
     appList: AppListLayout = AppListLayout(), categories: List<AppCategory> = emptyList(),
-    categoryItems: Map<String, List<LauncherApp>> = emptyMap(), headphones: Boolean = false, minuteOfDay: Int = 0) {
+    categoryItems: Map<String, List<LauncherApp>> = emptyMap(), headphones: Boolean = false, minuteOfDay: Int = 0,
+    numbersFirst: Boolean = false) {
     private val settingsApp = (apps.firstOrNull { it.isLauncherSettings && it.user == null }
         ?: apps.firstOrNull(LauncherApp::isLauncherSettings))
         .takeIf { appList.showGraceLauncher && appList.showGraceSettings }
@@ -55,9 +56,11 @@ class AppListModel(apps: List<LauncherApp>, folders: List<LauncherFolder> = empt
     // Use exactly the same name/pinyin ordering and alphabet sections as apps.
     private val grouped = (apps.filterNot { it.key == settingsApp?.key } + inlineFolders.values.map(LauncherFolder::asApp))
         .sortedWith(LauncherAppOrder).groupBy(LauncherApp::section)
-    private val appLetters = LauncherAlphabet.filter { it != "#" && it in grouped } +
+    private val numberSection = if ("#" in grouped) listOf("#") else emptyList()
+    private val appLetters = (if (numbersFirst) numberSection else emptyList()) +
+        LauncherAlphabet.filter { it != "#" && it in grouped } +
         grouped.keys.filter { it !in LauncherAlphabet }.sorted() +
-        if ("#" in grouped) listOf("#") else emptyList()
+        (if (numbersFirst) emptyList() else numberSection)
     private val drawerFolders = folders.filter { it.placement.inAppList && it.appListAtBottom }
     private val foldersByKey = (folders + listOfNotNull(privateFolder, workFolder, recentlyInstalledFolder))
         .associateBy(LauncherFolder::key)

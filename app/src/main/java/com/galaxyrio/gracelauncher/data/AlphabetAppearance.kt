@@ -19,6 +19,8 @@ data class AlphabetAppearance(
     val showOnHome: Boolean? = null,
     val showInAppList: Boolean = true,
     val rightTouchWidth: Int = 36,
+    /** Puts the # section (names that start with a number or symbol) before A instead of after Z. */
+    val numbersFirst: Boolean = false,
 ) {
     fun showsOnHome(legacyHideAlphabet: Boolean): Boolean = showOnHome ?: !legacyHideAlphabet
 
@@ -50,7 +52,7 @@ data class AlphabetAppearance(
         put("cookieSides", value.cookieSides); put("topPercent", value.topPercent ?: JSONObject.NULL)
         put("bottomPercent", value.bottomPercent); put("freeMovement", value.freeMovement)
         put("showOnHome", value.showOnHome ?: JSONObject.NULL); put("showInAppList", value.showInAppList)
-        put("rightTouchWidth", value.rightTouchWidth)
+        put("rightTouchWidth", value.rightTouchWidth); put("numbersFirst", value.numbersFirst)
     } }
 
     companion object {
@@ -76,6 +78,7 @@ data class AlphabetAppearance(
                     showOnHome = if (it.isNull("showOnHome")) null else it.optBoolean("showOnHome", true),
                     showInAppList = it.optBoolean("showInAppList", defaults.showInAppList),
                     rightTouchWidth = it.optInt("rightTouchWidth", defaults.rightTouchWidth),
+                    numbersFirst = it.optBoolean("numbersFirst", defaults.numbersFirst),
                 ).normalized()
             } ?: defaults
         }
