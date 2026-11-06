@@ -36,4 +36,16 @@ class LauncherSortingTest {
         assertEquals(expected, AppListModel(apps).items.filterIsInstance<DrawerItem.App>().map { it.app.label })
         assertEquals("A", apps.first().copy(label = "Alipay").section)
     }
+
+    @Test
+    fun numberSectionMovesBeforeAOnlyWhenAsked() {
+        val apps = listOf("Zoom", "1Password", "Alipay").mapIndexed { i, label ->
+            LauncherApp(ComponentName("example.sorting", "Num$i"), label, null)
+        }
+        assertEquals(listOf("A", "Z", "#"), AppListModel(apps).letters)
+        val first = AppListModel(apps, numbersFirst = true)
+        assertEquals(listOf("#", "A", "Z"), first.letters)
+        assertEquals(listOf("1Password", "Alipay", "Zoom"), first.items.filterIsInstance<DrawerItem.App>().map { it.app.label })
+        assertEquals(0, first.indexOfSection("#"))
+    }
 }

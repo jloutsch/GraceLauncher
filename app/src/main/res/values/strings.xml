@@ -801,6 +801,7 @@
     <string name="alphabet_top">Upper position</string>
     <string name="alphabet_bottom">Lower position</string>
     <string name="alphabet_free_movement">Free movement</string>
+    <string name="alphabet_numbers_first">Show # at the top</string>
     <string name="alphabet_automatic_spacing">Automatic · %1$d dp spacing</string>
     <string name="settings_palette_style">Palette style</string>
     <string name="palette_tonal_spot">Tonal spot</string>

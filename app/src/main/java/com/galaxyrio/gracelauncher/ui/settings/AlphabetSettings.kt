@@ -112,17 +112,17 @@ internal fun AlphabetSettings(uiState: LauncherUiState, actions: LauncherActions
                         verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
                         item("font") {
                             SettingsActionItem(stringResource(R.string.settings_font), appFontLabel(draft.fontId),
-                                0, 10, "alphabet_font", enabled = enabled, onClick = { dialog = "font" })
+                                0, 11, "alphabet_font", enabled = enabled, onClick = { dialog = "font" })
                         }
                         item("color") {
                             SettingsActionItem(stringResource(R.string.alphabet_letter_color), fontColorSummary(draft.fontColor, onWallpaper = true),
-                                1, 10, "alphabet_color", enabled = enabled, modifier = colorModifier, trailing = {
+                                1, 11, "alphabet_color", enabled = enabled, modifier = colorModifier, trailing = {
                                     Surface(Modifier.size(24.dp), shape = MaterialTheme.shapes.small,
                                         color = resolvedFontColor(draft.fontColor, onWallpaper = true)) {}
                                 }, onClick = { dialog = "color" })
                         }
                         item("font_size") {
-                            DesignerSegment(2, 10, "alphabet_font_size_control") {
+                            DesignerSegment(2, 11, "alphabet_font_size_control") {
                                 DesignerSlider(stringResource(R.string.clock_size), draft.fontSize.toFloat(), defaults.fontSize.toFloat(),
                                     10f..28f, enabled, "alphabet_font_size", suffix = "sp",
                                     onFinished = { value -> change { it.copy(fontSize = value.roundToInt()) } }) {
@@ -131,7 +131,7 @@ internal fun AlphabetSettings(uiState: LauncherUiState, actions: LauncherActions
                             }
                         }
                         item("shape") {
-                            DesignerSegment(3, 10, "alphabet_shape") {
+                            DesignerSegment(3, 11, "alphabet_shape") {
                                 Text(stringResource(R.string.alphabet_indicator_shape))
                                 val design = IconDesign(shape = draft.indicatorShape, cookieSides = draft.cookieSides,
                                     pebbleRoundness = draft.pebbleRoundness, squareCornerRadius = draft.squareCornerRadius)
@@ -145,7 +145,7 @@ internal fun AlphabetSettings(uiState: LauncherUiState, actions: LauncherActions
                             }
                         }
                         item("top") {
-                            DesignerSegment(4, 10, "alphabet_top_control") {
+                            DesignerSegment(4, 11, "alphabet_top_control") {
                                 if (draft.topPercent == null) Text(
                                     stringResource(R.string.alphabet_automatic_spacing, AlphabetAppearance.DefaultStepDp.roundToInt()),
                                     Modifier.testTag("alphabet_top_automatic"), style = MaterialTheme.typography.labelMedium,
@@ -161,7 +161,7 @@ internal fun AlphabetSettings(uiState: LauncherUiState, actions: LauncherActions
                             }
                         }
                         item("bottom") {
-                            DesignerSegment(5, 10, "alphabet_bottom_control") {
+                            DesignerSegment(5, 11, "alphabet_bottom_control") {
                                 DesignerSlider(stringResource(R.string.alphabet_bottom), draft.bottomPercent.toFloat(),
                                     maxOf(defaults.bottomPercent, (draft.topPercent ?: 0) + 1).toFloat(),
                                     ((draft.topPercent ?: 0) + 1f)..100f, enabled, "alphabet_bottom",
@@ -172,10 +172,10 @@ internal fun AlphabetSettings(uiState: LauncherUiState, actions: LauncherActions
                         }
                         item("free") {
                             SettingsToggleItem(stringResource(R.string.alphabet_free_movement), null,
-                                draft.freeMovement, 6, 10, "alphabet_free_movement", enabled = enabled) { value -> change { it.copy(freeMovement = value) } }
+                                draft.freeMovement, 6, 11, "alphabet_free_movement", enabled = enabled) { value -> change { it.copy(freeMovement = value) } }
                         }
                         item("touch_width") {
-                            DesignerSegment(7, 10, "alphabet_touch_width_control") {
+                            DesignerSegment(7, 11, "alphabet_touch_width_control") {
                                 DesignerSlider(stringResource(R.string.alphabet_touch_width), draft.rightTouchWidth.toFloat(),
                                     defaults.rightTouchWidth.toFloat(), 28f..56f, enabled, "alphabet_touch_width", suffix = "dp",
                                     onFinished = { value -> change { it.copy(rightTouchWidth = value.roundToInt()) } }) {
@@ -185,12 +185,16 @@ internal fun AlphabetSettings(uiState: LauncherUiState, actions: LauncherActions
                         }
                         item("left") {
                             SettingsToggleItem(stringResource(R.string.list_left_alphabet), null,
-                                uiState.settings.listAppearance.leftAlphabet, 8, 10, "list_left_alphabet", enabled = enabled) { value ->
+                                uiState.settings.listAppearance.leftAlphabet, 8, 11, "list_left_alphabet", enabled = enabled) { value ->
                                 actions.updateSettings { current -> current.copy(listAppearance = current.listAppearance.copy(leftAlphabet = value)) }
                             }
                         }
+                        item("numbers_first") {
+                            SettingsToggleItem(stringResource(R.string.alphabet_numbers_first), null,
+                                draft.numbersFirst, 9, 11, "alphabet_numbers_first", enabled = enabled) { value -> change { it.copy(numbersFirst = value) } }
+                        }
                         item("show_in") {
-                            DesignerSegment(9, 10, "alphabet_show_in") {
+                            DesignerSegment(10, 11, "alphabet_show_in") {
                                 Text(stringResource(R.string.alphabet_show_in))
                                 Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min),
                                     horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
@@ -268,9 +272,10 @@ private fun rememberAlphabetPreviewModel(uiState: LauncherUiState): AppListModel
     val headphones by rememberHeadphonesConnected()
     val time = now.atZone(java.time.ZoneId.systemDefault()).toLocalTime()
     val minute = time.hour * 60 + time.minute
-    return remember(apps, uiState.folders, privateFolder, workFolder, recentFolder, settings.listAppearance.appList, categories, members, headphones, minute) {
+    return remember(apps, uiState.folders, privateFolder, workFolder, recentFolder, settings.listAppearance.appList, categories, members, headphones, minute,
+        settings.listAppearance.alphabet.numbersFirst) {
         AppListModel(apps, uiState.folders, privateFolder, recentlyInstalledFolder = recentFolder, workFolder = workFolder,
             appList = settings.listAppearance.appList, categories = categories, categoryItems = members,
-            headphones = headphones, minuteOfDay = minute)
+            headphones = headphones, minuteOfDay = minute, numbersFirst = settings.listAppearance.alphabet.numbersFirst)
     }
 }

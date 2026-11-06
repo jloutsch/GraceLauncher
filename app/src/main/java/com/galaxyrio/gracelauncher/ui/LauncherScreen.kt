@@ -603,6 +603,7 @@ internal fun LauncherScreen(
         uiState.settings.digitalWellbeing.enabled && uiState.settings.digitalWellbeing.sortApps && uiState.usage.hasAccess
     }.orEmpty()
     val appListLayout = uiState.settings.listAppearance.appList
+    val numbersFirst = uiState.settings.listAppearance.alphabet.numbersFirst
     val appCategories = uiState.appCategories
     val categoryMembers = remember(uiState, appCategories) {
         appCategories.associate { category -> category.key to uiState.categoryItems(category).mapNotNull(uiState::findItem) }
@@ -612,10 +613,10 @@ internal fun LauncherScreen(
     val categoryTime = categoryNow.atZone(java.time.ZoneId.systemDefault()).toLocalTime()
     val categoryMinute = categoryTime.hour * 60 + categoryTime.minute
     val model = remember(appListApps, uiState.folders, privateFolder, privateExpanded, privateApps, recentFolder, workFolder, workExpanded,
-        workApps, usageRanking, appListLayout, appCategories, categoryMembers, categoryHeadphones, categoryMinute) {
+        workApps, usageRanking, appListLayout, appCategories, categoryMembers, categoryHeadphones, categoryMinute, numbersFirst) {
         AppListModel(appListApps, uiState.folders, privateFolder, privateExpanded, privateApps, recentFolder, workFolder, workExpanded, workApps,
             usageRanking = usageRanking, appList = appListLayout, categories = appCategories, categoryItems = categoryMembers,
-            headphones = categoryHeadphones, minuteOfDay = categoryMinute)
+            headphones = categoryHeadphones, minuteOfDay = categoryMinute, numbersFirst = numbersFirst)
     }
     val drawerState = rememberLazyListState()
     val appearance = rememberLauncherAppearance(uiState.textMode, uiState.themedIcons,
