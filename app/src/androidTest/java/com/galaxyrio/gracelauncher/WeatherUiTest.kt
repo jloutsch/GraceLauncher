@@ -113,7 +113,7 @@ class WeatherUiTest {
         assertTrue(weather.left > date.right)
         assertEquals(date.center.y, weather.center.y, 2f)
         screenshot("weather-home-en.png")
-        compose.onNodeWithTag("home_date").performClick()
+        compose.onNodeWithTag("home_date_text", useUnmergedTree = true).performClick()
         compose.onNodeWithTag("agenda_sheet").assertIsDisplayed()
         assertForecastAligned(today)
         compose.onNodeWithTag("weather_hourly").assertIsDisplayed()
@@ -144,7 +144,7 @@ class WeatherUiTest {
     @Test fun calendarPermissionAndCalendarErrorsKeepTheWeatherAvailable() {
         state = state.copy(scheduleStatus = ScheduleStatus.PermissionRequired, events = emptyList())
         showHome()
-        compose.onNodeWithTag("home_date").performClick()
+        compose.onNodeWithTag("home_date_text", useUnmergedTree = true).performClick()
         compose.onNodeWithTag("weather_hourly").assertIsDisplayed()
         assertForecastAligned(today)
         compose.onNodeWithTag("agenda_list").performScrollToNode(hasTestTag("new_event"))
