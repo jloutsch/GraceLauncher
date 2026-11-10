@@ -1134,7 +1134,8 @@ internal fun LauncherScreen(
                     overlay = LauncherOverlay.Agenda
                 },
                 onClockClick = onClockClick,
-                onWeatherClick = actions.openBreezyWeather,
+                onWeatherClick = if (uiState.settings.weatherAppKey?.let { key -> uiState.allApps.any { it.key == key } } == true)
+                    actions.openWeatherApp else actions.openBreezyWeather,
                 onWidgetMenu = { overlay = LauncherOverlay.HomeWidgetMenu },
                 onCustomWidgetMenu = { overlay = LauncherOverlay.CustomWidgetMenu },
                 actions = actions,
