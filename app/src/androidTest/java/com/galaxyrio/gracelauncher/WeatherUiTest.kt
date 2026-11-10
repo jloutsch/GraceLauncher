@@ -214,6 +214,21 @@ class WeatherUiTest {
         compose.onNodeWithTag("weather_hourly").assertHasNoClickAction()
     }
 
+    @Test fun homeWeatherOpensTheChosenWeatherAppAndOtherwiseBreezy() {
+        var appOpens = 0
+        var breezyOpens = 0
+        state = state.copy(settings = state.settings.copy(weatherAppKey = apps.first().key))
+        showHome(LauncherActions(openWeatherApp = { appOpens++ }, openBreezyWeather = { breezyOpens++ }))
+        compose.onNodeWithTag("home_weather").performClick()
+        compose.runOnIdle { assertEquals(1, appOpens); assertEquals(0, breezyOpens) }
+        compose.runOnIdle { state = state.copy(settings = state.settings.copy(weatherAppKey = "gone/gone.Activity")) }
+        compose.onNodeWithTag("home_weather").performClick()
+        compose.runOnIdle { assertEquals(1, appOpens); assertEquals(1, breezyOpens) }
+        compose.runOnIdle { state = state.copy(settings = state.settings.copy(weatherAppKey = null)) }
+        compose.onNodeWithTag("home_weather").performClick()
+        compose.runOnIdle { assertEquals(1, appOpens); assertEquals(2, breezyOpens) }
+    }
+
     @Test fun unavailableWeatherOffersAnActionThatMatchesTheConnectionProblem() {
         val invoked = mutableListOf<String>()
         state = state.copy(weather = WeatherState(WeatherStatus.NotInstalled))
