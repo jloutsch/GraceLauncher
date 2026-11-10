@@ -44,23 +44,25 @@ internal fun SwipeDismissContainer(
     contentColor: Color = MaterialTheme.colorScheme.primary,
     clipContent: Boolean = true,
     content: @Composable () -> Unit,
-) = key(itemKey) {
+) {
     val maxThreshold = with(LocalDensity.current) { thresholdDp.coerceIn(24, 160).dp.toPx() }
-    val scope = rememberCoroutineScope()
+    // A revision resets the gesture and cancels its jobs, not the child composition.
+    // Media buttons and artwork keep their native ripples and transitions across updates.
+    val scope = key(itemKey) { rememberCoroutineScope() }
     val currentDismiss by rememberUpdatedState(onDismiss)
     val currentEnabled by rememberUpdatedState(enabled)
     val currentCanDismiss by rememberUpdatedState(canDismiss)
     var width by remember { mutableIntStateOf(1) }
     val threshold = minOf(maxThreshold, width * .85f)
-    var dragging by remember { mutableStateOf(false) }
-    var settling by remember { mutableStateOf(false) }
-    var travel by remember { mutableFloatStateOf(0f) }
-    var breakaway by remember { mutableIntStateOf(0) }
-    val gap = remember { Animatable(0f) }
-    val restingOffset = remember { Animatable(0f) }
-    val tracker = remember { VelocityTracker() }
-    var lastMovementTime by remember { mutableLongStateOf(0L) }
-    var catchUp by remember { mutableStateOf<Job?>(null) }
+    var dragging by remember(itemKey) { mutableStateOf(false) }
+    var settling by remember(itemKey) { mutableStateOf(false) }
+    var travel by remember(itemKey) { mutableFloatStateOf(0f) }
+    var breakaway by remember(itemKey) { mutableIntStateOf(0) }
+    val gap = remember(itemKey) { Animatable(0f) }
+    val restingOffset = remember(itemKey) { Animatable(0f) }
+    val tracker = remember(itemKey) { VelocityTracker() }
+    var lastMovementTime by remember(itemKey) { mutableLongStateOf(0L) }
+    var catchUp by remember(itemKey) { mutableStateOf<Job?>(null) }
     val label = stringResource(R.string.notification_dismiss)
 
     fun displayedOffset(): Float = if (!dragging) restingOffset.value else
@@ -99,8 +101,8 @@ internal fun SwipeDismissContainer(
         }
     }
 
-    LaunchedEffect(enabled) { if (!enabled) finishDrag(cancelled = true) }
-    LaunchedEffect(canDismiss) {
+    LaunchedEffect(itemKey, enabled) { if (!enabled) finishDrag(cancelled = true) }
+    LaunchedEffect(itemKey, canDismiss) {
         if (!canDismiss) {
             catchUp?.cancel()
             breakaway = 0
@@ -117,7 +119,7 @@ internal fun SwipeDismissContainer(
         .onSizeChanged { width = it.width.coerceAtLeast(1) }
         // This surface never translates: movement and velocity stay in finger coordinates.
         // Horizontal detection leaves vertical scrolling, clicks and long presses to children.
-        .pointerInput(enabled, width, maxThreshold, resistance) {
+        .pointerInput(itemKey, enabled, width, maxThreshold, resistance) {
             detectHorizontalDragGestures(
                 onDragStart = {
                     if (enabled && !settling) {

@@ -20,6 +20,22 @@ current content tint.
 
 ## Sources
 
+### Music widget icons added 2026-11-05
+
+- `ms_play_arrow_filled.xml` (fill 1): https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/play_arrow/materialsymbolsoutlined/play_arrow_fill1_24px.xml
+- `ms_pause_filled.xml` (fill 1): https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/pause/materialsymbolsoutlined/pause_fill1_24px.xml
+- `ms_play_circle.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/play_circle/materialsymbolsoutlined/play_circle_24px.xml
+- `ms_pause_circle.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/pause_circle/materialsymbolsoutlined/pause_circle_24px.xml
+- `ms_chevron_backward.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/chevron_backward/materialsymbolsoutlined/chevron_backward_24px.xml
+- `ms_chevron_forward.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/chevron_forward/materialsymbolsoutlined/chevron_forward_24px.xml
+- `ms_album.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/album/materialsymbolsoutlined/album_24px.xml
+- `ms_artist.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/artist/materialsymbolsoutlined/artist_24px.xml
+- `ms_shuffle.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/shuffle/materialsymbolsoutlined/shuffle_24px.xml
+- `ms_linear_scale.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/linear_scale/materialsymbolsoutlined/linear_scale_24px.xml
+
+Official Android vector paths and viewports retained. Tint is supplied by Compose.
+Same Apache-2.0 license.
+
 ### App stack icon added 2026-10-15
 
 - `ms_steppers.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/steppers/materialsymbolsoutlined/steppers_24px.xml

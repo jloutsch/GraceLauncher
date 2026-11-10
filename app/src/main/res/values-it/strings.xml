@@ -827,4 +827,21 @@
     <string name="category_dynamic_rule">Regola dinamica</string>
     <string name="category_rule_notifications">App con notifiche</string>
     <string name="calendar_reading">Dati del calendario</string>
+    <string name="calendar_sources">Scegli calendari</string>
+    <string name="calendar_sources_visible">Calendari visibili dal sistema</string>
+    <plurals name="calendar_sources_selected">
+        <item quantity="one">%1$d calendario selezionato</item>
+        <item quantity="many">%1$d calendari selezionati</item>
+        <item quantity="other">%1$d calendari selezionati</item>
+    </plurals>
+    <string name="calendar_sources_loading">Caricamento calendari…</string>
+    <string name="calendar_sources_error">Impossibile caricare i calendari</string>
+    <string name="calendar_sources_empty">Nessun calendario trovato</string>
+    <string name="calendar_local">Su questo dispositivo</string>
+    <string name="calendar_unnamed">Calendario senza nome</string>
+    <string name="calendar_hidden">Nascosto nel calendario di sistema</string>
+    <string name="calendar_open_events">Apri eventi</string>
+    <string name="calendar_app">App calendario predefinita</string>
+    <string name="calendar_system_default_app">Predefinita di sistema</string>
+    <string name="calendar_choose_app_description">Scegli l\'app utilizzata per aprire gli eventi del calendario.</string>
 </resources>

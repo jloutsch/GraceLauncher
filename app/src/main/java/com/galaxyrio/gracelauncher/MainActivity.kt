@@ -1,6 +1,7 @@
 package com.galaxyrio.gracelauncher
 
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
@@ -17,6 +18,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import com.galaxyrio.gracelauncher.data.LauncherDatabase
 import com.galaxyrio.gracelauncher.data.backup.AutoBackupRunner
 import com.galaxyrio.gracelauncher.data.backup.BackupController
@@ -30,6 +32,9 @@ import com.galaxyrio.gracelauncher.ui.LauncherViewModel
 import com.galaxyrio.gracelauncher.ui.components.LocalAppTransitions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -56,6 +61,19 @@ class MainActivity : ComponentActivity() {
             statusBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launcherViewModel.uiState
+                    .filter { !it.isLoadingSettings && !it.settingsLoadFailed }
+                    .map { it.settings.allowScreenRotation }
+                    .distinctUntilChanged()
+                    .collect { allowRotation ->
+                        val orientation = if (allowRotation) ActivityInfo.SCREEN_ORIENTATION_USER
+                            else ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+                        if (requestedOrientation != orientation) requestedOrientation = orientation
+                    }
+            }
+        }
         setContent {
             CompositionLocalProvider(LocalAppTransitions provides appTransitions) {
                 LauncherAppTheme(launcherViewModel) {

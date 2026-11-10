@@ -74,7 +74,8 @@ class LauncherSettingsPersistenceTest {
                 LauncherDatabase.Migration24To25, LauncherDatabase.Migration25To26,
                 LauncherDatabase.Migration26To27, LauncherDatabase.Migration27To28,
                 LauncherDatabase.Migration28To29, LauncherDatabase.Migration29To30,
-                LauncherDatabase.Migration30To31).build()
+                LauncherDatabase.Migration30To31, LauncherDatabase.Migration31To32,
+                LauncherDatabase.Migration32To33).build()
         database = reopened
         return LauncherSettingsRepository(reopened)
     }
@@ -266,6 +267,7 @@ class LauncherSettingsPersistenceTest {
             calendarAgenda = false,
             showBatteryPercentage = false,
             allowHapticFeedback = false,
+            allowScreenRotation = false,
             useDynamicColors = false,
             themeColor = 0xFF28665A.toInt(),
             darkMode = ThemeMode.Dark,

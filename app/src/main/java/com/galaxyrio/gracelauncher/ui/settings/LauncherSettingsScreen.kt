@@ -79,7 +79,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 internal enum class SettingsPage {
-    Root, Productivity, Clock, ClockStyle, Calendar, Weather, Themes, Advanced, About, HiddenApps, Folders, FolderEditor,
+    Root, Productivity, Clock, ClockStyle, Calendar, CalendarSources, CalendarApp, Weather, Themes, Advanced, About, HiddenApps, Folders, FolderEditor,
     Changelog, Licenses, AppLicense, IconPacks, IconDesigner, IconDesignerApp, PrivateSpace, PrivateSpaceEditor, Search,
     MediaPlayer, GraceButton, GraceAction, GraceApp, GraceShortcut, GraceFolder, Gestures, WorkProfile, WorkProfileEditor,
     LabGraceButton, LabGesture, LabPopup, LabAccessibility, LabDismiss, Fonts, FontColors, ListAppearance, Alphabet, ShortcutsFolders, AppStacks,
@@ -178,7 +178,8 @@ fun LauncherSettingsScreen(
             alpha = 1f - rootExit.value
             translationX = distance * direction * rootExit.value
         }.background(if (currentEntry?.destination?.route in listOf(SettingsPage.ClockStyle.name, SettingsPage.IconDesigner.name,
-            SettingsPage.ListAppearance.name, SettingsPage.Alphabet.name, SettingsPage.GraceButtonAppearance.name, SettingsPage.GraceButtonPosition.name))
+            SettingsPage.ListAppearance.name, SettingsPage.Alphabet.name, SettingsPage.GraceButtonAppearance.name, SettingsPage.GraceButtonPosition.name,
+            SettingsPage.MediaPlayerAppearance.name))
             Color.Transparent else MaterialTheme.colorScheme.surfaceContainer),
         enterTransition = { settingsEnter(distance) },
         exitTransition = { settingsExit(distance) },
@@ -321,7 +322,7 @@ fun LauncherSettingsScreen(
                     SettingsPage.GraceButtonPosition -> GraceButtonPositionSettings(uiState, actions, back)
                     SettingsPage.AgendaAppearance -> SettingsPlaceholder(stringResource(R.string.settings_agenda), "agenda_appearance", back)
                     SettingsPage.SearchAppearance -> SettingsPlaceholder(stringResource(R.string.settings_search), "search_appearance", back)
-                    SettingsPage.MediaPlayerAppearance -> SettingsPlaceholder(stringResource(R.string.settings_media_player), "media_appearance", back)
+                    SettingsPage.MediaPlayerAppearance -> MediaPlayerAppearanceSettings(uiState, actions, back)
                     SettingsPage.ClockStyle -> ClockStyleSettings(uiState, actions, back) { navigate(SettingsPage.Fonts) }
                     SettingsPage.Fonts -> FontSettings(uiState, actions, back) { navigate(SettingsPage.FontColors) }
                     SettingsPage.FontColors -> FontColorSettings(uiState, actions, back)
@@ -350,8 +351,13 @@ fun LauncherSettingsScreen(
                             }
                         },
                     )
-                    SettingsPage.Calendar -> CalendarSettings(uiState, actions, back) { navigate(SettingsPage.ClockStyle) }
-                    SettingsPage.Advanced -> AdvancedSettings(back, navigate,
+                    SettingsPage.Calendar -> CalendarSettings(uiState, actions, back,
+                        onCalendars = { navigate(SettingsPage.CalendarSources) },
+                        onCalendarApp = { navigate(SettingsPage.CalendarApp) },
+                        onAppearance = { navigate(SettingsPage.ClockStyle) })
+                    SettingsPage.CalendarSources -> CalendarSourcesSettings(uiState, actions, back)
+                    SettingsPage.CalendarApp -> CalendarAppSettings(uiState, actions, back)
+                    SettingsPage.Advanced -> AdvancedSettings(uiState, actions, back, navigate,
                         onChooseDefaultHome = { if (isCurrent()) actions.requestDefaultHome() })
                     SettingsPage.LabGraceButton -> LabGraceButtonSettings(uiState, actions, back)
                     SettingsPage.LabGesture -> LabGestureSettings(uiState, actions, back)

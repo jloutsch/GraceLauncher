@@ -5,7 +5,6 @@ import android.app.Activity
 import android.app.KeyguardManager
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.ContentUris
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.LauncherApps
@@ -85,6 +84,7 @@ import androidx.lifecycle.withResumed
 import androidx.core.net.toUri
 import androidx.core.content.ContextCompat
 import com.galaxyrio.gracelauncher.R
+import com.galaxyrio.gracelauncher.platform.openCalendarEvent
 import com.galaxyrio.gracelauncher.MainActivity
 import com.galaxyrio.gracelauncher.WidgetSetupActivity
 import com.galaxyrio.gracelauncher.data.LauncherApp
@@ -203,7 +203,10 @@ fun LauncherRoute(
     }
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission(),
-    ) { viewModel.refreshSchedule() }
+    ) {
+        viewModel.refreshSchedule()
+        viewModel.refreshCalendarSources()
+    }
     val homeRoleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         viewModel.refreshProfiles()
     }
@@ -463,26 +466,22 @@ fun LauncherRoute(
             if (app != null) launchApp(app, null) else Toast.makeText(context, R.string.app_unavailable, Toast.LENGTH_SHORT).show()
         },
         openEvent = {
-            openSystemApp(Intent(Intent.ACTION_VIEW, ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, it.id))
-                .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, it.startsAt.toEpochMilli())
-                .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, it.endsAt.toEpochMilli()))
+            if (!openCalendarEvent(context, it, viewModel.uiState.value.settings.calendar.appPackage)) {
+                Toast.makeText(context, R.string.app_unavailable, Toast.LENGTH_SHORT).show()
+            }
         },
         refreshAgenda = viewModel::refreshSchedule,
+        refreshCalendarSources = viewModel::refreshCalendarSources,
         textMode = viewModel::setTextMode,
         themedIcons = viewModel::setThemedIcons,
         refreshIconPacks = viewModel::refreshApps,
         refreshApps = viewModel::refreshApps,
         applyClockStyle = viewModel::applyClockStyle,
+        applyMediaStyle = viewModel::applyMediaStyle,
         deleteFonts = viewModel::deleteFonts,
         applyIconDesign = viewModel::applyIconDesign,
         deleteIconDesigns = viewModel::deleteIconDesigns,
-        updateSettings = { change ->
-            val enableCalendar = change(uiState.settings).calendarAgenda && !uiState.settings.calendarAgenda
-            viewModel.updateSettings(change)
-            if (enableCalendar) {
-                permissionLauncher.launch(Manifest.permission.READ_CALENDAR)
-            }
-        },
+        updateSettings = viewModel::updateSettings,
         setHiddenApps = viewModel::setHiddenApps,
         hideApp = viewModel::hideApp,
         setFolderAutoHide = viewModel::setFolderAutoHide,

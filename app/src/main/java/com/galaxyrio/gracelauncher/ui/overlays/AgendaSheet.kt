@@ -72,8 +72,10 @@ fun AgendaSheet(uiState: LauncherUiState, actions: LauncherActions, onRequestCal
     }
     val events = uiState.events.takeIf { uiState.settings.calendarAgenda }.orEmpty()
     val calendarDays = uiState.settings.calendar.daysAhead
-    val groups = remember(events, forecasts, today, zone, forecastDays, calendarDays) {
-        weatherAgendaDays(events, forecasts.keys.toList(), today, forecastDays, zone, calendarDayCount = calendarDays)
+    val deprioritizeAllDay = uiState.settings.calendar.deprioritizeAllDay
+    val groups = remember(events, forecasts, today, zone, forecastDays, calendarDays, deprioritizeAllDay) {
+        weatherAgendaDays(events, forecasts.keys.toList(), today, forecastDays, zone,
+            calendarDayCount = calendarDays, deprioritizeAllDay = deprioritizeAllDay)
     }
     val dateFormat = remember(locale) { DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "MMMEd"), locale) }
     val compactDateFormat = remember(locale) { DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, "MMMd"), locale) }

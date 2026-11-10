@@ -32,6 +32,7 @@ fun agendaDays(
     today: LocalDate,
     zone: ZoneId = ZoneId.systemDefault(),
     dayCount: Long = 14,
+    deprioritizeAllDay: Boolean = true,
 ): Map<LocalDate, List<ScheduleEvent>> {
     val days = sortedMapOf<LocalDate, MutableList<ScheduleEvent>>()
     days[today] = mutableListOf()
@@ -44,6 +45,11 @@ fun agendaDays(
             day = day.plusDays(1)
         }
     }
+    if (deprioritizeAllDay) {
+        val withinDayOrder = compareBy<ScheduleEvent> { it.isAllDay }
+            .thenBy { it.localBoundary(it.startsAt, zone) }
+        days.values.forEach { it.sortWith(withinDayOrder) }
+    }
     return days
 }
 
@@ -53,19 +59,32 @@ fun visibleAgendaEvents(
     now: Instant,
     limit: Int,
     zone: ZoneId = ZoneId.systemDefault(),
-): List<ScheduleEvent> = events
-    .asSequence()
-    .filter { it.localBoundary(it.endsAt, zone).isAfter(now) }
-    .sortedBy { it.localBoundary(it.startsAt, zone) }
-    .distinctBy { it.id to it.startsAt }
-    .let { if (limit > 0) it.take(limit) else it }
-    .toList()
+    deprioritizeAllDay: Boolean = true,
+): List<ScheduleEvent> {
+    val chronological = compareBy<ScheduleEvent> { it.localBoundary(it.startsAt, zone) }
+    val order = if (deprioritizeAllDay) {
+        val today = now.atZone(zone).toLocalDate()
+        // Ongoing occurrences belong to today for priority, even when they
+        // began earlier. Future dates still follow all of today's events.
+        compareBy<ScheduleEvent> {
+            maxOf(today, it.localBoundary(it.startsAt, zone).atZone(zone).toLocalDate())
+        }.thenBy { it.isAllDay }.then(chronological)
+    } else chronological
+    return events.asSequence()
+        .filter { it.localBoundary(it.endsAt, zone).isAfter(now) }
+        .sortedWith(order)
+        .distinctBy { it.id to it.startsAt }
+        .let { if (limit > 0) it.take(limit) else it }
+        .toList()
+}
 
 fun nextVisibleEvent(
     events: List<ScheduleEvent>,
     now: Instant,
     zone: ZoneId = ZoneId.systemDefault(),
-): ScheduleEvent? = visibleAgendaEvents(events, now, limit = 1, zone = zone).firstOrNull()
+    deprioritizeAllDay: Boolean = true,
+): ScheduleEvent? = visibleAgendaEvents(events, now, limit = 1, zone = zone,
+    deprioritizeAllDay = deprioritizeAllDay).firstOrNull()
 
 fun eventCountdown(
     event: ScheduleEvent,
