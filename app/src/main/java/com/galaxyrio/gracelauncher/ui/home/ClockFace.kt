@@ -91,13 +91,13 @@ internal fun ClockTimeLabel(time: String, style: ClockStyle, textStyle: TextStyl
         val colon = time.indexOf(':')
         val hourDigits = time.take(colon.coerceAtLeast(0)).count(Char::isDigit)
         var hourSlot = (2 - hourDigits).coerceAtLeast(0)
-        var minuteSlot = 2
+        var followingSlot = 2
         val coloredTime = buildAnnotatedString {
             append(displayTime)
             time.forEachIndexed { index, character ->
                 if (character.isDigit()) {
-                    val slot = if (index < colon) hourSlot++ else minuteSlot++
-                    if (slot < 4) digitColors?.getOrNull(slot)?.let { addStyle(SpanStyle(color = it), index, index + 1) }
+                    val slot = if (index < colon) hourSlot++ else followingSlot++
+                    digitColors?.getOrNull(slot)?.let { addStyle(SpanStyle(color = it), index, index + 1) }
                 }
             }
         }

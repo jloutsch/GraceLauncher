@@ -14,6 +14,7 @@ ksp = "2.3.10"
 materialKolor = "4.1.1"
 aboutLibraries = "15.1.1"
 navigation = "2.9.8"
+media3 = "1.11.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -40,6 +41,7 @@ androidx-room-testing = { group = "androidx.room", name = "room-testing", versio
 material-kolor = { group = "com.materialkolor", name = "material-kolor", version.ref = "materialKolor" }
 aboutlibraries-core = { module = "com.mikepenz:aboutlibraries-core", version.ref = "aboutLibraries" }
 androidx-navigation-compose = { module = "androidx.navigation:navigation-compose", version.ref = "navigation" }
+androidx-media3-session = { module = "androidx.media3:media3-session", version.ref = "media3" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

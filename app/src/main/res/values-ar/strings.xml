@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="clock_enable">تفعيل الساعة</string>
+    <string name="calendar_enable">تفعيل اليومية والمدونة</string>
+    <string name="calendar_reading">تاريخ اليومية</string>
+    <string name="calendar_sources">إختر يومية</string>
+</resources>

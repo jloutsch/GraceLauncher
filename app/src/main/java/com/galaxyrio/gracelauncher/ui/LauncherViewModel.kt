@@ -31,6 +31,8 @@ import com.galaxyrio.gracelauncher.data.LauncherProfileSnapshot
 import com.galaxyrio.gracelauncher.data.CalendarRepository
 import com.galaxyrio.gracelauncher.data.CalendarRefreshMode
 import com.galaxyrio.gracelauncher.data.CalendarSnapshot
+import com.galaxyrio.gracelauncher.data.CalendarQuery
+import com.galaxyrio.gracelauncher.data.CalendarSource
 import com.galaxyrio.gracelauncher.data.CatalogRefreshState
 import com.galaxyrio.gracelauncher.data.FavoritesStore
 import com.galaxyrio.gracelauncher.data.LauncherApp
@@ -74,6 +76,7 @@ import com.galaxyrio.gracelauncher.platform.PrivateSpaceState
 import com.galaxyrio.gracelauncher.platform.DefaultHome
 import com.galaxyrio.gracelauncher.platform.BreezyWeatherUpdates
 import com.galaxyrio.gracelauncher.data.media.MediaCommand
+import com.galaxyrio.gracelauncher.data.MediaPlayerStyle
 import com.galaxyrio.gracelauncher.data.media.MediaSessionRepository
 import com.galaxyrio.gracelauncher.data.media.MediaSnapshot
 import com.galaxyrio.gracelauncher.data.media.NowPlaying
@@ -127,6 +130,8 @@ data class LauncherUiState(
     val appLoadFailed: Boolean = false,
     val events: List<ScheduleEvent> = emptyList(),
     val scheduleStatus: ScheduleStatus = ScheduleStatus.PermissionRequired,
+    val calendarSources: List<CalendarSource> = emptyList(),
+    val calendarSourcesStatus: ScheduleStatus = ScheduleStatus.Loading,
     val hasShortcutAccess: Boolean = false,
     val categories: Map<String, String> = emptyMap(),
     val textMode: WallpaperTextMode = WallpaperTextMode.Auto,
@@ -390,7 +395,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private val catalogRefresh = CatalogRefreshState<CatalogInputs>()
     private var privateAppLoadJob: Job? = null
     private var scheduleLoadJob: Job? = null
-    private data class ScheduleReadRequest(val daysAhead: Int, val automatic: Boolean)
+    private var calendarSourcesLoadJob: Job? = null
+    private data class ScheduleReadRequest(val query: CalendarQuery, val automatic: Boolean)
     private var activeScheduleRead: ScheduleReadRequest? = null
     private var pendingScheduleRead: ScheduleReadRequest? = null
     private var schedulePollingJob: Job? = null
@@ -515,8 +521,15 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     }
                     if (previous.isLoadingSettings ||
                         previous.settings.calendarAgenda != snapshot.settings.calendarAgenda ||
-                        previous.settings.calendar != snapshot.settings.calendar
+                        previous.settings.calendar.query != snapshot.settings.calendar.query ||
+                        previous.settings.calendar.refreshMode != snapshot.settings.calendar.refreshMode
                     ) updateCalendarRefreshPolicy()
+                    if (!previous.isLoadingSettings &&
+                        previous.settings.calendar.selectedCalendarIds != snapshot.settings.calendar.selectedCalendarIds
+                    ) {
+                        // A source edit applies immediately, including in manual refresh mode.
+                        requestScheduleRead(automatic = false)
+                    }
                     if (previous.isLoadingSettings || previous.settings.mediaPlayer != snapshot.settings.mediaPlayer) {
                         mediaRepository.setEnabled(snapshot.settings.mediaPlayer)
                     }
@@ -983,6 +996,29 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         updateCalendarRefreshPolicy()
     }
 
+    fun refreshCalendarSources() {
+        if (!hasCalendarPermission()) {
+            calendarSourcesLoadJob?.cancel()
+            _uiState.update { it.copy(calendarSources = emptyList(), calendarSourcesStatus = ScheduleStatus.PermissionRequired) }
+            return
+        }
+        if (calendarSourcesLoadJob?.isActive == true) return
+        calendarSourcesLoadJob = viewModelScope.launch {
+            _uiState.update { it.copy(calendarSourcesStatus = ScheduleStatus.Loading) }
+            try {
+                val calendars = calendarRepository.calendars()
+                val allowed = hasCalendarPermission()
+                _uiState.update { it.copy(calendarSources = if (allowed) calendars else emptyList(), calendarSourcesStatus =
+                    if (allowed) ScheduleStatus.Ready else ScheduleStatus.PermissionRequired) }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                _uiState.update { it.copy(calendarSources = emptyList(), calendarSourcesStatus =
+                    if (hasCalendarPermission()) ScheduleStatus.Error else ScheduleStatus.PermissionRequired) }
+            }
+        }
+    }
+
     fun setCalendarForeground(active: Boolean) {
         if (calendarForeground == active) return
         calendarForeground = active
@@ -1024,9 +1060,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 if (it.settings.calendarAgenda) ScheduleStatus.PermissionRequired else ScheduleStatus.Ready) }
             return
         }
-        val matching = snapshot?.takeIf { it.daysAhead == state.settings.calendar.daysAhead }
+        val matching = snapshot?.takeIf { it.query == state.settings.calendar.query }
         _uiState.update { it.copy(events = matching?.events.orEmpty(), scheduleStatus = when {
-            activeScheduleRead?.daysAhead == it.settings.calendar.daysAhead -> ScheduleStatus.Loading
+            activeScheduleRead?.query == it.settings.calendar.query -> ScheduleStatus.Loading
             else -> ScheduleStatus.Ready
         }) }
     }
@@ -1051,7 +1087,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val interval = preferences.refreshMode.intervalMillis ?: return
         schedulePollingJob = viewModelScope.launch {
             while (isActive) {
-                val snapshot = calendarRepository.snapshots.value?.takeIf { it.daysAhead == preferences.daysAhead }
+                val snapshot = calendarRepository.snapshots.value?.takeIf { it.query == preferences.query }
                 val remaining = snapshot?.let {
                     interval - (SystemClock.elapsedRealtimeNanos() - it.refreshedAtNanos) / 1_000_000L
                 } ?: 0L
@@ -1069,14 +1105,14 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (!ensureScheduleAccess()) return
         val preferences = _uiState.value.settings.calendar
         if (automatic && preferences.refreshMode == CalendarRefreshMode.Manual) return
-        val request = ScheduleReadRequest(preferences.daysAhead, automatic)
+        val request = ScheduleReadRequest(preferences.query, automatic)
         if (scheduleLoadJob?.isActive == true) {
             // Duplicate resume/timer/manual signals share the current read. A changed
-            // horizon replaces just one pending request, rather than restarting IO.
-            if (activeScheduleRead?.daysAhead == request.daysAhead) {
+            // horizon or source selection replaces just one pending request, rather than restarting IO.
+            if (activeScheduleRead?.query == request.query) {
                 pendingScheduleRead = null
                 if (!automatic) activeScheduleRead = request
-            } else if (pendingScheduleRead?.let { it.daysAhead == request.daysAhead && !it.automatic } != true) {
+            } else if (pendingScheduleRead?.let { it.query == request.query && !it.automatic } != true) {
                 pendingScheduleRead = request
             }
             return
@@ -1089,16 +1125,16 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     pendingScheduleRead = null
                     if (!ensureScheduleAccess()) break
                     val current = _uiState.value.settings.calendar
-                    if (current.daysAhead != next.daysAhead ||
+                    if (current.query != next.query ||
                         (next.automatic && (!calendarForeground || current.refreshMode == CalendarRefreshMode.Manual))) continue
                     activeScheduleRead = next
                     _uiState.update { it.copy(scheduleStatus = ScheduleStatus.Loading) }
                     try {
-                        calendarRepository.refresh(next.daysAhead)?.let(::adoptCalendarSnapshot)
+                        calendarRepository.refresh(next.query)?.let(::adoptCalendarSnapshot)
                     } catch (cancelled: CancellationException) {
                         throw cancelled
                     } catch (error: Exception) {
-                        if (ensureScheduleAccess() && _uiState.value.settings.calendar.daysAhead == next.daysAhead) {
+                        if (ensureScheduleAccess() && _uiState.value.settings.calendar.query == next.query) {
                             _uiState.update { it.copy(scheduleStatus = ScheduleStatus.Error) }
                         }
                     } finally {
@@ -1347,6 +1383,19 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun updateSettings(transform: (LauncherSettings) -> LauncherSettings) = persistSettings {
         settingsRepository.mutateSettings(transform)
+    }
+
+    suspend fun applyMediaStyle(style: MediaPlayerStyle): Boolean = settingsWriteMutex.withLock {
+        try {
+            settingsRepository.mutateSettings { it.copy(mediaStyle = style.normalized()) }
+            _uiState.update { it.copy(settingsSaveFailed = false) }
+            true
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            Log.e("LauncherViewModel", "Unable to save media style", error)
+            _uiState.update { it.copy(settingsSaveFailed = true) }
+            false
+        }
     }
 
     suspend fun applyClockStyle(style: ClockStyle): Boolean = settingsWriteMutex.withLock {

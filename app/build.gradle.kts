@@ -15,8 +15,8 @@ android {
         applicationId = "com.galaxyrio.gracelauncher"
         minSdk = 28
         targetSdk = 37
-        versionCode = 14
-        versionName = "1.2.2"
+        versionCode = 15
+        versionName = "1.2.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -71,6 +71,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
     implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.media3.session)
     implementation(libs.androidx.room.runtime)
     implementation(libs.material.kolor)
     implementation(libs.aboutlibraries.core)

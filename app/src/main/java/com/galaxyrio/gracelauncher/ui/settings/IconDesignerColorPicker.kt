@@ -45,7 +45,8 @@ import java.util.Locale
 @Composable
 internal fun IconDesignerColorPicker(title: String, choice: IconColor?, theme: Int, default: IconColor?,
     onChange: (IconColor?) -> Unit, onClose: () -> Unit, modifier: Modifier = Modifier, fallback: Int = theme,
-    allowFromApp: Boolean = false, appColor: Int? = null, fontColors: FontColors? = null) {
+    allowFromApp: Boolean = false, appColor: Int? = null, fontColors: FontColors? = null,
+    fromAppLabel: String? = null, fromAppSummary: String? = null) {
     val scheme = MaterialTheme.colorScheme
     // An inherited wallpaper text color is a live palette reference, not a fixed swatch.
     val selectedColor = choice ?: if (fontColors != null) IconColor(0, fontColorId = FontColors.WallpaperId) else null
@@ -93,7 +94,9 @@ internal fun IconDesignerColorPicker(title: String, choice: IconColor?, theme: I
                 }
             }
             DesignerConnectedChoices(IconColorSource.entries.filter { allowFromApp || it != IconColorSource.FromApp },
-                source, true, "icon_designer_color_source", { it.label() }) { selected ->
+                source, true, "icon_designer_color_source", {
+                    if (it == IconColorSource.FromApp && fromAppLabel != null) fromAppLabel else it.label()
+                }) { selected ->
                 if (selected == source) return@DesignerConnectedChoices
                 when (selected) {
                     IconColorSource.Theme -> {
@@ -116,7 +119,7 @@ internal fun IconDesignerColorPicker(title: String, choice: IconColor?, theme: I
                     Text(choice?.materialRole?.localizedLabel() ?: stringResource(R.string.font_color_material))
                 }
             }
-            if (source == IconColorSource.FromApp) Text(stringResource(R.string.icon_color_from_app_summary),
+            if (source == IconColorSource.FromApp) Text(fromAppSummary ?: stringResource(R.string.icon_color_from_app_summary),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (fixed) {
                 val planeDescription = stringResource(R.string.icon_designer_saturation_brightness)

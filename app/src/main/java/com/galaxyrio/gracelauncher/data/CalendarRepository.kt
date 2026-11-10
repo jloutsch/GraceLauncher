@@ -1,5 +1,6 @@
 package com.galaxyrio.gracelauncher.data
 
+import android.content.ContentUris
 import android.content.Context
 import android.os.SystemClock
 import android.provider.CalendarContract
@@ -14,9 +15,18 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 data class CalendarSnapshot(
-    val daysAhead: Int,
+    val query: CalendarQuery,
     val events: List<ScheduleEvent>,
     val refreshedAtNanos: Long,
+)
+
+data class CalendarSource(
+    val id: Long,
+    val name: String,
+    val accountName: String,
+    val accountType: String,
+    val color: Int?,
+    val visible: Boolean,
 )
 
 class CalendarRepository(private val context: Context) {
@@ -28,27 +38,68 @@ class CalendarRepository(private val context: Context) {
         sharedSnapshots.value = null
     }
 
-    suspend fun refresh(daysAhead: Int): CalendarSnapshot? {
-        val days = daysAhead.coerceIn(CalendarPreferences.DaysAheadRange)
+    suspend fun refresh(query: CalendarQuery): CalendarSnapshot? {
+        val normalizedQuery = query.copy(daysAhead = query.daysAhead.coerceIn(CalendarPreferences.DaysAheadRange))
         val requestedAt = SystemClock.elapsedRealtimeNanos()
         val generation = snapshotGeneration.get()
         return readMutex.withLock {
             if (generation != snapshotGeneration.get()) return@withLock null
             // A concurrent caller can use the same read once it has completed.
             sharedSnapshots.value?.takeIf {
-                it.daysAhead == days && it.refreshedAtNanos >= requestedAt
+                it.query == normalizedQuery && it.refreshedAtNanos >= requestedAt
             }?.let { return@withLock it }
-            val events = upcomingEvents(days)
+            val events = upcomingEvents(normalizedQuery)
             if (generation != snapshotGeneration.get()) return@withLock null
-            CalendarSnapshot(days, events, SystemClock.elapsedRealtimeNanos()).also {
+            CalendarSnapshot(normalizedQuery, events, SystemClock.elapsedRealtimeNanos()).also {
                 sharedSnapshots.value = it
             }
         }
     }
 
-    private suspend fun upcomingEvents(daysAhead: Int): List<ScheduleEvent> = withContext(Dispatchers.IO) {
+    /** Include hidden calendars in the picker without changing their provider flags. */
+    suspend fun calendars(): List<CalendarSource> = withContext(Dispatchers.IO) {
+        val projection = arrayOf(
+            CalendarContract.Calendars._ID,
+            CalendarContract.Calendars.CALENDAR_DISPLAY_NAME,
+            CalendarContract.Calendars.NAME,
+            CalendarContract.Calendars.ACCOUNT_NAME,
+            CalendarContract.Calendars.ACCOUNT_TYPE,
+            CalendarContract.Calendars.CALENDAR_COLOR,
+            CalendarContract.Calendars.VISIBLE,
+        )
+        val cursor = context.contentResolver.query(
+            CalendarContract.Calendars.CONTENT_URI, projection, null, null,
+            CalendarContract.Calendars.CALENDAR_DISPLAY_NAME + " COLLATE LOCALIZED ASC",
+        ) ?: error("Calendar provider returned no cursor")
+        cursor.use {
+            val idIndex = it.getColumnIndexOrThrow(CalendarContract.Calendars._ID)
+            val displayNameIndex = it.getColumnIndexOrThrow(CalendarContract.Calendars.CALENDAR_DISPLAY_NAME)
+            val nameIndex = it.getColumnIndexOrThrow(CalendarContract.Calendars.NAME)
+            val accountNameIndex = it.getColumnIndexOrThrow(CalendarContract.Calendars.ACCOUNT_NAME)
+            val accountTypeIndex = it.getColumnIndexOrThrow(CalendarContract.Calendars.ACCOUNT_TYPE)
+            val colorIndex = it.getColumnIndexOrThrow(CalendarContract.Calendars.CALENDAR_COLOR)
+            val visibleIndex = it.getColumnIndexOrThrow(CalendarContract.Calendars.VISIBLE)
+            buildList {
+                while (it.moveToNext()) {
+                    add(CalendarSource(
+                        id = it.getLong(idIndex),
+                        name = it.getString(displayNameIndex)?.trim()?.takeIf(String::isNotEmpty)
+                            ?: it.getString(nameIndex)?.trim().orEmpty(),
+                        accountName = it.getString(accountNameIndex).orEmpty(),
+                        accountType = it.getString(accountTypeIndex).orEmpty(),
+                        color = if (it.isNull(colorIndex)) null else it.getInt(colorIndex),
+                        visible = it.getInt(visibleIndex) != 0,
+                    ))
+                }
+            }
+        }
+    }
+
+    private suspend fun upcomingEvents(query: CalendarQuery): List<ScheduleEvent> = withContext(Dispatchers.IO) {
+        val calendarIds = query.selectedCalendarIds
+        if (calendarIds != null && calendarIds.isEmpty()) return@withContext emptyList()
         val now = Instant.now()
-        val horizon = now.plus(Duration.ofDays(daysAhead.toLong()))
+        val horizon = now.plus(Duration.ofDays(query.daysAhead.toLong()))
         val projection = arrayOf(
             CalendarContract.Instances.EVENT_ID,
             CalendarContract.Instances.TITLE,
@@ -61,13 +112,19 @@ class CalendarRepository(private val context: Context) {
             CalendarContract.Instances.CALENDAR_DISPLAY_NAME,
         )
 
-        CalendarContract.Instances.query(
-            context.contentResolver,
-            projection,
+        val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().apply {
             // Include UTC all-day instances that may still be today in the user's zone.
-            now.minus(Duration.ofDays(1)).toEpochMilli(),
-            horizon.toEpochMilli(),
-        )?.use { cursor ->
+            ContentUris.appendId(this, now.minus(Duration.ofDays(1)).toEpochMilli())
+            ContentUris.appendId(this, horizon.toEpochMilli())
+        }.build()
+        // Instances.query() always adds VISIBLE = 1, excluding explicitly selected hidden calendars.
+        val selection = if (calendarIds == null) CalendarContract.Calendars.VISIBLE + " = ?"
+            else CalendarContract.Instances.CALENDAR_ID + " IN (${calendarIds.joinToString { "?" }})"
+        val selectionArgs = calendarIds?.map(Long::toString)?.toTypedArray() ?: arrayOf("1")
+        val cursor = context.contentResolver.query(
+            uri, projection, selection, selectionArgs, "${CalendarContract.Instances.BEGIN} ASC",
+        ) ?: error("Calendar provider returned no cursor")
+        cursor.use {
             val idIndex = cursor.getColumnIndexOrThrow(CalendarContract.Instances.EVENT_ID)
             val titleIndex = cursor.getColumnIndexOrThrow(CalendarContract.Instances.TITLE)
             val beginIndex = cursor.getColumnIndexOrThrow(CalendarContract.Instances.BEGIN)
@@ -100,7 +157,7 @@ class CalendarRepository(private val context: Context) {
                     )
                 }
             }
-        }.orEmpty()
+        }
     }
 
     private companion object {

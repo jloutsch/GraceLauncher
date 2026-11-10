@@ -38,6 +38,7 @@ data class ClockVisibility(
 
 enum class ClockColorPart {
     HourTens, HourOnes, MinuteTens, MinuteOnes, Weekday, Month, Day, Battery, Weather, Agenda, WeatherIcon, BatteryIcon,
+    SecondTens, SecondOnes,
 }
 
 private const val ClockColorVersion = 2

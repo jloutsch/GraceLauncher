@@ -19,6 +19,7 @@ import androidx.annotation.MainThread
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.graphics.scale
 import androidx.core.net.toUri
+import com.galaxyrio.gracelauncher.data.icons.IconDominantColor
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -54,6 +55,8 @@ internal class MediaSessionRepository(
     private var artJob: Job? = null
     private var artRequest: ArtworkRequest? = null
     private var selected: Entry? = null
+    private var shuffleSessionId: String? = null
+    private var shuffleController: MediaShuffleController? = null
     private val listener = MediaSessionManager.OnActiveSessionsChangedListener { controllers ->
         if (enabled && hasAccess()) sync(controllers.orEmpty()) else refresh()
     }
@@ -157,6 +160,7 @@ internal class MediaSessionRepository(
             .maxByOrNull { playbackPriority(it.playback?.state ?: 0) }
             ?.takeUnless { it.dismissed }
         selected = entry
+        updateShuffleController(entry)
         if (entry == null) {
             artJob?.cancel(); artRequest = null
             _state.update { it.copy(nowPlaying = null) }
@@ -174,17 +178,46 @@ internal class MediaSessionRepository(
                 ?: metadata.bitmap(MediaMetadata.METADATA_KEY_DISPLAY_ICON),
             metadata.text(MediaMetadata.METADATA_KEY_ALBUM_ART_URI) ?: metadata.text(MediaMetadata.METADATA_KEY_ART_URI)
                 ?: metadata.text(MediaMetadata.METADATA_KEY_DISPLAY_ICON_URI))
-        val previousArt = _state.value.nowPlaying?.artwork.takeIf { request == artRequest }
-        _state.update { it.copy(nowPlaying = NowPlaying(entry.id, entry.playerName, title, artist, previousArt, playing,
+        val previous = _state.value.nowPlaying.takeIf { request == artRequest }
+        _state.update { it.copy(nowPlaying = NowPlaying(entry.id, entry.playerName, title, artist, previous?.artwork, playing,
             canToggle = supports(PlaybackState.ACTION_PLAY_PAUSE) || supports(if (playing) PlaybackState.ACTION_PAUSE else PlaybackState.ACTION_PLAY),
             canPrevious = supports(PlaybackState.ACTION_SKIP_TO_PREVIOUS), canNext = supports(PlaybackState.ACTION_SKIP_TO_NEXT),
-            revision = entry.revision)) }
+            revision = entry.revision,
+            album = metadata.text(MediaMetadata.METADATA_KEY_ALBUM),
+            durationMs = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.coerceAtLeast(0) ?: 0,
+            positionMs = entry.playback?.position?.coerceAtLeast(0) ?: 0,
+            positionUpdatedAtMs = entry.playback?.lastPositionUpdateTime ?: 0,
+            playbackSpeed = if (entry.playback?.state in listOf(PlaybackState.STATE_PLAYING,
+                PlaybackState.STATE_FAST_FORWARDING, PlaybackState.STATE_REWINDING)) entry.playback?.playbackSpeed ?: 0f else 0f,
+            canSeek = supports(PlaybackState.ACTION_SEEK_TO),
+            canShuffle = shuffleController?.available == true,
+            shuffleEnabled = shuffleController?.active == true,
+            artworkSeedColor = previous?.artworkSeedColor)) }
         if (request != artRequest) {
             artRequest = request
             artJob?.cancel()
             artJob = scope.launch {
-                val bitmap = withContext(Dispatchers.IO) { loadArtwork(request) }?.asImageBitmap()
-                if (request == artRequest) _state.update { it.copy(nowPlaying = it.nowPlaying?.copy(artwork = bitmap)) }
+                val artwork = withContext(Dispatchers.IO) {
+                    loadArtwork(request)?.let { bitmap -> bitmap.asImageBitmap() to artworkSeed(bitmap) }
+                }
+                if (request == artRequest) _state.update { it.copy(nowPlaying = it.nowPlaying?.copy(
+                    artwork = artwork?.first, artworkSeedColor = artwork?.second)) }
+            }
+        }
+    }
+
+    /** One connection for the selected, notified player; capability updates also serve the preview. */
+    private fun updateShuffleController(entry: Entry?) {
+        if (shuffleSessionId == entry?.id) return
+        shuffleSessionId = entry?.id
+        shuffleController?.close()
+        shuffleController = entry?.let { current ->
+            MediaShuffleController(context, current.controller.sessionToken) { available, active ->
+                if (shuffleSessionId == current.id) _state.update { snapshot ->
+                    snapshot.copy(nowPlaying = snapshot.nowPlaying?.let {
+                        if (it.sessionId == current.id) it.copy(canShuffle = available, shuffleEnabled = active) else it
+                    })
+                }
             }
         }
     }
@@ -210,6 +243,14 @@ internal class MediaSessionRepository(
             when (command) {
                 MediaCommand.Previous -> { if (!current.canPrevious) return false; controls.skipToPrevious() }
                 MediaCommand.Next -> { if (!current.canNext) return false; controls.skipToNext() }
+                MediaCommand.ToggleShuffle -> {
+                    if (!current.canShuffle) return false
+                    return shuffleController?.toggle() == true
+                }
+                is MediaCommand.Seek -> {
+                    if (!current.canSeek || current.durationMs <= 0 || command.revision != current.revision) return false
+                    controls.seekTo(command.positionMs.coerceIn(0, current.durationMs))
+                }
                 MediaCommand.TogglePlayback -> {
                     if (!current.canToggle) return false
                     val direct = if (current.playing) PlaybackState.ACTION_PAUSE else PlaybackState.ACTION_PLAY
@@ -254,6 +295,7 @@ internal class MediaSessionRepository(
     }
 
     private fun detach() {
+        updateShuffleController(null)
         if (listening) runCatching { manager.removeOnActiveSessionsChangedListener(listener) }
         listening = false
         entries.values.forEach { runCatching { it.controller.unregisterCallback(it.callback) } }
@@ -264,6 +306,14 @@ internal class MediaSessionRepository(
     fun close() { closed = true; detach(); scope.cancel() }
 
     private data class ArtworkRequest(val sessionId: String, val track: String?, val bitmap: Bitmap?, val uri: String?)
+
+    /** Sample only when artwork changes, off the UI thread; never recycle the player's bitmap. */
+    private fun artworkSeed(bitmap: Bitmap): Int? = runCatching {
+        val readable = if (bitmap.config == Bitmap.Config.HARDWARE)
+            bitmap.copy(Bitmap.Config.ARGB_8888, false) ?: return@runCatching null else bitmap
+        try { IconDominantColor.of(readable, allowNeutral = true) }
+        finally { if (readable !== bitmap) readable.recycle() }
+    }.getOrNull()
 
     private fun loadArtwork(request: ArtworkRequest): Bitmap? {
         return try {

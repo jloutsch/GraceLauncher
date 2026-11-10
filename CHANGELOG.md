@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.3
+
+- Added more customization options for clock widgets.
+- Added more styles for the music widget.
+- Added more app list customization options.
+- Added Gadgetbridge weather protocol support for apps such as Weather Master.
+- Added an adjustable touch area for the A-Z list.
+- Added other small features and fixed UI issues.
+
 ## 1.2.2
 
 ### Bug fixes

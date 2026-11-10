@@ -25,9 +25,18 @@ import com.galaxyrio.gracelauncher.ui.components.LauncherSymbol
 import kotlin.math.roundToInt
 
 @Composable
-internal fun AdvancedSettings(onBack: () -> Unit, navigate: (SettingsPage) -> Unit, onChooseDefaultHome: () -> Unit) {
+internal fun AdvancedSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit,
+    navigate: (SettingsPage) -> Unit, onChooseDefaultHome: () -> Unit) {
     SettingsScaffold(stringResource(R.string.settings_advanced), "settings_advanced", onBack) { padding ->
         SettingsList(padding) {
+            item { Spacer(Modifier.height(24.dp)) }
+            item {
+                SettingsToggleItem(stringResource(R.string.settings_allow_screen_rotation),
+                    stringResource(R.string.settings_allow_screen_rotation_summary), uiState.settings.allowScreenRotation,
+                    0, 1, "allow_screen_rotation") { enabled ->
+                    actions.updateSettings { it.copy(allowScreenRotation = enabled) }
+                }
+            }
             item { SettingsHeading(stringResource(R.string.settings_lab)) }
             item {
                 SettingsActionItem(stringResource(R.string.settings_grace_button), null, 0, 5, "lab_open_grace_button",

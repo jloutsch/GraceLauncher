@@ -24,7 +24,7 @@ internal data class PositionedClockGlyph(
     val x: Float,
     val y: Float = 0f,
     val letterSpacingEm: Float = 0f,
-    /** Logical hour tens/ones and minute tens/ones, independent of omitted leading zeros. */
+    /** Logical hour, minute and second tens/ones, independent of omitted leading zeros. */
     val digitSlot: Int? = null,
 )
 
@@ -134,9 +134,7 @@ internal fun measureClockGlyphs(
                 if (colon != null) addAll(colon.glyphs.map { it.copy(x = it.x + requireNotNull(positions.colonX)) })
                 addAll(minutes.glyphs.map { it.copy(x = it.x + positions.minuteX, y = positions.minuteBaseline) })
                 if (!stacked && groups.size == 3) {
-                    // Seconds intentionally use the base color, leaving the four
-                    // existing hour/minute color slots unchanged.
-                    val seconds = run(groups[2])
+                    val seconds = run(groups[2], firstDigitSlot = 4)
                     val secondsPositions = clockGroupPositions(minutes.ink, seconds.ink, groupGapPx,
                         stacked = false, colonWidth = colon?.ink?.width)
                     if (colon != null) addAll(colon.glyphs.map {

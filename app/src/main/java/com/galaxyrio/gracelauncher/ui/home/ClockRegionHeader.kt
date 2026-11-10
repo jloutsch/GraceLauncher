@@ -3,6 +3,7 @@ package com.galaxyrio.gracelauncher.ui.home
 import android.text.format.DateFormat
 import androidx.compose.animation.core.animateOffsetAsState
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
@@ -68,6 +69,7 @@ import com.galaxyrio.gracelauncher.data.visibleAgendaEvents
 import com.galaxyrio.gracelauncher.data.weather.WeatherCurrent
 import com.galaxyrio.gracelauncher.data.weather.WeatherSnapshot
 import com.galaxyrio.gracelauncher.ui.components.LauncherLayout
+import com.galaxyrio.gracelauncher.ui.theme.LauncherBatteryState
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.theme.rememberAppFontFamily
 import com.galaxyrio.gracelauncher.ui.theme.rememberBatteryState
@@ -101,6 +103,8 @@ internal fun HomeClockHeader(
     weatherSnapshot: WeatherSnapshot? = null,
     agendaEvents: List<ScheduleEvent> = listOfNotNull(event),
     clockActive: Boolean = true,
+    deprioritizeAllDay: Boolean = true,
+    batteryOverride: LauncherBatteryState? = null,
 ) {
     val regions = clockStyle.regions
     if (regions == null) {
@@ -111,7 +115,8 @@ internal fun HomeClockHeader(
     }
     val appearance = LocalLauncherAppearance.current
     val colors = ClockColorPart.entries.associateWith { resolvedFontColor(clockStyle.colors[it], onWallpaper = true) }
-    val digitColors = listOf(ClockColorPart.HourTens, ClockColorPart.HourOnes, ClockColorPart.MinuteTens, ClockColorPart.MinuteOnes)
+    val digitColors = listOf(ClockColorPart.HourTens, ClockColorPart.HourOnes, ClockColorPart.MinuteTens, ClockColorPart.MinuteOnes,
+        ClockColorPart.SecondTens, ClockColorPart.SecondOnes)
         .map(colors::getValue)
     val locale = LocalConfiguration.current.locales[0]
     val maxRotatedHeightPx = with(LocalDensity.current) {
@@ -124,9 +129,9 @@ internal fun HomeClockHeader(
     val batterySelected = regions.primary == ClockElement.Battery ||
         ClockElement.Battery in regions.secondary.selected || ClockElement.Battery in regions.tertiary.selected
     val battery = if (showCalendar && showBattery && batterySelected &&
-        (regions.battery.showIcon || regions.battery.showPercentage)) rememberBatteryState() else null
+        (regions.battery.showIcon || regions.battery.showPercentage)) batteryOverride ?: rememberBatteryState() else null
     val weatherVisible = hasHomeWeatherContent(weather, regions.weather, weatherSnapshot, now)
-    val agendaRows = if (showCalendar) visibleAgendaEvents(agendaEvents, now, limit = 0)
+    val agendaRows = if (showCalendar) visibleAgendaEvents(agendaEvents, now, limit = 0, deprioritizeAllDay = deprioritizeAllDay)
         .mapNotNull { current ->
             clockAgendaFields(current, regions.agenda.visibleFields).takeIf { it.isNotEmpty() }
                 ?.let { fields -> current to fields }
@@ -274,11 +279,12 @@ internal fun HomeClockHeader(
     fun agendaRegion(inset: Boolean = true, wrapWidth: Boolean = false) {
         if (agendaRows.isEmpty()) return
         val widthModifier = if (wrapWidth) Modifier else Modifier.fillMaxWidth()
+        val interactions = remember { MutableInteractionSource() }
         Box(widthModifier.testTag("clock_region:Agenda"), propagateMinConstraints = wrapWidth) {
-            Box(widthModifier.testTag("home_agenda").clip(LauncherLayout.RowShape)
+            Box(widthModifier.testTag("home_agenda")
                 .semantics { contentDescription = dateDescription }
                 .then(if (interactive) Modifier.combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() }, indication = ripple(color = colors.getValue(ClockColorPart.Agenda)),
+                    interactionSource = interactions, indication = null,
                     role = Role.Button, onClick = onDateClick, onLongClick = onLongClick,
                 ) else Modifier), propagateMinConstraints = wrapWidth) {
                 Column {
@@ -291,6 +297,11 @@ internal fun HomeClockHeader(
                                 color = colors.getValue(ClockColorPart.Agenda))
                         }
                     }
+                }
+                if (interactive) {
+                    // The rounded touch feedback must not clip the first/last row or its shadow.
+                    Box(Modifier.matchParentSize().clip(LauncherLayout.RowShape)
+                        .indication(interactions, ripple(color = colors.getValue(ClockColorPart.Agenda))))
                 }
             }
         }

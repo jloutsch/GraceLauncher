@@ -26,6 +26,7 @@ import com.galaxyrio.gracelauncher.ui.overlays.PopupWidgetItem
 import com.galaxyrio.gracelauncher.ui.overlays.PopupWidgetControls
 import kotlinx.coroutines.isActive
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.overscroll
 import androidx.compose.foundation.rememberOverscrollEffect
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -48,9 +49,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -96,6 +99,7 @@ import com.galaxyrio.gracelauncher.data.ClockColorPart
 import com.galaxyrio.gracelauncher.data.GraceButtonGesture
 import com.galaxyrio.gracelauncher.data.nextVisibleEvent
 import com.galaxyrio.gracelauncher.data.media.MediaCommand
+import com.galaxyrio.gracelauncher.data.IconDesign
 import com.galaxyrio.gracelauncher.data.media.NowPlaying
 import com.galaxyrio.gracelauncher.data.media.IdleMediaSessionId
 import com.galaxyrio.gracelauncher.data.weather.WeatherCurrent
@@ -156,7 +160,8 @@ fun HomeScreen(
     val headphones by rememberHeadphonesConnected()
     val localTime = now.atZone(java.time.ZoneId.systemDefault()).toLocalTime()
     val homeContent = uiState.visibleHomeContent(headphones, localTime.hour * 60 + localTime.minute)
-    val event = if (uiState.settings.calendarAgenda) nextVisibleEvent(uiState.events, now) else null
+    val event = if (uiState.settings.calendarAgenda) nextVisibleEvent(uiState.events, now,
+        deprioritizeAllDay = uiState.settings.calendar.deprioritizeAllDay) else null
     val entries = homeContent.items
     val categoryIcons = uiState.appCategories.associate { it.key to it.icon }
     val entriesByKey = entries.associateBy { it.key }
@@ -363,6 +368,7 @@ fun HomeScreen(
                             showClock = uiState.settings.clockEnabled, showCalendar = uiState.settings.calendarAgenda,
                             agendaEvents = if (uiState.settings.calendarAgenda) uiState.events else emptyList(),
                             calendarAboveClock = uiState.settings.calendarAboveClock,
+                            deprioritizeAllDay = uiState.settings.calendar.deprioritizeAllDay,
                             interactive = inputEnabled, onLongClick = {}, onWeatherClick = onWeatherClick,
                             clockActive = inputEnabled)
                         // Keep the slot while empty so its height springs to zero instead of
@@ -371,6 +377,9 @@ fun HomeScreen(
                             animationSpec = spring(dampingRatio = 1f, stiffness = 400f),
                         )) {
                             if (media != null) HomeMediaPlayer(media, onMediaCommand,
+                                style = uiState.settings.mediaStyle,
+                                iconDesign = uiState.settings.iconDesign?.design ?: IconDesign(),
+                                albumContainerColor = rememberMediaAlbumContainerColor(media.artworkSeedColor, uiState.settings),
                                 keepWhilePlaying = uiState.settings.mediaKeepWhilePlaying,
                                 dismissResistance = uiState.settings.dismissResistance,
                                 dismissThresholdDp = uiState.settings.dismissThresholdDp,
@@ -468,7 +477,8 @@ internal fun LegacyHomeClockHeader(
     val battery = if (showCalendar && showBattery && visibility.showBattery) rememberBatteryPercent() else null
     val visibleWeather = weather?.takeIf { visibility.showWeather && it.temperature != null }
     val colors = ClockColorPart.entries.associateWith { resolvedFontColor(clockStyle.colors[it], onWallpaper = true) }
-    val digitColors = listOf(ClockColorPart.HourTens, ClockColorPart.HourOnes, ClockColorPart.MinuteTens, ClockColorPart.MinuteOnes)
+    val digitColors = listOf(ClockColorPart.HourTens, ClockColorPart.HourOnes, ClockColorPart.MinuteTens, ClockColorPart.MinuteOnes,
+        ClockColorPart.SecondTens, ClockColorPart.SecondOnes)
         .map(colors::getValue)
     val context = LocalContext.current
     val locale = LocalConfiguration.current.locales[0]
@@ -518,62 +528,67 @@ internal fun LegacyHomeClockHeader(
     }
     val calendarContent: @Composable () -> Unit = {
         val shape = LauncherLayout.RowShape
-        if (calendarContentVisible) Surface(
+        val interactions = remember { MutableInteractionSource() }
+        if (calendarContentVisible) Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .testTag(dateTag)
                 .then(if (calendarAction) Modifier.semantics { contentDescription = dateDescription } else Modifier)
-                .clip(shape)
                 .then(if (interactive && calendarAction) Modifier.combinedClickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication = ripple(color = appearance.text),
+                    interactionSource = interactions,
+                    indication = null,
                     role = Role.Button,
                     onClick = onDateClick,
                     onLongClick = onLongClick,
                 ) else Modifier),
-            shape = shape,
-            color = Color.Transparent,
-            contentColor = appearance.text,
+            propagateMinConstraints = true,
         ) {
             val dateStyle = MaterialTheme.typography.bodyLarge.copy(
                 fontWeight = FontWeight.Normal,
                 shadow = appearance.textShadow,
             )
-            Column(Modifier.padding(vertical = LauncherLayout.ContentInset)) {
-                if (rowVisible) Row(Modifier.padding(horizontal = LauncherLayout.ContentInset, vertical = 2.dp)) {
-                    if (smallClockVisible) {
-                        ClockTimeLabel(
-                            time = clockText, style = clockStyle, textStyle = dateStyle,
-                            modifier = Modifier.alignByBaseline().testTag("${clockTag}_time")
-                                .semantics { contentDescription = clockDescription }
-                                .then(if (interactive) Modifier.combinedClickable(
-                                    interactionSource = remember { MutableInteractionSource() }, indication = null,
-                                    onClick = onClockClick,
-                                    onLongClick = onLongClick,
-                                ) else Modifier),
+            CompositionLocalProvider(LocalContentColor provides appearance.text) {
+                Column(Modifier.padding(vertical = LauncherLayout.ContentInset)) {
+                    if (rowVisible) Row(Modifier.padding(horizontal = LauncherLayout.ContentInset, vertical = 2.dp)) {
+                        if (smallClockVisible) {
+                            ClockTimeLabel(
+                                time = clockText, style = clockStyle, textStyle = dateStyle,
+                                modifier = Modifier.alignByBaseline().testTag("${clockTag}_time")
+                                    .semantics { contentDescription = clockDescription }
+                                    .then(if (interactive) Modifier.combinedClickable(
+                                        interactionSource = remember { MutableInteractionSource() }, indication = null,
+                                        onClick = onClockClick,
+                                        onLongClick = onLongClick,
+                                    ) else Modifier),
+                                color = appearance.text,
+                                digitColors = digitColors,
+                            )
+                            if (calendarText.isNotEmpty()) Text(" · ", modifier = Modifier.alignByBaseline(), color = appearance.text, style = dateStyle)
+                        }
+                        if (calendarText.isNotEmpty()) Text(
+                            text = calendarText,
+                            modifier = Modifier.weight(1f, fill = false).alignByBaseline().testTag("${dateTag}_text"),
                             color = appearance.text,
-                            digitColors = digitColors,
+                            style = dateStyle,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                        if (calendarText.isNotEmpty()) Text(" · ", modifier = Modifier.alignByBaseline(), color = appearance.text, style = dateStyle)
+                        if (visibleWeather != null) {
+                            if (smallClockVisible || calendarText.isNotEmpty()) Spacer(Modifier.width(10.dp))
+                            HomeWeather(visibleWeather, colors.getValue(ClockColorPart.Weather), dateStyle, Modifier.alignByBaseline(),
+                                onClick = onWeatherClick.takeIf { interactive }, onLongClick = onLongClick.takeIf { interactive },
+                                iconColor = colors.getValue(ClockColorPart.WeatherIcon))
+                        }
                     }
-                    if (calendarText.isNotEmpty()) Text(
-                        text = calendarText,
-                        modifier = Modifier.weight(1f, fill = false).alignByBaseline().testTag("${dateTag}_text"),
-                        color = appearance.text,
-                        style = dateStyle,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (visibleWeather != null) {
-                        if (smallClockVisible || calendarText.isNotEmpty()) Spacer(Modifier.width(10.dp))
-                        HomeWeather(visibleWeather, colors.getValue(ClockColorPart.Weather), dateStyle, Modifier.alignByBaseline(),
-                            onClick = onWeatherClick.takeIf { interactive }, onLongClick = onLongClick.takeIf { interactive },
-                            iconColor = colors.getValue(ClockColorPart.WeatherIcon))
+                    if (agendaVisible) {
+                        ScheduleLine(event = event, now = now, color = colors.getValue(ClockColorPart.Agenda))
                     }
                 }
-                if (agendaVisible) {
-                    ScheduleLine(event = event, now = now, color = colors.getValue(ClockColorPart.Agenda))
-                }
+            }
+            if (interactive && calendarAction) {
+                // Keep the legacy calendar's rounded ripple separate from its text and icons.
+                Box(Modifier.matchParentSize().clip(shape)
+                    .indication(interactions, ripple(color = appearance.text)))
             }
         }
     }

@@ -12,17 +12,18 @@ import kotlin.math.abs
 internal object IconDominantColor {
     private const val SampleSize = 24
 
-    fun of(icon: Bitmap): Int? {
+    /** Album artwork may keep a neutral seed; app icons retain their existing theme fallback. */
+    fun of(icon: Bitmap, allowNeutral: Boolean = false): Int? {
         val sampled = if (icon.width > SampleSize || icon.height > SampleSize)
             Bitmap.createScaledBitmap(icon, SampleSize, SampleSize, true) else icon
         val pixels = IntArray(sampled.width * sampled.height)
         try { sampled.getPixels(pixels, 0, sampled.width, 0, 0, sampled.width, sampled.height) }
         finally { if (sampled !== icon) sampled.recycle() }
-        return fromPixels(pixels)
+        return fromPixels(pixels, allowNeutral)
     }
 
     /** Pure pixel reduction, shared with the host-side color regression tests. */
-    internal fun fromPixels(pixels: IntArray): Int? {
+    internal fun fromPixels(pixels: IntArray, allowNeutral: Boolean = false): Int? {
         val counts = IntArray(1 shl 12)
         for (pixel in pixels) {
             if (pixel ushr 24 < 128) continue
@@ -39,6 +40,7 @@ internal object IconDominantColor {
             dominant < 0 -> null
             !isNeutral(dominant) -> bucketColor(dominant)
             saturated >= 0 -> bucketColor(saturated)
+            allowNeutral -> bucketColor(dominant)
             else -> null
         }
     }

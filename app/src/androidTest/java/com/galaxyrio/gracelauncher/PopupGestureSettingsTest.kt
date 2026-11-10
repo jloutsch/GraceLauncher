@@ -140,13 +140,14 @@ class PopupGestureSettingsTest {
     @Test fun labNavigationSlidersAndIndependentResets() {
         var state by mutableStateOf(LauncherUiState())
         var page by mutableStateOf(SettingsPage.Advanced)
+        val actions = LauncherActions(updateSettings = { update ->
+            state = state.copy(settings = update(state.settings))
+        })
         compose.setContent {
             GraceLauncherTheme(dynamicColor = false) {
                 if (page == SettingsPage.LabPopup) {
-                    LabPopupSettings(state, LauncherActions(updateSettings = { update ->
-                        state = state.copy(settings = update(state.settings))
-                    }), onBack = { page = SettingsPage.Advanced })
-                } else AdvancedSettings(onBack = {}, navigate = { page = it }, onChooseDefaultHome = {})
+                    LabPopupSettings(state, actions, onBack = { page = SettingsPage.Advanced })
+                } else AdvancedSettings(state, actions, onBack = {}, navigate = { page = it }, onChooseDefaultHome = {})
             }
         }
         compose.onNodeWithTag("lab_open_popup").performClick()
