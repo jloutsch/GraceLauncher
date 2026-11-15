@@ -60,7 +60,7 @@ class ForkLegacyBackupTest {
             .addMigrations(*LauncherDatabase.Migrations).build()
         try {
             val snapshot = LauncherSettingsRepository(database).snapshots.first()
-            assertEquals("w/w.Weather", snapshot.settings.weatherAppKey)
+            assertEquals("w/w.Weather", snapshot.settings.weatherConnection.appKey)
             val clockJson = database.openHelper.readableDatabase.query("SELECT clockStyleJson FROM launcher_settings").use { it.moveToFirst(); it.getString(0) }
             assertEquals(7, JSONObject(clockJson).getInt("marker"))
             assertEquals(setOf("ws"), snapshot.settings.widgetStackFolderIds)

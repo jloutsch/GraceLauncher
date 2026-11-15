@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.galaxyrio.gracelauncher.ui.settings
 
 import androidx.compose.animation.animateColorAsState
@@ -7,7 +9,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -72,7 +73,8 @@ internal fun ClockRegionOrder(
                 modifier = Modifier.then(if (dragging) Modifier else Modifier.animateItem())
                     .zIndex(if (dragging || reorder.drop?.key == key) 1f else 0f)
                     .graphicsLayer { translationY = offset }
-                    .fillMaxWidth().height(64.dp).clip(RoundedCornerShape(16.dp)).background(background)
+                    .fillMaxWidth().height(64.dp)
+                    .clip(ListItemDefaults.segmentedShapes(index, reorder.keys.size).shape).background(background)
                     .testTag("clock_region_order:$key")
                     .semantics {
                         customActions = buildList {

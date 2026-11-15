@@ -39,6 +39,17 @@ internal object BreezyWeatherParser {
                 condition = condition(item.string("weatherCode")),
                 isDaylight = item.optBoolean("isDaylight", true),
                 description = item.string("weatherText"),
+                feelsLike = item.temperature("sourceFeelsLike") ?: item.temperature("computedApparent"),
+                humidity = item.percent("relativeHumidity"),
+                wind = item.wind(),
+                airQuality = item.optJSONObject("airQuality")?.measure("index", setOf("aqi"))?.takeIf { it.value >= 0 },
+                uv = item.measure("uV", setOf("uvi"))?.takeIf { it.value >= 0 },
+                precipitationProbability = item.precipitation("precipitationProbability", probability = true),
+                precipitation = item.precipitation("precipitation"),
+                dewPoint = item.dewPoint(),
+                pressure = item.pressure(),
+                cloudCover = item.percent("cloudCover"),
+                visibility = item.visibility(),
             )
         }.distinctBy(WeatherHour::at).sortedBy(WeatherHour::at)
         val currentDaylight = hourly.minByOrNull { Duration.between(now, it.at).abs() }
@@ -50,20 +61,19 @@ internal object BreezyWeatherParser {
             val condition = condition(item.string("weatherCode"))
             val description = item.string("weatherText")
             val feelsLike = item.temperature("sourceFeelsLike") ?: item.temperature("computedApparent")
-            val humidity = item.measure("relativeHumidity", setOf("percent"))?.takeIf { it.value in 0.0..100.0 }
-            val wind = item.optJSONObject("wind")?.let { value ->
-                val degree = (value.opt("degree") as? Number)?.toDouble()?.takeIf {
-                    it.isFinite() && (it == -1.0 || it in 0.0..360.0)
-                }
-                val speed = value.measure("speed", setOf("mps", "kph", "kn", "mph", "ftps", "bf"))
-                    ?.takeIf { it.value >= 0 }
-                if (degree != null || speed != null) WeatherWind(degree, speed) else null
-            }
+            val humidity = item.percent("relativeHumidity")
+            val wind = item.wind()
             val airQuality = item.optJSONObject("airQuality")?.measure("index", setOf("aqi"))?.takeIf { it.value >= 0 }
             val uv = item.measure("uV", setOf("uvi"))?.takeIf { it.value >= 0 }
+            val dewPoint = item.dewPoint()
+            val pressure = item.pressure()
+            val cloudCover = item.percent("cloudCover")
+            val visibility = item.visibility()
             if (temperature == null && condition == WeatherCondition.Unknown && description == null &&
-                feelsLike == null && humidity == null && wind == null && airQuality == null && uv == null) null
-            else WeatherCurrent(temperature, condition, currentDaylight, description, feelsLike, humidity, wind, airQuality, uv)
+                feelsLike == null && humidity == null && wind == null && airQuality == null && uv == null &&
+                dewPoint == null && pressure == null && cloudCover == null && visibility == null) null
+            else WeatherCurrent(temperature, condition, currentDaylight, description, feelsLike, humidity, wind, airQuality, uv,
+                dewPoint = dewPoint, pressure = pressure, cloudCover = cloudCover, visibility = visibility)
         }
         val daily = json.optJSONArray("daily").objects().mapNotNull { item ->
             val date = item.instant("date")?.atZone(location.timeZone)?.toLocalDate() ?: return@mapNotNull null
@@ -75,14 +85,21 @@ internal object BreezyWeatherParser {
                 low = night?.temperature(),
                 condition = condition(day?.string("weatherCode") ?: night?.string("weatherCode")),
                 description = day?.string("weatherText") ?: night?.string("weatherText"),
+                feelsLike = day?.temperature("sourceFeelsLike") ?: day?.temperature("computedApparent"),
+                humidity = item.optJSONObject("relativeHumidity")?.percent("avg"),
+                wind = day?.wind() ?: night?.wind(),
+                airQuality = item.optJSONObject("airQuality")?.measure("index", setOf("aqi"))?.takeIf { it.value >= 0 },
+                uv = item.measure("uV", setOf("uvi"))?.takeIf { it.value >= 0 },
             )
         }.distinctBy(WeatherDay::date).sortedBy(WeatherDay::date)
         if (current == null && hourly.isEmpty() && daily.isEmpty()) return null
 
-        // Include separate air-quality attribution when its current index is available.
+        // Hourly air quality can be available even when the current index is absent.
         val sources = json.optJSONObject("sources")
         val credits = listOfNotNull(sources?.optJSONObject("current"), sources?.optJSONObject("forecast"),
-            sources?.optJSONObject("airQuality")?.takeIf { current?.airQuality != null })
+            sources?.optJSONObject("airQuality")?.takeIf {
+                current?.airQuality != null || hourly.any { it.airQuality != null } || daily.any { it.airQuality != null }
+            })
         val attribution = credits.mapNotNull { it.string("text") }.distinct().joinToString(" · ")
         val links = buildMap {
             credits.forEach { source ->
@@ -120,6 +137,36 @@ internal object BreezyWeatherParser {
 
     private fun JSONObject.temperature(part: String = "temperature"): WeatherTemperature? =
         optJSONObject("temperature")?.measure(part, setOf("c", "f", "k"))?.let { WeatherTemperature(it.value, it.unit) }
+
+    private fun JSONObject.percent(key: String): WeatherMeasure? =
+        measure(key, setOf("percent"))?.takeIf { it.value in 0.0..100.0 }
+
+    private fun JSONObject.dewPoint(): WeatherTemperature? =
+        measure("dewPoint", setOf("c", "f", "k"))?.let { WeatherTemperature(it.value, it.unit) }
+
+    private fun JSONObject.pressure(): WeatherMeasure? =
+        measure("pressure", setOf("mb", "kpa", "hpa", "atm", "mmhg", "inhg", "kgfpsqcm"))?.takeIf { it.value > 0 }
+
+    private fun JSONObject.visibility(): WeatherMeasure? =
+        measure("visibility", setOf("m", "km", "mi", "nmi", "ft"))?.takeIf { it.value >= 0 }
+
+    private fun JSONObject.wind(): WeatherWind? = optJSONObject("wind")?.let { value ->
+        val degree = (value.opt("degree") as? Number)?.toDouble()?.takeIf {
+            it.isFinite() && (it == -1.0 || it in 0.0..360.0)
+        }
+        val units = setOf("mps", "kph", "kn", "mph", "ftps", "bf")
+        val speed = value.measure("speed", units)?.takeIf { it.value >= 0 }
+        val gusts = value.measure("gusts", units)?.takeIf { it.value >= 0 }
+        if (degree != null || speed != null || gusts != null) WeatherWind(degree, speed, gusts) else null
+    }
+
+    private fun JSONObject.precipitation(key: String, probability: Boolean = false): WeatherPrecipitation? =
+        optJSONObject(key)?.let { data ->
+            fun value(part: String) = if (probability) data.percent(part) else
+                data.measure(part, setOf("mm", "cm", "in", "lpsqm"))?.takeIf { it.value >= 0 }
+            WeatherPrecipitation(value("total"), value("rain"), value("snow"), value("ice"), value("thunderstorm"))
+                .takeIf { it.total != null || it.rain != null || it.snow != null || it.ice != null || it.thunderstorm != null }
+        }
 
     private fun JSONObject.measure(key: String, units: Set<String>): WeatherMeasure? {
         val data = optJSONObject(key) ?: return null

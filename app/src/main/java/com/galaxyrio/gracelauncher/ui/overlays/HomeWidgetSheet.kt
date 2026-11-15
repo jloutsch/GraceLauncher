@@ -62,7 +62,7 @@ internal fun HomeWidgetSheet(uiState: LauncherUiState, actions: LauncherActions,
     }
     fun navigate(page: String) { onChange(LauncherOverlay.SettingsDestination(page)) }
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())
-        .padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 12.dp)) {
+        .padding(start = 20.dp, end = 20.dp, top = 22.dp, bottom = 12.dp + launcherSheetBottomInset())) {
         Row(Modifier.padding(horizontal = 12.dp).padding(bottom = 12.dp).heightIn(min = 48.dp), verticalAlignment = Alignment.CenterVertically) {
             if (custom && app != null) { AppIcon(app, size = 34.dp); Spacer(Modifier.width(20.dp)) }
             Text(if (custom) widget.widgetLabel ?: stringResource(R.string.widget_home_menu) else stringResource(R.string.widget_home_menu),

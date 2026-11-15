@@ -82,7 +82,7 @@ import kotlin.math.roundToInt
 private class ScrubState {
     var active by mutableStateOf(false)
     var fingerY by mutableFloatStateOf(0f)
-    var fingerX by mutableFloatStateOf(0f)
+    var inwardDistance by mutableFloatStateOf(0f)
     var selectedIndex by mutableIntStateOf(0)
     var drift by mutableFloatStateOf(0f)
 }
@@ -132,8 +132,8 @@ fun AlphabetRail(
     val inputEnabled by rememberUpdatedState(enabled)
     val currentOnScrubFinished by rememberUpdatedState(onScrubFinished)
     val currentOnDoubleTap by rememberUpdatedState(onDoubleTap)
-    var leftTouchOrigin by remember { mutableStateOf(Offset.Zero) }
-    var rightTouchOrigin by remember { mutableStateOf(Offset.Zero) }
+    var startTouchOrigin by remember { mutableStateOf(Offset.Zero) }
+    var endTouchOrigin by remember { mutableStateOf(Offset.Zero) }
     val haptics by rememberUpdatedState(LocalHapticFeedback.current)
     val density = LocalDensity.current
     val doubleTapSlop = with(density) { 100.dp.toPx() }
@@ -148,6 +148,9 @@ fun AlphabetRail(
     val rightTouchWidth = (alphabet?.rightTouchWidth?.coerceIn(28, 56) ?: 48).dp
     val railWidth = with(density) { 48.dp.toPx() }
     val rightAligned by rememberUpdatedState(LocalLayoutDirection.current == LayoutDirection.Ltr)
+    // Start/end placement mirrors automatically, but graphicsLayer translations
+    // use physical pixels. Move inward from the rail's actual screen edge.
+    val inwardDirection = if (rightAligned) -1f else 1f
     val indicatorSize = with(density) { 46.dp.toPx() }
     val indicatorGap = with(density) { 14.dp.toPx() }
     // Leave room for the rail's widest glyph (or its 18dp home star),
@@ -175,8 +178,8 @@ fun AlphabetRail(
 
     // Ignoring events inside a disabled pointer handler still blocks siblings below
     // this overlay. Detach it so widget resize handles can receive the initial down.
-    fun touchSurface(fromLeft: Boolean) = if (!enabled) Modifier else Modifier.pointerInput(
-        entries, fromLeft, onDoubleTap != null, doubleTapIntervalMs, doubleTapSlop,
+    fun touchSurface(fromStart: Boolean) = if (!enabled) Modifier else Modifier.pointerInput(
+        entries, fromStart, onDoubleTap != null, doubleTapIntervalMs, doubleTapSlop,
     ) {
         val doubleTapTimeout = doubleTapIntervalMs?.coerceIn(150, 700)?.toLong()
             ?: viewConfiguration.doubleTapTimeoutMillis
@@ -219,12 +222,11 @@ fun AlphabetRail(
                     val railY = change.position.y - railTopPx
                     state.drift = alphabetDriftAt(railY, railHeightPx.toFloat(), state.drift, freeMovement)
                     state.fingerY = (railY - state.drift).coerceIn(0f, railHeightPx.toFloat())
-                    // Translate the right strip into the fixed visual rail's coordinates.
-                    state.fingerX = when {
-                        fromLeft -> railWidth - change.position.x
-                        rightAligned -> railWidth - size.width + change.position.x
-                        else -> change.position.x
-                    }
+                    // Both logical edge strips drive the same inward pull. Measure
+                    // from the touched physical edge, including in RTL and when
+                    // the end strip's width differs from the visual rail's width.
+                    val fromRightEdge = if (fromStart) !rightAligned else rightAligned
+                    state.inwardDistance = if (fromRightEdge) size.width - change.position.x else change.position.x
                     val index = alphabetIndexAt(
                         y = state.fingerY,
                         height = railHeightPx.toFloat(),
@@ -245,7 +247,7 @@ fun AlphabetRail(
             }
             // Finish the scrub before an action changes pages or starts its transition.
             doubleTapPosition?.let { position ->
-                val origin = if (fromLeft) leftTouchOrigin else rightTouchOrigin
+                val origin = if (fromStart) startTouchOrigin else endTouchOrigin
                 currentOnDoubleTap?.invoke(origin + position)
             }
         }
@@ -254,12 +256,12 @@ fun AlphabetRail(
     // Two touch regions, one visual rail and one scrub state. No second alphabet is drawn.
     Box(modifier.then(if (leftTouchEnabled) Modifier.fillMaxWidth() else Modifier.width(maxOf(48.dp, rightTouchWidth))).height(touchHeight)) {
         if (leftTouchEnabled) Box(Modifier.align(Alignment.TopStart).width(28.dp).height(touchHeight)
-            .onGloballyPositioned { leftTouchOrigin = it.positionInRoot() }
+            .onGloballyPositioned { startTouchOrigin = it.positionInRoot() }
             .testTag("alphabet_left_touch").then(touchSurface(true)).clearAndSetSemantics {})
         Box(
             Modifier.align(Alignment.TopEnd).width(rightTouchWidth).height(touchHeight)
                 .then(if (showRightTouchArea) Modifier.background(MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)) else Modifier)
-                .onGloballyPositioned { rightTouchOrigin = it.positionInRoot() }
+                .onGloballyPositioned { endTouchOrigin = it.positionInRoot() }
                 .testTag("alphabet_rail")
                 .semantics { contentDescription = railDescription }
                 .then(touchSurface(false)),
@@ -290,8 +292,8 @@ fun AlphabetRail(
                             // every move through the launcher or the LazyColumn composition.
                             val distance = (index + 0.5f) * cellHeightPx - state.fingerY
                             val gaussian = exp(-(distance * distance) / (2f * waveRadius * waveRadius))
-                            val extraPull = ((railWidth - state.fingerX) * 0.35f).coerceIn(0f, basePull)
-                            translationX = -(basePull + extraPull) * gaussian * wave
+                            val extraPull = (state.inwardDistance * 0.35f).coerceIn(0f, basePull)
+                            translationX = inwardDirection * (basePull + extraPull) * gaussian * wave
                         }
                         .semantics {
                             contentDescription = description
@@ -337,12 +339,14 @@ fun AlphabetRail(
                 modifier = Modifier
                     .size(46.dp)
                     .graphicsLayer {
-                        val extraPull = ((railWidth - state.fingerX) * 0.35f).coerceIn(0f, basePull)
+                        val extraPull = (state.inwardDistance * 0.35f).coerceIn(0f, basePull)
                         // Use an edge-to-edge gap instead of a radius multiplier.
                         // Only the shared wave pull animates, so the bubble never
                         // crowds the rail while it appears or follows the finger.
-                        translationX = railWidth / 2f - indicatorSize - railGlyphHalfWidth - indicatorGap -
-                            (basePull + extraPull) * wave
+                        // The indicator is placed at logical Start inside the
+                        // rail; mirror its offset, not the glyph drawn inside it.
+                        translationX = inwardDirection * (indicatorSize + railGlyphHalfWidth + indicatorGap - railWidth / 2f +
+                            (basePull + extraPull) * wave)
                         translationY = railTopPx + drift + (state.fingerY - indicatorSize / 2f)
                             .coerceIn(0f, (railHeightPx - indicatorSize).coerceAtLeast(0f))
                         alpha = wave

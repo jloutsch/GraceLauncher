@@ -39,6 +39,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.LookaheadScope
@@ -55,6 +56,9 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.ClockColorPart
+import com.galaxyrio.gracelauncher.data.ClockAgenda
+import com.galaxyrio.gracelauncher.data.ClockTasks
+import com.galaxyrio.gracelauncher.data.ClockWeather
 import com.galaxyrio.gracelauncher.data.ClockElement
 import com.galaxyrio.gracelauncher.data.ClockRegions
 import com.galaxyrio.gracelauncher.data.ClockRegion
@@ -64,6 +68,8 @@ import com.galaxyrio.gracelauncher.data.ClockLayout
 import com.galaxyrio.gracelauncher.data.ClockStyle
 import com.galaxyrio.gracelauncher.data.ScheduleEvent
 import com.galaxyrio.gracelauncher.data.visibleAgendaEvents
+import com.galaxyrio.gracelauncher.data.tasks.TaskItem
+import com.galaxyrio.gracelauncher.data.tasks.TaskPriority
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.components.endPadding
@@ -93,7 +99,7 @@ import kotlinx.coroutines.launch
 private val ClockStyleDraftSaver = Saver<ClockStyle, String>(save = { it.encode() }, restore = { ClockStyle.decode(it) })
 
 private enum class ClockEditorPage { Presets, Style, Color }
-private enum class ClockContentPage { Agenda, Weather }
+private enum class ClockContentPage { Agenda, Weather, Task }
 
 private val ClockColorGroups = listOf(
     R.string.settings_clock to listOf(ClockColorPart.HourTens, ClockColorPart.HourOnes,
@@ -102,6 +108,7 @@ private val ClockColorGroups = listOf(
     R.string.settings_weather to listOf(ClockColorPart.Weather, ClockColorPart.WeatherIcon),
     R.string.clock_color_battery to listOf(ClockColorPart.Battery, ClockColorPart.BatteryIcon),
     R.string.settings_agenda to listOf(ClockColorPart.Agenda),
+    R.string.settings_tasks to listOf(ClockColorPart.Task),
 )
 
 @Composable
@@ -118,6 +125,8 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
     var baseline by rememberSaveable(stateSaver = ClockStyleDraftSaver) { mutableStateOf(draft) }
     var confirmExit by rememberSaveable { mutableStateOf(false) }
     var page by rememberSaveable { mutableStateOf(ClockEditorPage.Style) }
+    // Expansion belongs to this editor visit, not the saved widget configuration.
+    var expandedGroups by remember { mutableStateOf(emptySet<String>()) }
     var presetLayout by rememberSaveable {
         mutableStateOf(uiState.settings.clockStyle.layout.takeIf {
             uiState.settings.clockStyle.regions == null && !it.allowsCustomFont
@@ -170,7 +179,8 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
         val fontIds = listOf(current, baseline).flatMap { style ->
             val regions = style.resolvedRegions()
             (listOf(style.singleLine, style.twoLines) + style.presets.values + regions.primaryFaces.values).mapNotNull { it.fontId } +
-                listOfNotNull(regions.secondary.typography.fontId, regions.tertiary.typography.fontId, regions.agenda.typography.fontId)
+                listOfNotNull(regions.secondary.typography.fontId, regions.tertiary.typography.fontId,
+                    regions.agenda.typography.fontId, regions.tasks.typography.fontId)
         }
         val missing = fontIds
             .filter { ClockFontStore.displayName(it) != null && it !in available }.toSet()
@@ -192,6 +202,7 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
             ClockRegion.Secondary -> regions.secondary.typography.fontId
             ClockRegion.Tertiary -> regions.tertiary.typography.fontId
             ClockRegion.Agenda -> regions.agenda.typography.fontId
+            ClockRegion.Task -> regions.tasks.typography.fontId
             ClockRegion.Primary -> null
         }
         FontPickerDialog(uiState.settings.fontLibrary, fontId,
@@ -203,6 +214,8 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
                         typography = current.tertiary.typography.copy(fontId = id)))
                     ClockRegion.Agenda -> current.copy(agenda = current.agenda.copy(
                         typography = current.agenda.typography.copy(fontId = id)))
+                    ClockRegion.Task -> current.copy(tasks = current.tasks.copy(
+                        typography = current.tasks.typography.copy(fontId = id)))
                     ClockRegion.Primary -> current
                 } }
                 editingRegionFont = null
@@ -313,6 +326,15 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
                                             current.copy(agenda = current.agenda.copy(order = order))
                                         } },
                                         onClose = { editingContent = null }, modifier = controlsModifier.padding(bottom = 16.dp),
+                                        rightAligned = regions.agenda.rightAligned,
+                                        onAlignedReorder = { order, rightAligned -> if (pageEnabled) updateRegions { current ->
+                                            current.copy(agenda = current.agenda.copy(order = order, rightAligned = rightAligned))
+                                        } },
+                                        onReset = { if (pageEnabled) updateRegions { current ->
+                                            val defaults = ClockAgenda()
+                                            current.copy(agenda = current.agenda.copy(order = defaults.order,
+                                                selected = defaults.selected, rightAligned = defaults.rightAligned))
+                                        } },
                                     )
                                     ClockContentPage.Weather -> ClockContentPicker(
                                         stringResource(R.string.clock_weather_contents), regions.weather.order, regions.weather.selected,
@@ -331,6 +353,30 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
                                         onLabelChange = { field, shown -> if (pageEnabled) updateRegions { current ->
                                             current.copy(weather = current.weather.copy(labeledFields = if (shown)
                                                 current.weather.labeledFields + field else current.weather.labeledFields - field))
+                                        } },
+                                        onReset = { if (pageEnabled) updateRegions { current ->
+                                            current.copy(weather = ClockWeather())
+                                        } },
+                                    )
+                                    ClockContentPage.Task -> ClockContentPicker(
+                                        stringResource(R.string.clock_task_contents), regions.tasks.order, regions.tasks.selected,
+                                        pageEnabled, uiState.settings.allowHapticFeedback, "clock_task_field", label = { it.label() },
+                                        onSelect = { field, checked -> if (pageEnabled) updateRegions { current ->
+                                            current.copy(tasks = current.tasks.copy(selected = if (checked)
+                                                current.tasks.selected + field else current.tasks.selected - field))
+                                        } },
+                                        onReorder = { order -> if (pageEnabled) updateRegions { current ->
+                                            current.copy(tasks = current.tasks.copy(order = order))
+                                        } },
+                                        onClose = { editingContent = null }, modifier = controlsModifier.padding(bottom = 16.dp),
+                                        rightAligned = regions.tasks.rightAligned,
+                                        onAlignedReorder = { order, rightAligned -> if (pageEnabled) updateRegions { current ->
+                                            current.copy(tasks = current.tasks.copy(order = order, rightAligned = rightAligned))
+                                        } },
+                                        onReset = { if (pageEnabled) updateRegions { current ->
+                                            val defaults = ClockTasks()
+                                            current.copy(tasks = current.tasks.copy(order = defaults.order,
+                                                selected = defaults.selected, rightAligned = defaults.rightAligned))
                                         } },
                                     )
                                 }
@@ -355,9 +401,14 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
                                     }
                                     ClockEditorPage.Presets -> Unit
                                     ClockEditorPage.Style -> clockRegionSettings(regions, pageEnabled, uiState.settings.allowHapticFeedback,
+                                        expandedGroups = expandedGroups,
+                                        onToggleGroup = { group ->
+                                            expandedGroups = if (group in expandedGroups) expandedGroups - group else expandedGroups + group
+                                        },
                                         onChange = ::updateRegions, onFont = { editingFont = it }, onWeatherIcons = { weatherIcons = true },
                                         onWeatherContent = { editingContent = ClockContentPage.Weather },
                                         onAgendaContent = { editingContent = ClockContentPage.Agenda },
+                                        onTaskContent = { editingContent = ClockContentPage.Task },
                                         onRegionFont = { editingRegionFont = it })
                                 }
                             }
@@ -479,6 +530,17 @@ private fun ClockStylePreview(
         ) }
     }
     val zone = ZoneId.systemDefault()
+    val sampleTask = TaskItem(
+        id = -1L, title = stringResource(R.string.clock_task_preview_title),
+        dueAt = now.plusSeconds(3600), startsAt = now.minusSeconds(3600),
+        notes = stringResource(R.string.clock_task_preview_notes), priority = TaskPriority.Medium,
+        listName = stringResource(R.string.clock_task_preview_list), listColor = MaterialTheme.colorScheme.primary.toArgb(),
+    )
+    val tasks = uiState.tasks.tasks.ifEmpty {
+        List(9) { index -> sampleTask.copy(id = -(index + 1L),
+            title = if (index == 0) sampleTask.title else stringResource(R.string.clock_task_preview_task, index + 1),
+            dueAt = now.plusSeconds(3600 + index * 7200L)) }
+    }
     val weatherSnapshot = uiState.weather.snapshot ?: WeatherSnapshot(
         location = WeatherLocation("preview", stringResource(R.string.clock_weather_preview_location), zone),
         current = WeatherCurrent(
@@ -506,6 +568,8 @@ private fun ClockStylePreview(
                 Box(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                     HomeClockHeader(
                         now = now, event = events.firstOrNull(), onDateClick = {}, onClockClick = {}, agendaEvents = events,
+                        tasks = tasks, showTasks = true,
+                        taskPreferences = uiState.settings.calendar.tasksOrg,
                         showBattery = true, clockStyle = style,
                         showClock = true, showCalendar = true,
                         calendarAboveClock = uiState.settings.calendarAboveClock,
@@ -527,11 +591,11 @@ private fun ClockStylePreview(
 internal fun ClockSlider(
     title: String, value: Int, default: Int, range: IntRange, step: Int,
     index: Int, count: Int, tag: String, enabled: Boolean, valueLabel: String? = null,
-    discrete: Boolean = false, onChange: (Int) -> Unit,
+    discrete: Boolean = false, containerColor: Color = MaterialTheme.colorScheme.surfaceBright, onChange: (Int) -> Unit,
 ) {
     SegmentedListItem(
         shapes = ListItemDefaults.segmentedShapes(index, count),
-        colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceBright),
+        colors = ListItemDefaults.segmentedColors(containerColor = containerColor),
         modifier = Modifier.testTag("${tag}_item"),
         content = {
             Column {
@@ -587,6 +651,7 @@ private fun ClockColorPart.label(): String = stringResource(when (this) {
     ClockColorPart.Battery -> R.string.clock_color_battery_percentage
     ClockColorPart.Weather -> R.string.clock_color_weather
     ClockColorPart.Agenda -> R.string.clock_color_agenda
+    ClockColorPart.Task -> R.string.clock_color_task
     ClockColorPart.WeatherIcon -> R.string.clock_color_weather_icons
     ClockColorPart.BatteryIcon -> R.string.clock_color_battery_icons
 })

@@ -48,6 +48,9 @@ data class GraceButtonSettings(
     val appListAnimationDurationMs: Int = 500,
     /** 100 keeps the normal distance and velocity thresholds. Higher is easier. */
     val swipeSensitivity: Int = 100,
+    /** Home boundary pulls can require deliberate distance rather than fling velocity. */
+    val protectSwipeUp: Boolean = false,
+    val protectSwipeDown: Boolean = false,
     /** null follows the system double-tap timeout. */
     val doubleTapIntervalMs: Int? = null,
     val layout: GraceButtonLayout = GraceButtonLayout(),
@@ -93,6 +96,8 @@ data class GraceButtonSettings(
         put("searchAnimationDurationMs", searchAnimationDurationMs.coerceIn(100, 1500))
         put("appListAnimationDurationMs", appListAnimationDurationMs.coerceIn(100, 1500))
         put("swipeSensitivity", swipeSensitivity.coerceIn(50, 200))
+        put("protectSwipeUp", protectSwipeUp)
+        put("protectSwipeDown", protectSwipeDown)
         put("doubleTapIntervalMs", doubleTapIntervalMs?.coerceIn(150, 700))
         val placement = layout.normalized()
         put("layout", JSONObject().put("alignment", placement.alignment.name)
@@ -122,6 +127,8 @@ data class GraceButtonSettings(
                 searchAnimationDurationMs = data.optInt("searchAnimationDurationMs", defaults.searchAnimationDurationMs).coerceIn(100, 1500),
                 appListAnimationDurationMs = data.optInt("appListAnimationDurationMs", defaults.appListAnimationDurationMs).coerceIn(100, 1500),
                 swipeSensitivity = data.optInt("swipeSensitivity", defaults.swipeSensitivity).coerceIn(50, 200),
+                protectSwipeUp = data.optBoolean("protectSwipeUp", defaults.protectSwipeUp),
+                protectSwipeDown = data.optBoolean("protectSwipeDown", defaults.protectSwipeDown),
                 doubleTapIntervalMs = if (data.has("doubleTapIntervalMs") && !data.isNull("doubleTapIntervalMs"))
                     data.optInt("doubleTapIntervalMs", 300).coerceIn(150, 700) else defaults.doubleTapIntervalMs,
                 layout = if (layout == null) defaults.layout else GraceButtonLayout(

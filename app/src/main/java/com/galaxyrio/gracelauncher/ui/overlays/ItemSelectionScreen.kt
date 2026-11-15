@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.galaxyrio.gracelauncher.ui.overlays
 
 import android.appwidget.AppWidgetManager
@@ -8,6 +10,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -18,6 +21,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -483,7 +488,9 @@ private fun ItemSelectionScreen(
                 Text(emptyMessage ?: stringResource(if (reorderOnly) R.string.private_space_empty else if (onAddWidget == null) R.string.favorites_empty else R.string.popup_empty), Modifier.padding(8.dp),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            items(reorder.keys.mapNotNull(selectedEntries::get), key = { FavoritesReorderState.itemKey(it.key) }, contentType = { if (it.widget == null) "selected" else "widget" }) { entry ->
+            val selectedRows = reorder.keys.mapNotNull(selectedEntries::get)
+            itemsIndexed(selectedRows, key = { _, entry -> FavoritesReorderState.itemKey(entry.key) },
+                contentType = { _, entry -> if (entry.widget == null) "selected" else "widget" }) { rowIndex, entry ->
                 val dragging = reorder.draggingKey == entry.key
                 val offset by rememberReorderTranslation(reorder, entry.key)
                 val background by animateColorAsState(if (dragging) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainer,
@@ -494,7 +501,8 @@ private fun ItemSelectionScreen(
                 Column(Modifier.then(if (dragging) Modifier else Modifier.animateItem())
                     .zIndex(if (dragging || reorder.drop?.key == entry.key) 1f else 0f)
                     .graphicsLayer { translationY = offset }
-                    .clip(RoundedCornerShape(16.dp)).background(background)
+                    .padding(bottom = ListItemDefaults.SegmentedGap)
+                    .clip(ListItemDefaults.segmentedShapes(rowIndex, selectedRows.size).shape).background(background)
                     .semantics {
                         customActions = buildList {
                             if (enabled && !readOnlySelected && index > 0) add(CustomAccessibilityAction(moveUp) { reorder.moveBy(entry.key, -1) })
@@ -505,7 +513,7 @@ private fun ItemSelectionScreen(
                     SelectionChoice(entry, true, "favorite:${entry.key}", enabled && reorder.draggingKey == null,
                         { if (entry.key !in mandatoryKeys) onRemove(entry.key) },
                         selectable = !reorderOnly && !readOnlySelected, checkboxEnabled = entry.key !in mandatoryKeys,
-                        checkboxOnly = checkboxOnly, onRowClick = edit) {
+                        checkboxOnly = checkboxOnly, shape = RectangleShape, onRowClick = edit) {
                         if (edit != null) IconButton(onClick = edit, enabled = enabled && reorder.draggingKey == null,
                             modifier = Modifier.testTag("favorite_edit:${entry.key}")) {
                             Icon(painterResource(R.drawable.ms_edit), stringResource(R.string.homepage_edit_item, entry.label))
@@ -627,9 +635,11 @@ private fun SelectionHeading(text: String, tag: String) {
 private fun SelectionChoice(entry: SelectionEntry, checked: Boolean, tag: String, enabled: Boolean, onToggle: () -> Unit,
     modifier: Modifier = Modifier, selectable: Boolean = true, checkboxOnly: Boolean = false,
     checkboxEnabled: Boolean = true,
+    shape: Shape = RoundedCornerShape(16.dp),
     onRowClick: (() -> Unit)? = null, trailing: @Composable () -> Unit = {}) {
     AppSelectionRow(entry.label, checked, if (checkboxOnly) onRowClick ?: {} else onToggle, modifier.testTag(tag), enabled = enabled,
-        selectable = selectable, trailing = trailing, checkboxEnabled = checkboxEnabled, onCheckboxClick = if (checkboxOnly) onToggle else null, icon = {
+        selectable = selectable, trailing = trailing, checkboxEnabled = checkboxEnabled, shape = shape,
+        onCheckboxClick = if (checkboxOnly) onToggle else null, icon = {
             if (entry.category != null) {
                 if (entry.category.icon == CategoryIcon.None) LauncherIcon(LauncherSymbol.Category) else CategoryIndicator(entry.category.icon)
             }

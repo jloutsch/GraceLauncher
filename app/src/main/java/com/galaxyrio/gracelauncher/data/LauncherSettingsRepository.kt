@@ -74,7 +74,8 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
             weatherLocationId = settings.weatherLocationId,
             weatherConnectionJson = settings.weatherConnection.encode(),
             clockAppKey = settings.clockAppKey,
-            clockStyleJson = settings.clockStyle.encode().withField(WeatherAppKeyField, settings.weatherAppKey),
+            clockStyleJson = settings.clockStyle.encode(),
+            agendaAppearanceJson = settings.agendaAppearance.encode(),
             homeLayoutJson = settings.homeLayout.encode(),
             hideStatusBar = settings.hideStatusBar,
             hideAlphabet = settings.hideAlphabet,
@@ -100,6 +101,37 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
             preferNonAccessibility = settings.preferNonAccessibility,
             calendarPreferencesJson = settings.calendar.encode(),
         ))
+    }
+
+    /** Commit presentation and its widget together; only then release IDs no surface still owns. */
+    suspend fun saveAgendaAppearance(style: AgendaAppearance, widget: HomeLayout?): List<Int> = database.withTransaction {
+        val items = database.itemsDao()
+        val previous = listOf(AgendaWidgetKey, AgendaWidgetDraftKey).flatMap { key ->
+            items.popup(key)?.let { PopupItem.decode(it.itemsJson) }.orEmpty()
+        }.mapNotNull { it.widget?.widgetId }.toSet()
+        val selected = widget?.takeIf { it.hasWidget }
+        require(selected == null || selected.widgetId in previous)
+        val current = dao.readSettings()?.toSettings() ?: LauncherSettings()
+        // An appearance draft must not reset the last action chosen on the agenda itself.
+        updateSettings(current.copy(agendaAppearance = style.normalized().copy(
+            lastCreateAction = current.agendaAppearance.lastCreateAction)))
+        if (selected == null) items.deletePopup(AgendaWidgetKey)
+        else items.savePopup(AppPopupEntity(AgendaWidgetKey,
+            PopupItem.encode(listOf(PopupItem("widget:${selected.widgetId}", selected)))))
+        items.deletePopup(AgendaWidgetDraftKey)
+        val retained = items.readPopups().flatMap { PopupItem.decode(it.itemsJson) }.mapNotNull { it.widget?.widgetId }.toSet() +
+            current.homeLayout.widgetId
+        previous.filterNot { it in retained }
+    }
+
+    suspend fun discardAgendaWidgetDraft(): List<Int> = database.withTransaction {
+        val items = database.itemsDao()
+        val removed = items.popup(AgendaWidgetDraftKey)?.let { PopupItem.decode(it.itemsJson) }.orEmpty()
+            .mapNotNull { it.widget?.widgetId }
+        items.deletePopup(AgendaWidgetDraftKey)
+        val retained = items.readPopups().flatMap { PopupItem.decode(it.itemsJson) }.mapNotNull { it.widget?.widgetId }.toSet() +
+            (dao.readSettings()?.toSettings()?.homeLayout?.widgetId ?: -1)
+        removed.filterNot { it in retained }
     }
 
     /** Read-modify-write is atomic even when a UI emission has not arrived yet. */
@@ -212,6 +244,9 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
         dao.readSettings()?.let {
             dao.saveSettings(it.copy(iconDesignJson = json(it.iconDesignJson), mediaAppKey = json(it.mediaAppKey),
                 graceButtonJson = json(it.graceButtonJson), clockAppKey = json(it.clockAppKey), clockStyleJson = json(it.clockStyleJson),
+                weatherConnectionJson = WeatherConnectionPreferences.decode(it.weatherConnectionJson).let { weather ->
+                    weather.copy(appKey = weather.appKey?.let(::key)).encode()
+                },
                 homeLayoutJson = json(it.homeLayoutJson), listAppearanceJson = json(it.listAppearanceJson),
                 privateSpaceJson = json(it.privateSpaceJson), workProfileJson = json(it.workProfileJson),
                 homeGesturesJson = json(it.homeGesturesJson), searchJson = json(it.searchJson),
@@ -259,11 +294,14 @@ private fun LauncherSettingsEntity.toSettings() = LauncherSettings(
     weatherEnabled = weatherEnabled,
     weatherForecastDays = weatherForecastDays.coerceIn(1, 14),
     weatherLocationId = weatherLocationId,
-    weatherAppKey = stringField(clockStyleJson, WeatherAppKeyField),
     widgetStackFolderIds = stringSetField(shortcutsFoldersJson, WidgetStackFoldersField),
-    weatherConnection = WeatherConnectionPreferences.decode(weatherConnectionJson),
+    // The fork's own weather app choice predates upstream's; carry it over until the user picks one there.
+    weatherConnection = WeatherConnectionPreferences.decode(weatherConnectionJson).let { weather ->
+        if (weather.appKey != null) weather else weather.copy(appKey = stringField(clockStyleJson, WeatherAppKeyField))
+    },
     clockAppKey = clockAppKey,
     clockStyle = ClockStyle.decode(clockStyleJson, legacyShowBattery = showBatteryPercentage),
+    agendaAppearance = AgendaAppearance.decode(agendaAppearanceJson),
     homeLayout = HomeLayout.decode(homeLayoutJson),
     hideStatusBar = hideStatusBar,
     hideAlphabet = hideAlphabet,

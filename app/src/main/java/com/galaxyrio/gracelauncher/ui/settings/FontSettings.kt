@@ -214,7 +214,8 @@ internal fun FontSettings(uiState: LauncherUiState, actions: LauncherActions, on
                     Row(Modifier.then(if (dragging) Modifier else Modifier.animateItem())
                         .zIndex(if (dragging || reorder.drop?.key == id) 1f else 0f)
                         .graphicsLayer { translationY = offset }
-                        .fillMaxWidth().heightIn(min = 64.dp).clip(MaterialTheme.shapes.large)
+                        .fillMaxWidth().padding(bottom = ListItemDefaults.SegmentedGap).heightIn(min = 64.dp)
+                        .clip(ListItemDefaults.segmentedShapes(filtered.indexOf(id), filtered.size).shape)
                         .background(if (dragging) MaterialTheme.colorScheme.surfaceContainerHigh else MaterialTheme.colorScheme.surfaceContainer)
                         .combinedClickable(enabled = canSelect, role = Role.Checkbox, onClick = { toggle() },
                             onLongClick = if (id in imported) ({ deleting = true; deletion = listOf(id) }) else null)

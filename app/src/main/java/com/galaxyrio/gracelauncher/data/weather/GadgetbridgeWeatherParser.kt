@@ -72,16 +72,20 @@ internal object GadgetbridgeWeatherParser {
         val currentCondition = condition(data.optInt("currentConditionCode", -1))
         val description = data.text("currentCondition")
         val feelsLike = data.temperature("feelsLikeTemp", unit)
-        val humidity = data.number("currentHumidity")?.takeIf { it in 0.0..100.0 }?.let { WeatherMeasure(it, "percent") }
-        val speed = data.number("windSpeed")?.takeIf { it >= 0 }?.let { WeatherMeasure(it, "kph") }
-        val direction = data.number("windDirection")?.takeIf { it in 0.0..360.0 }
-        val wind = if (speed != null || direction != null) WeatherWind(direction, speed) else null
+        val humidity = data.percent("currentHumidity")
+        val wind = data.wind()
         val airQuality = data.optJSONObject("airQuality")?.number("aqi")?.takeIf { it >= 0 }?.let { WeatherMeasure(it, "aqi") }
         val uv = data.number("uvIndex")?.takeIf { it >= 0 }?.let { WeatherMeasure(it, "uvi") }
+        val precipitationProbability = data.percent("precipProbability")?.let { WeatherPrecipitation(total = it) }
+        val dewPoint = data.temperature("dewPoint", unit)
+        val pressure = data.pressure()
+        val cloudCover = data.percent("cloudCover")
+        val visibility = data.number("visibility")?.takeIf { it >= 0 }?.let { WeatherMeasure(it, "m") }
         val current = if (temperature == null && currentCondition == WeatherCondition.Unknown && description == null &&
-            feelsLike == null && humidity == null && wind == null && airQuality == null && uv == null) null
+            feelsLike == null && humidity == null && wind == null && airQuality == null && uv == null &&
+            precipitationProbability == null && dewPoint == null && pressure == null && cloudCover == null && visibility == null) null
         else WeatherCurrent(temperature, currentCondition, daylight(now, sunrise, sunset, zone), description,
-            feelsLike, humidity, wind, airQuality, uv)
+            feelsLike, humidity, wind, airQuality, uv, precipitationProbability, dewPoint, pressure, cloudCover, visibility)
 
         val rawHours = data.optJSONArray("hourly").objects(MAX_HOURS)
         val rawDays = data.optJSONArray("forecasts").objects(MAX_DAYS)
@@ -95,19 +99,44 @@ internal object GadgetbridgeWeatherParser {
                     firstDay.number("maxTemp") == data.number("todayMaxTemp")))
         val hourly = rawHours.mapNotNull { hour ->
             val at = hour.instant("timestamp") ?: return@mapNotNull null
-            WeatherHour(at, hour.temperature("temp", unit) ?: hour.temperature("temperature", unit), condition(hour.optInt("conditionCode", -1)),
-                daylight(at, sunrise, sunset, zone), hour.text("condition"))
+            WeatherHour(
+                at = at,
+                temperature = hour.temperature("temp", unit) ?: hour.temperature("temperature", unit),
+                condition = condition(hour.optInt("conditionCode", -1)),
+                isDaylight = daylight(at, sunrise, sunset, zone),
+                description = hour.text("condition"),
+                humidity = hour.percent("humidity"),
+                wind = hour.wind(),
+                uv = hour.number("uvIndex")?.takeIf { it >= 0 }?.let { WeatherMeasure(it, "uvi") },
+                precipitationProbability = hour.percent("precipProbability")?.let { WeatherPrecipitation(total = it) },
+                dewPoint = hour.temperature("dewPoint", unit),
+                pressure = hour.pressure(),
+                cloudCover = hour.percent("cloudCover"),
+                // WeatherSpec.Hourly does not expose feels-like, AQI, gusts, amounts or visibility.
+            )
         }.distinctBy(WeatherHour::at).sortedBy(WeatherHour::at)
         val daily = buildList {
             val high = data.temperature("todayMaxTemp", unit)
             val low = data.temperature("todayMinTemp", unit)
-            if (high != null || low != null) add(WeatherDay(forecastDate, high, low, currentCondition, description))
+            if (high != null || low != null) add(WeatherDay(forecastDate, high, low, currentCondition, description,
+                feelsLike = feelsLike, humidity = humidity, wind = wind, airQuality = airQuality, uv = uv))
             rawDays.forEachIndexed { dayIndex, day ->
                 // Standard WeatherSpec forecasts start tomorrow; WeatherMaster's variant starts today.
                 val date = (day.instant("sunRise") ?: day.instant("sunSet"))?.atZone(zone)?.toLocalDate()
                     ?: forecastDate.plusDays(dayIndex.toLong() + if (firstForecastIsToday) 0 else 1)
-                add(WeatherDay(date, day.temperature("maxTemp", unit), day.temperature("minTemp", unit),
-                    condition(day.optInt("conditionCode", -1)), day.text("condition")))
+                // WeatherMaster includes today: retain its daily fields instead of losing them to the current fallback.
+                val fallback = if (firstForecastIsToday && date == forecastDate) firstOrNull { it.date == date } else null
+                if (fallback != null) remove(fallback)
+                add(WeatherDay(date, day.temperature("maxTemp", unit) ?: fallback?.high,
+                    day.temperature("minTemp", unit) ?: fallback?.low,
+                    condition(day.optInt("conditionCode", -1)).let {
+                        if (it == WeatherCondition.Unknown) fallback?.condition ?: it else it
+                    }, day.text("condition") ?: fallback?.description,
+                    feelsLike = fallback?.feelsLike,
+                    humidity = day.percent("humidity") ?: fallback?.humidity, wind = day.wind() ?: fallback?.wind,
+                    airQuality = day.optJSONObject("airQuality")?.number("aqi")?.takeIf { it >= 0 }
+                        ?.let { WeatherMeasure(it, "aqi") } ?: fallback?.airQuality,
+                    uv = day.number("uvIndex")?.takeIf { it >= 0 }?.let { WeatherMeasure(it, "uvi") } ?: fallback?.uv))
             }
         }.distinctBy(WeatherDay::date).sortedBy(WeatherDay::date)
         if (current == null && hourly.isEmpty() && daily.isEmpty()) return null
@@ -148,6 +177,18 @@ internal object GadgetbridgeWeatherParser {
             else -> kelvin - 273.15
         }
         return WeatherTemperature(value, unit)
+    }
+
+    private fun JSONObject.percent(key: String): WeatherMeasure? =
+        number(key)?.takeIf { it in 0.0..100.0 }?.let { WeatherMeasure(it, "percent") }
+
+    private fun JSONObject.pressure(): WeatherMeasure? =
+        number("pressure")?.takeIf { it > 0 }?.let { WeatherMeasure(it, "mb") }
+
+    private fun JSONObject.wind(): WeatherWind? {
+        val speed = number("windSpeed")?.takeIf { it >= 0 }?.let { WeatherMeasure(it, "kph") }
+        val direction = number("windDirection")?.takeIf { it in 0.0..360.0 }
+        return if (speed != null || direction != null) WeatherWind(direction, speed) else null
     }
 
     private fun JSONObject.number(key: String): Double? = (opt(key) as? Number)?.toDouble()?.takeIf(Double::isFinite)

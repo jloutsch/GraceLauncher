@@ -59,6 +59,8 @@ import com.galaxyrio.gracelauncher.ui.LauncherScreen
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.ScheduleStatus
 import com.galaxyrio.gracelauncher.ui.overlays.AgendaSheet
+import com.galaxyrio.gracelauncher.ui.overlays.LocalLauncherSheetLayout
+import com.galaxyrio.gracelauncher.ui.overlays.launcherSheetLayout
 import com.galaxyrio.gracelauncher.ui.theme.GraceLauncherTheme
 import com.galaxyrio.gracelauncher.ui.weather.WeatherSourceNote
 import com.galaxyrio.gracelauncher.ui.weather.WeatherAttribution
@@ -196,37 +198,19 @@ class WeatherUiTest {
         }
     }
 
-    @Test fun hourlyForecastOpensTheChosenWeatherAppOnTapButNotOnScroll() {
+    @Test fun hourlyForecastOpensTheWeatherAppOnTapButNotOnScroll() {
         var opens = 0
-        state = state.copy(settings = state.settings.copy(weatherAppKey = apps.first().key))
         compose.setContent {
             GraceLauncherTheme(dynamicColor = false) {
-                Surface { AgendaSheet(state, LauncherActions(openWeatherApp = { opens++ }), onRequestCalendar = {}) }
+                CompositionLocalProvider(LocalLauncherSheetLayout provides launcherSheetLayout(hideStatusBar = false)) {
+                    Surface { AgendaSheet(state, LauncherActions(openWeatherApp = { opens++ }), onRequestCalendar = {}) }
+                }
             }
         }
         compose.onNodeWithTag("weather_hourly").performTouchInput { swipeLeft() }
         compose.runOnIdle { assertEquals("Scrolling the forecast must not open the app", 0, opens) }
         compose.onNodeWithTag("weather_hourly").performClick()
         compose.runOnIdle { assertEquals(1, opens) }
-        compose.runOnIdle { state = state.copy(settings = state.settings.copy(weatherAppKey = "gone/gone.Activity")) }
-        compose.onNodeWithTag("weather_hourly").assertHasNoClickAction()
-        compose.runOnIdle { state = state.copy(settings = state.settings.copy(weatherAppKey = null)) }
-        compose.onNodeWithTag("weather_hourly").assertHasNoClickAction()
-    }
-
-    @Test fun homeWeatherOpensTheChosenWeatherAppAndOtherwiseBreezy() {
-        var appOpens = 0
-        var breezyOpens = 0
-        state = state.copy(settings = state.settings.copy(weatherAppKey = apps.first().key))
-        showHome(LauncherActions(openWeatherApp = { appOpens++ }, openBreezyWeather = { breezyOpens++ }))
-        compose.onNodeWithTag("home_weather").performClick()
-        compose.runOnIdle { assertEquals(1, appOpens); assertEquals(0, breezyOpens) }
-        compose.runOnIdle { state = state.copy(settings = state.settings.copy(weatherAppKey = "gone/gone.Activity")) }
-        compose.onNodeWithTag("home_weather").performClick()
-        compose.runOnIdle { assertEquals(1, appOpens); assertEquals(1, breezyOpens) }
-        compose.runOnIdle { state = state.copy(settings = state.settings.copy(weatherAppKey = null)) }
-        compose.onNodeWithTag("home_weather").performClick()
-        compose.runOnIdle { assertEquals(1, appOpens); assertEquals(2, breezyOpens) }
     }
 
     @Test fun unavailableWeatherOffersAnActionThatMatchesTheConnectionProblem() {

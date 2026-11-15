@@ -234,7 +234,7 @@
     <string name="lab_animation">Animação</string>
     <string name="lab_swipe_sensitivity">Sensibilidade do deslizamento</string>
     <string name="wallpaper_text">Texto do papel de parede</string>
-    <string name="lab_swipe_sensitivity_summary">Valores mais altos facilitam a ativação do deslizamento na tela inicial e do gesto de deslizar para baixo para fechar a pesquisa. 100% mantém os limites padrão de distância e velocidade.</string>
+    <string name="lab_swipe_sensitivity_summary" formatted="false">Valores mais altos facilitam a ativação do deslizamento na tela inicial e do gesto de deslizar para baixo para fechar a pesquisa. 100% mantém os limites padrão de distância e velocidade.</string>
     <string name="lab_double_tap_interval">Intervalo do toque duplo</string>
     <string name="lab_double_tap_interval_summary">Tempo máximo entre toques no espaço vazio da tela inicial. Um intervalo mais longo facilita o toque duplo.</string>
     <string name="lab_milliseconds">%1$d ms</string>
@@ -726,7 +726,7 @@
     <string name="media_keep_while_playing_summary">Os gestos de deslizar retornam à posição original em vez de dispensar o reprodutor durante a reprodução</string>
     <string name="lab_swipe_dismiss">Deslize para dispensar</string>
     <string name="lab_dismiss_resistance">Resistência ao deslizamento</string>
-    <string name="lab_dismiss_resistance_summary">Compartilhado por notificações e pelo reprodutor de mídia. Valores mais altos criam maior resistência; 0% acompanha o seu dedo.</string>
+    <string name="lab_dismiss_resistance_summary" formatted="false">Compartilhado por notificações e pelo reprodutor de mídia. Valores mais altos criam maior resistência; 0% acompanha o seu dedo.</string>
     <string name="lab_dismiss_threshold">Limite de rompimento</string>
     <string name="lab_dismiss_threshold_summary">Distância antes que a resistência seja liberada. Compartilhada por notificações e pelo reprodutor de mídia; limitada pela largura disponível.</string>
 </resources>

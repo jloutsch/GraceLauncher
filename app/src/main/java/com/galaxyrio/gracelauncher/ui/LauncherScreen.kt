@@ -85,6 +85,8 @@ import androidx.core.net.toUri
 import androidx.core.content.ContextCompat
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.platform.openCalendarEvent
+import com.galaxyrio.gracelauncher.data.tasks.TasksRepository
+import com.galaxyrio.gracelauncher.data.tasks.TaskCompletionResult
 import com.galaxyrio.gracelauncher.MainActivity
 import com.galaxyrio.gracelauncher.WidgetSetupActivity
 import com.galaxyrio.gracelauncher.data.LauncherApp
@@ -209,6 +211,28 @@ fun LauncherRoute(
     }
     val homeRoleLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         viewModel.refreshProfiles()
+    }
+    val tasksPermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        viewModel.refreshTasks()
+    }
+    fun finishTask(id: Long) {
+        viewModel.completeTask(id) { result ->
+            val message = when (result) {
+                TaskCompletionResult.Success -> null
+                TaskCompletionResult.PermissionRequired -> R.string.tasks_write_permission_required
+                TaskCompletionResult.ReadOnly -> R.string.tasks_read_only
+                TaskCompletionResult.NotFound -> R.string.tasks_task_unavailable
+                TaskCompletionResult.Error -> R.string.tasks_complete_error
+            }
+            if (message != null) Toast.makeText(context.applicationContext, message, Toast.LENGTH_LONG).show()
+        }
+    }
+    var taskAwaitingWritePermission by rememberSaveable { mutableStateOf<Long?>(null) }
+    val tasksWritePermissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        val id = taskAwaitingWritePermission
+        taskAwaitingWritePermission = null
+        if (granted && id != null) finishTask(id)
+        else if (!granted) Toast.makeText(context, R.string.tasks_write_permission_required, Toast.LENGTH_LONG).show()
     }
     val mediaAccessLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         viewModel.refreshApps()
@@ -368,6 +392,19 @@ fun LauncherRoute(
                 }
             }
         },
+        openWeatherApp = {
+            val state = viewModel.uiState.value
+            val key = state.settings.weatherConnection.appKey
+            if (key == null) {
+                val intent = context.packageManager.getLaunchIntentForPackage(BreezyWeatherRepository.PACKAGE_NAME)
+                if (intent != null) openSystemApp(intent)
+                else Toast.makeText(context, R.string.app_unavailable, Toast.LENGTH_SHORT).show()
+            } else {
+                val app = state.allApps.firstOrNull { it.key == key && it.shortcut == null }
+                if (app != null) launchApp(app, null)
+                else Toast.makeText(context, R.string.app_unavailable, Toast.LENGTH_SHORT).show()
+            }
+        },
         openBreezyWeather = {
             val intent = context.packageManager.getLaunchIntentForPackage(BreezyWeatherRepository.PACKAGE_NAME)
             if (intent != null) openSystemApp(intent)
@@ -461,9 +498,16 @@ fun LauncherRoute(
                 .putExtra(CalendarContract.EXTRA_EVENT_BEGIN_TIME, System.currentTimeMillis())
                 .putExtra(CalendarContract.EXTRA_EVENT_END_TIME, System.currentTimeMillis() + 3_600_000))
         },
-        openWeatherApp = {
-            val app = uiState.settings.weatherAppKey?.let { key -> uiState.allApps.firstOrNull { it.key == key } }
-            if (app != null) launchApp(app, null) else Toast.makeText(context, R.string.app_unavailable, Toast.LENGTH_SHORT).show()
+        newTask = {
+            // Same exported activity and extra as Tasks.org's static_new_task shortcut.
+            val intent = Intent(Intent.ACTION_VIEW)
+                .setClassName(TasksRepository.Package, "com.todoroo.astrid.activity.MainActivity")
+                .putExtra("open_task", 0)
+            openSystemApp(intent)
+        },
+        addAgendaWidget = {
+            openSystemApp(Intent(context, WidgetSetupActivity::class.java)
+                .putExtra(WidgetSetupActivity.EXTRA_POPUP_OWNER, com.galaxyrio.gracelauncher.data.AgendaWidgetDraftKey))
         },
         openEvent = {
             if (!openCalendarEvent(context, it, viewModel.uiState.value.settings.calendar.appPackage)) {
@@ -472,11 +516,42 @@ fun LauncherRoute(
         },
         refreshAgenda = viewModel::refreshSchedule,
         refreshCalendarSources = viewModel::refreshCalendarSources,
+        refreshTasks = viewModel::refreshTasks,
+        requestTasksAccess = { tasksPermissionLauncher.launch(TasksRepository.ReadPermission) },
+        openTasksAccessSettings = { openSystemApp(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.fromParts("package", context.packageName, null))) },
+        openTasks = {
+            val intent = context.packageManager.getLaunchIntentForPackage(TasksRepository.Package)
+            if (intent != null) openSystemApp(intent)
+            else Toast.makeText(context, R.string.app_unavailable, Toast.LENGTH_SHORT).show()
+        },
+        getTasks = { openSystemApp(Intent(Intent.ACTION_VIEW, "https://tasks.org".toUri())) },
+        openTask = { task ->
+            val intent = Intent(Intent.ACTION_VIEW).setDataAndType(TasksRepository.taskUri(task.id),
+                "vnd.android.cursor.item/vnd.org.tasks.task").setPackage(TasksRepository.Package)
+            runCatching { context.startActivity(intent) }.onFailure {
+                val home = context.packageManager.getLaunchIntentForPackage(TasksRepository.Package)
+                if (home != null) openSystemApp(home)
+                else Toast.makeText(context, R.string.app_unavailable, Toast.LENGTH_SHORT).show()
+            }
+        },
+        completeTask = { task ->
+            if (taskAwaitingWritePermission == null) {
+                if (ContextCompat.checkSelfPermission(context, TasksRepository.WritePermission) == PackageManager.PERMISSION_GRANTED) {
+                    finishTask(task.id)
+                } else {
+                    taskAwaitingWritePermission = task.id
+                    tasksWritePermissionLauncher.launch(TasksRepository.WritePermission)
+                }
+            }
+        },
         textMode = viewModel::setTextMode,
         themedIcons = viewModel::setThemedIcons,
         refreshIconPacks = viewModel::refreshApps,
         refreshApps = viewModel::refreshApps,
         applyClockStyle = viewModel::applyClockStyle,
+        applyAgendaAppearance = viewModel::applyAgendaAppearance,
+        discardAgendaWidgetDraft = viewModel::discardAgendaWidgetDraft,
         applyMediaStyle = viewModel::applyMediaStyle,
         deleteFonts = viewModel::deleteFonts,
         applyIconDesign = viewModel::applyIconDesign,
@@ -1133,8 +1208,7 @@ internal fun LauncherScreen(
                     overlay = LauncherOverlay.Agenda
                 },
                 onClockClick = onClockClick,
-                onWeatherClick = if (uiState.settings.weatherAppKey?.let { key -> uiState.allApps.any { it.key == key } } == true)
-                    actions.openWeatherApp else actions.openBreezyWeather,
+                onWeatherClick = actions.openWeatherApp,
                 onWidgetMenu = { overlay = LauncherOverlay.HomeWidgetMenu },
                 onCustomWidgetMenu = { overlay = LauncherOverlay.CustomWidgetMenu },
                 actions = actions,

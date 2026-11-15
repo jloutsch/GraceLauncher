@@ -3,7 +3,9 @@
 package com.galaxyrio.gracelauncher.ui.settings
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListScope
@@ -11,7 +13,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
@@ -26,6 +30,7 @@ import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.customActions
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -45,16 +50,22 @@ internal fun LazyListScope.clockRegionSettings(
     regions: ClockRegions,
     enabled: Boolean,
     hapticsEnabled: Boolean,
+    expandedGroups: Set<String>,
+    onToggleGroup: (String) -> Unit,
     onChange: ((ClockRegions) -> ClockRegions) -> Unit,
     onFont: (ClockElement) -> Unit,
     onWeatherIcons: () -> Unit,
     onWeatherContent: () -> Unit,
     onAgendaContent: () -> Unit,
+    onTaskContent: () -> Unit,
     onRegionFont: (ClockRegion) -> Unit,
 ) {
     fun group(region: ClockRegion, controls: List<ClockControl>) {
-        item("clock_region_heading:$region") { SettingsHeading(region.label()) }
-        controls.forEachIndexed { index, control ->
+        val expanded = region.name in expandedGroups
+        clockSetting("clock_region_heading:$region") {
+            ClockGroupHeading(region.label(), expanded, enabled, "clock_region_heading:$region") { onToggleGroup(region.name) }
+        }
+        if (expanded) controls.forEachIndexed { index, control ->
             clockSetting("clock_region:$region:${control.key}") { control.content(index, controls.size) }
         }
     }
@@ -193,6 +204,7 @@ internal fun LazyListScope.clockRegionSettings(
             ClockControlSegment(index, count, "${prefix}_elements") {
                 ClockElementButtons(region, row.order, row.selected, enabled, hapticsEnabled,
                     disabledElements = setOfNotNull(primary),
+                    centered = row.centered,
                     onSelect = { element, checked ->
                         onChange { current ->
                             if (element != current.primary) current.select(region, element, checked) else current
@@ -201,6 +213,10 @@ internal fun LazyListScope.clockRegionSettings(
                     onReorder = { order -> changeRow { it.copy(order = order) } })
             }
         })
+        if (row.selected.isNotEmpty()) controls += ClockControl("centered") { index, count ->
+            SettingsToggleItem(stringResource(R.string.grace_button_align_center), null, row.centered,
+                index, count, "${prefix}_centered", enabled) { value -> changeRow { it.copy(centered = value) } }
+        }
         if (ClockElement.Clock in row.selected) controls += ClockControl("seconds") { index, count ->
             SettingsToggleItem(stringResource(R.string.clock_show_seconds), null, row.showSeconds,
                 index, count, "${prefix}_show_seconds", enabled) { value -> changeRow { it.copy(showSeconds = value) } }
@@ -278,6 +294,10 @@ internal fun LazyListScope.clockRegionSettings(
     }
     if (agenda.selected.isNotEmpty()) {
         val defaults = ClockRowTypography()
+        agendaControls += ClockControl("centered") { index, count ->
+            SettingsToggleItem(stringResource(R.string.grace_button_align_center), null, agenda.centered,
+                index, count, "clock_agenda_centered", enabled) { value -> changeAgenda { it.copy(centered = value) } }
+        }
         agendaControls += ClockControl("font") { index, count ->
             SettingsActionItem(stringResource(R.string.settings_font), appFontLabel(agenda.typography.fontId), index, count,
                 "clock_agenda_font_selector", enabled = enabled) { onRegionFont(ClockRegion.Agenda) }
@@ -307,8 +327,65 @@ internal fun LazyListScope.clockRegionSettings(
     }
     group(ClockRegion.Agenda, agendaControls)
 
-    item("clock_layout_heading") { SettingsHeading(stringResource(R.string.clock_layout_section)) }
-    val layoutCount = 5
+    val tasks = regions.tasks
+    fun changeTasks(transform: (ClockTasks) -> ClockTasks) = onChange { current ->
+        current.copy(tasks = transform(current.tasks))
+    }
+    val taskControls = mutableListOf(ClockControl("contents") { index, count ->
+        SettingsActionItem(stringResource(R.string.clock_task_contents), null,
+            index, count, "clock_task_contents", enabled = enabled, onClick = onTaskContent)
+    })
+    taskControls += ClockControl("task_count") { index, count ->
+        ClockSlider(stringResource(R.string.clock_task_count), tasks.taskCount, 1, 0..9, 1,
+            index, count, "clock_task_count", enabled,
+            valueLabel = if (tasks.taskCount == 0) stringResource(R.string.clock_agenda_unlimited) else tasks.taskCount.toString(),
+            discrete = true) { value -> changeTasks { it.copy(taskCount = value) } }
+    }
+    if (tasks.selected.isNotEmpty()) {
+        val defaults = ClockRowTypography()
+        taskControls += ClockControl("centered") { index, count ->
+            SettingsToggleItem(stringResource(R.string.grace_button_align_center), null, tasks.centered,
+                index, count, "clock_task_centered", enabled) { value -> changeTasks { it.copy(centered = value) } }
+        }
+        taskControls += ClockControl("font") { index, count ->
+            SettingsActionItem(stringResource(R.string.settings_font), appFontLabel(tasks.typography.fontId), index, count,
+                "clock_task_font_selector", enabled = enabled) { onRegionFont(ClockRegion.Task) }
+        }
+        taskControls += ClockControl("size") { index, count ->
+            ClockSlider(stringResource(R.string.clock_size), tasks.typography.size, defaults.size, 8..72, 1,
+                index, count, "clock_task_size", enabled) { value ->
+                changeTasks { it.copy(typography = it.typography.copy(size = value)) }
+            }
+        }
+        taskControls += ClockControl("weight") { index, count ->
+            ClockSlider(stringResource(R.string.clock_weight), tasks.typography.weight, defaults.weight, 100..900, 100,
+                index, count, "clock_task_weight", enabled) { value ->
+                changeTasks { it.copy(typography = it.typography.copy(weight = value)) }
+            }
+        }
+        taskControls += ClockControl("shadow") { index, count ->
+            ClockSlider(stringResource(R.string.clock_font_shadow), tasks.typography.fontShadow, defaults.fontShadow, 0..24, 1,
+                index, count, "clock_task_font_shadow", enabled) { value ->
+                changeTasks { it.copy(typography = it.typography.copy(fontShadow = value)) }
+            }
+        }
+    }
+    if (ClockTaskField.DueDate in tasks.selected || ClockTaskField.StartDate in tasks.selected) {
+        taskControls += ClockControl("latin_letters") { index, count ->
+            SettingsToggleItem(stringResource(R.string.clock_use_latin_letters), null, tasks.useLatinLetters,
+                index, count, "clock_task_latin_letters", enabled) { value -> changeTasks { it.copy(useLatinLetters = value) } }
+        }
+    }
+    group(ClockRegion.Task, taskControls)
+
+    val layoutExpanded = "Layout" in expandedGroups
+    clockSetting("clock_layout_heading") {
+        ClockGroupHeading(stringResource(R.string.clock_layout_section), layoutExpanded, enabled, "clock_layout_heading") {
+            onToggleGroup("Layout")
+        }
+    }
+    if (!layoutExpanded) return
+    val layoutCount = 6
     clockSetting("clock_region_order") {
         ClockControlSegment(0, layoutCount, "clock_region_order") {
             Column {
@@ -326,30 +403,55 @@ internal fun LazyListScope.clockRegionSettings(
             onChange { it.copy(regionSpacing = value) }
         }
     }
+    clockSetting("clock_bottom_padding") {
+        ClockSlider(stringResource(R.string.clock_bottom_padding), regions.bottomPadding, ClockRegions().bottomPadding,
+            0..64, 1, 2, layoutCount, "clock_bottom_padding", enabled,
+            valueLabel = stringResource(R.string.lab_dp, regions.bottomPadding)) { value ->
+            onChange { it.copy(bottomPadding = value) }
+        }
+    }
     clockSetting("clock_rotate_above_primary") {
         SettingsToggleItem(stringResource(R.string.clock_rotate_above_primary), null, regions.rotateAbovePrimary,
-            2, layoutCount, "clock_rotate_above_primary", enabled) { checked ->
+            3, layoutCount, "clock_rotate_above_primary", enabled) { checked ->
             onChange { it.copy(rotateAbovePrimary = checked) }
         }
     }
     clockSetting("clock_rotate_primary") {
         SettingsToggleItem(stringResource(R.string.clock_rotate_primary), null, regions.rotatePrimary,
-            3, layoutCount, "clock_rotate_primary", enabled) { checked ->
+            4, layoutCount, "clock_rotate_primary", enabled) { checked ->
             onChange { it.copy(rotatePrimary = checked) }
         }
     }
     clockSetting("clock_rotate_all") {
         SettingsToggleItem(stringResource(R.string.clock_rotate_all), null, regions.rotateAll,
-            4, layoutCount, "clock_rotate_all", enabled) { checked ->
+            5, layoutCount, "clock_rotate_all", enabled) { checked ->
             onChange { it.copy(rotateAll = checked) }
         }
     }
 }
 
 @Composable
-private fun ClockControlSegment(index: Int, count: Int, tag: String, content: @Composable () -> Unit) {
+private fun ClockGroupHeading(title: String, expanded: Boolean, enabled: Boolean, tag: String, onToggle: () -> Unit) {
+    val angle by animateFloatAsState(if (expanded) 180f else 0f,
+        MaterialTheme.motionScheme.fastSpatialSpec(), label = "clockGroupChevron")
+    val action = stringResource(if (expanded) R.string.clock_collapse_group else R.string.clock_expand_group)
+    val state = stringResource(if (expanded) R.string.widget_group_expanded else R.string.widget_group_collapsed)
+    Row(Modifier.fillMaxWidth().padding(top = 16.dp).clip(MaterialTheme.shapes.small)
+        .clickable(enabled = enabled, role = Role.Button, onClickLabel = action, onClick = onToggle)
+        .heightIn(min = 40.dp).padding(start = 4.dp, end = 8.dp).testTag(tag)
+        .semantics { heading(); stateDescription = state }, verticalAlignment = Alignment.CenterVertically) {
+        Text(title, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        Icon(painterResource(R.drawable.ms_expand_more), contentDescription = null,
+            modifier = Modifier.size(20.dp).graphicsLayer { rotationZ = angle }, tint = MaterialTheme.colorScheme.primary)
+    }
+}
+
+@Composable
+internal fun ClockControlSegment(index: Int, count: Int, tag: String,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceBright, content: @Composable () -> Unit,
+) {
     SegmentedListItem(shapes = ListItemDefaults.segmentedShapes(index, count),
-        colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceBright),
+        colors = ListItemDefaults.segmentedColors(containerColor = containerColor),
         modifier = Modifier.testTag(tag), content = content)
 }
 
@@ -419,17 +521,38 @@ private fun ClockElementButtons(
     enabled: Boolean,
     hapticsEnabled: Boolean,
     disabledElements: Set<ClockElement> = emptySet(),
+    centered: Boolean = false,
     onSelect: (ClockElement, Boolean) -> Unit,
     onReorder: ((List<ClockElement?>) -> Unit)? = null,
+) = OrderedIconChoices(
+    tag = "clock_region:${region.name}", order = order, selected = selected,
+    enabled = enabled, hapticsEnabled = hapticsEnabled, disabledElements = disabledElements,
+    centered = centered, labelFor = { it.label() }, iconFor = { it.icon() },
+    onSelect = onSelect, onReorder = onReorder,
+)
+
+@Composable
+internal fun <T : Enum<T>> OrderedIconChoices(
+    tag: String,
+    order: List<T?>,
+    selected: Set<T>,
+    enabled: Boolean,
+    hapticsEnabled: Boolean,
+    disabledElements: Set<T> = emptySet(),
+    centered: Boolean = false,
+    labelFor: @Composable (T) -> String,
+    iconFor: (T) -> Int,
+    onSelect: (T, Boolean) -> Unit,
+    onReorder: ((List<T?>) -> Unit)? = null,
 ) {
     val latestOrder by rememberUpdatedState(order)
     val reorder by rememberUpdatedState(onReorder)
     val haptics = LocalHapticFeedback.current
-    val rects = remember(region) { mutableStateMapOf<String, Rect>() }
-    var dragging by remember(region) { mutableStateOf<String?>(null) }
-    var drop by remember(region) { mutableStateOf<ClockElementDrop?>(null) }
-    var center by remember(region) { mutableFloatStateOf(0f) }
-    var originalOrder by remember(region) { mutableStateOf<List<ClockElement?>?>(null) }
+    val rects = remember(tag) { mutableStateMapOf<String, Rect>() }
+    var dragging by remember(tag) { mutableStateOf<String?>(null) }
+    var drop by remember(tag) { mutableStateOf<ClockElementDrop?>(null) }
+    var center by remember(tag) { mutableFloatStateOf(0f) }
+    var originalOrder by remember(tag) { mutableStateOf<List<T?>?>(null) }
     val placementSpec = MaterialTheme.motionScheme.defaultSpatialSpec<Float>()
     fun feedback() { if (hapticsEnabled) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove) }
     fun move(key: String, to: Int): Boolean {
@@ -468,17 +591,21 @@ private fun ClockElementButtons(
                     animated
                 }
                 val currentPosition by rememberUpdatedState(position)
-                val label = element?.label() ?: stringResource(R.string.clock_alignment_divider)
+                val label = element?.let { labelFor(it) } ?: stringResource(R.string.clock_alignment_divider)
                 val left = stringResource(R.string.clock_move_left)
                 val right = stringResource(R.string.clock_move_right)
-                val side = stringResource(if (index < order.indexOf(null)) R.string.grace_button_align_left else R.string.grace_button_align_right)
+                val side = stringResource(when {
+                    centered -> R.string.grace_button_align_center
+                    index < order.indexOf(null) -> R.string.grace_button_align_left
+                    else -> R.string.grace_button_align_right
+                })
                 val slot = if (element == null) Modifier.width(24.dp) else Modifier.weight(1f)
                 Box(slot.heightIn(min = 48.dp).zIndex(if (isDragging || released != null) 1f else 0f)
                     .onGloballyPositioned { coordinates ->
                         val position = coordinates.positionInParent()
                         rects[key] = Rect(position.x, position.y, position.x + coordinates.size.width, position.y + coordinates.size.height)
                     }
-                    .then(if (onReorder != null) Modifier.pointerInput(region, key, enabled) {
+                    .then(if (onReorder != null) Modifier.pointerInput(tag, key, enabled) {
                         if (!enabled) return@pointerInput
                         detectDragGesturesAfterLongPress(
                             onDragStart = {
@@ -537,7 +664,7 @@ private fun ClockElementButtons(
                             }
                             translationX = visible - target
                         }
-                        .testTag("clock_region:${region.name}:$key")
+                        .testTag("$tag:$key")
                         .semantics(mergeDescendants = element == null) {
                             if (element == null) contentDescription = label
                             if (onReorder != null) {
@@ -553,7 +680,7 @@ private fun ClockElementButtons(
                     } else ToggleButton(checked = element in selected, onCheckedChange = { onSelect(element, it) },
                         enabled = enabled && element !in disabledElements,
                         shapes = connectedShapes(index, order.size), contentPadding = PaddingValues(0.dp), modifier = control) {
-                        Icon(painterResource(element.icon()), label, Modifier.size(24.dp))
+                        Icon(painterResource(iconFor(element)), label, Modifier.size(24.dp))
                     }
                 }
             }
@@ -575,6 +702,7 @@ internal fun ClockRegion.label(): String = stringResource(when (this) {
     ClockRegion.Secondary -> R.string.clock_secondary_region
     ClockRegion.Tertiary -> R.string.clock_tertiary_region
     ClockRegion.Agenda -> R.string.clock_agenda_region
+    ClockRegion.Task -> R.string.clock_task_region
 })
 
 @Composable

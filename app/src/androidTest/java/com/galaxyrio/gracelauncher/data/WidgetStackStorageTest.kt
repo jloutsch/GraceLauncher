@@ -88,13 +88,18 @@ class WidgetStackStorageTest {
         assertEquals(listOf("a/a.Main"), stored("folder:apps"))
     }
 
-    @Test fun weatherAppSurvivesClockStyleChangesAndCanBeCleared() = runBlocking {
-        settings.mutateSettings { it.copy(weatherAppKey = "w/w.Weather") }
-        // The clock editor replaces the whole clock style.
-        settings.mutateSettings { it.copy(clockStyle = ClockStyle.decode(null, legacyShowBattery = false)) }
-        assertEquals("w/w.Weather", settings.snapshots.first().settings.weatherAppKey)
+    @Test fun forkWeatherAppMovesIntoUpstreamsWeatherSetting() = runBlocking {
+        settings.mutateSettings { it }
+        // Where the fork kept its own weather app choice before upstream added one.
+        database.openHelper.writableDatabase.execSQL("UPDATE launcher_settings SET clockStyleJson = '{\"weatherAppKey\":\"w/w.Weather\"}'")
+        assertEquals("w/w.Weather", settings.snapshots.first().settings.weatherConnection.appKey)
 
-        settings.mutateSettings { it.copy(weatherAppKey = null) }
-        assertNull(settings.snapshots.first().settings.weatherAppKey)
+        // The next save stores it in upstream's setting, so replacing the clock style keeps it.
+        settings.mutateSettings { it.copy(clockStyle = ClockStyle.decode(null, legacyShowBattery = false)) }
+        assertEquals("w/w.Weather", settings.snapshots.first().settings.weatherConnection.appKey)
+
+        // A choice made in upstream's setting wins, and clearing it is not undone by the old value.
+        settings.mutateSettings { it.copy(weatherConnection = it.weatherConnection.copy(appKey = null)) }
+        assertNull(settings.snapshots.first().settings.weatherConnection.appKey)
     }
 }

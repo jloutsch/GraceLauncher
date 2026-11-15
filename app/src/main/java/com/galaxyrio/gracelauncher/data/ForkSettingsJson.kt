@@ -6,7 +6,7 @@ import org.json.JSONObject
 // Fork-only settings are stored as extra fields inside upstream's JSON columns, so the
 // fork's database schema stays identical to upstream's and upstream migrations apply as-is.
 
-/** The app opened from the weather forecast; stored in clockStyleJson. */
+/** The fork's former weather app choice in clockStyleJson; now only read, to carry it into upstream's weatherConnection. */
 internal const val WeatherAppKeyField = "weatherAppKey"
 
 /** Ids of folders shown as widget stacks; stored in shortcutsFoldersJson. */

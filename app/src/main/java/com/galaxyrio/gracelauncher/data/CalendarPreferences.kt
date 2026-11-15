@@ -2,6 +2,7 @@ package com.galaxyrio.gracelauncher.data
 
 import org.json.JSONArray
 import org.json.JSONObject
+import com.galaxyrio.gracelauncher.data.tasks.TasksPreferences
 
 enum class CalendarRefreshMode(val intervalMillis: Long?) {
     EveryMinute(60_000L),
@@ -19,6 +20,7 @@ data class CalendarPreferences(
     val selectedCalendarIds: Set<Long>? = null,
     /** null lets Android resolve the event with the user's system default. */
     val appPackage: String? = null,
+    val tasksOrg: TasksPreferences = TasksPreferences(),
 ) {
     val query: CalendarQuery get() = CalendarQuery(daysAhead, selectedCalendarIds)
 
@@ -26,13 +28,15 @@ data class CalendarPreferences(
         daysAhead = daysAhead.coerceIn(DaysAheadRange),
         selectedCalendarIds = selectedCalendarIds?.filterTo(linkedSetOf()) { it >= 0L },
         appPackage = appPackage?.trim()?.takeIf(String::isNotEmpty),
+        tasksOrg = tasksOrg.normalized(),
     )
 
     fun encode(): String = normalized().let { value ->
         JSONObject().put("daysAhead", value.daysAhead).put("refreshMode", value.refreshMode.name)
             .put("deprioritizeAllDay", value.deprioritizeAllDay)
             .put("selectedCalendarIds", value.selectedCalendarIds?.let { JSONArray(it.sorted()) } ?: JSONObject.NULL)
-            .put("appPackage", value.appPackage ?: JSONObject.NULL).toString()
+            .put("appPackage", value.appPackage ?: JSONObject.NULL)
+            .put("tasksOrg", value.tasksOrg.json()).toString()
     }
 
     companion object {
@@ -56,6 +60,7 @@ data class CalendarPreferences(
                     }
                 },
                 appPackage = if (json.isNull("appPackage")) null else json.optString("appPackage"),
+                tasksOrg = TasksPreferences.decode(json.optJSONObject("tasksOrg")),
             ).normalized()
         }.getOrDefault(CalendarPreferences())
     }

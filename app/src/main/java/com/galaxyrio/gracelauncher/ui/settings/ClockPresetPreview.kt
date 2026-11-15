@@ -34,6 +34,7 @@ import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherTypography
 import com.galaxyrio.gracelauncher.ui.theme.LocalWallpaperFontColor
 import java.time.Instant
+import com.galaxyrio.gracelauncher.data.tasks.TaskItem
 import java.time.LocalDateTime
 import java.time.ZoneId
 
@@ -42,6 +43,7 @@ internal data class ClockPresetPreviewContent(
     val events: List<ScheduleEvent>,
     val weather: WeatherSnapshot,
     val battery: LauncherBatteryState,
+    val tasks: List<TaskItem> = emptyList(),
 )
 
 /** Every preset uses the same fixed content, independent of providers and clock ticks. */
@@ -54,7 +56,9 @@ internal fun rememberClockPresetPreviewContent(): ClockPresetPreviewContent {
     val weatherLocation = stringResource(R.string.clock_weather_preview_location)
     val weatherDescription = stringResource(R.string.weather_clear)
     val calendarColor = MaterialTheme.colorScheme.primary.toArgb()
-    return remember(zone, title, eventLocation, calendarName, weatherLocation, weatherDescription, calendarColor) {
+    val taskTitle = stringResource(R.string.clock_task_preview_title)
+    val taskList = stringResource(R.string.clock_task_preview_list)
+    return remember(zone, title, eventLocation, calendarName, weatherLocation, weatherDescription, calendarColor, taskTitle, taskList) {
         val now = LocalDateTime.of(2026, 11, 3, 9, 30).atZone(zone).toInstant()
         ClockPresetPreviewContent(
             now = now,
@@ -90,6 +94,8 @@ internal fun rememberClockPresetPreviewContent(): ClockPresetPreviewContent {
                 attribution = "",
             ),
             battery = LauncherBatteryState(percent = 80, isCharging = false),
+            tasks = listOf(TaskItem(id = -1L, title = taskTitle, dueAt = now.plusSeconds(7200),
+                listName = taskList, listColor = calendarColor)),
         )
     }
 }
@@ -118,6 +124,8 @@ internal fun ClockPresetPreview(
                         now = content.now,
                         event = content.events.firstOrNull(),
                         agendaEvents = content.events,
+                        tasks = content.tasks,
+                        showTasks = true,
                         onDateClick = {},
                         onClockClick = {},
                         showBattery = true,

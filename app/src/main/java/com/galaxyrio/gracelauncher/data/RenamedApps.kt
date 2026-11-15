@@ -10,7 +10,8 @@ private val NonAppPrefixes = listOf("folder:", "widget:", "grace:", "shortcut:")
 internal fun isAppKey(key: String): Boolean {
     val component = if (key.startsWith("profile:")) key.substringAfter(':').substringAfter(':', "") else key
     return '/' in component && NonAppPrefixes.none { component.startsWith(it) } &&
-        component != HomeContentKey && component != WidgetScreenKey
+        component != HomeContentKey && component != WidgetScreenKey &&
+        component != AgendaWidgetKey && component != AgendaWidgetDraftKey
 }
 
 /**

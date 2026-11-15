@@ -197,7 +197,8 @@ private fun PackChoice(
     SegmentedListItem(
         checked = checked, onCheckedChange = { onToggle() }, enabled = enabled,
         modifier = modifier.testTag(tag),
-        shapes = shapes.copy(selectedShape = shapes.shape, pressedShape = shapes.shape),
+        shapes = shapes.copy(selectedShape = shapes.shape, pressedShape = shapes.shape,
+            focusedShape = shapes.shape, hoveredShape = shapes.shape, draggedShape = shapes.shape),
         colors = colors.copy(selectedContainerColor = colors.containerColor, selectedContentColor = colors.contentColor,
             selectedLeadingContentColor = colors.leadingContentColor, selectedTrailingContentColor = colors.trailingContentColor,
             selectedSupportingContentColor = colors.supportingContentColor),

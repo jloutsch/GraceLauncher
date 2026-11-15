@@ -18,8 +18,10 @@ import androidx.compose.ui.unit.dp
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.ShortcutsFoldersSettings
 import com.galaxyrio.gracelauncher.data.GraceButtonSettings
+import com.galaxyrio.gracelauncher.data.GraceButtonGesture
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
+import com.galaxyrio.gracelauncher.ui.components.labelRes
 import com.galaxyrio.gracelauncher.ui.components.LauncherIcon
 import com.galaxyrio.gracelauncher.ui.components.LauncherSymbol
 import kotlin.math.roundToInt
@@ -134,6 +136,28 @@ internal fun LabGestureSettings(uiState: LauncherUiState, actions: LauncherActio
                     hasOverride = settings.doubleTapIntervalMs != null,
                     onReset = { actions.updateSettings { it.copy(homeGestures = it.homeGestures.copy(doubleTapIntervalMs = null)) } },
                     onChange = { value -> actions.updateSettings { it.copy(homeGestures = it.homeGestures.copy(doubleTapIntervalMs = value)) } })
+            }
+            item { Spacer(Modifier.height(24.dp)) }
+            item {
+                SegmentedListItem(
+                    modifier = Modifier.testTag("home_pull_protection_header"),
+                    shapes = ListItemDefaults.segmentedShapes(0, 3),
+                    colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceBright),
+                    content = { Text(stringResource(R.string.home_pull_protection)) },
+                    supportingContent = { Text(stringResource(R.string.home_pull_protection_summary)) },
+                )
+            }
+            item {
+                SettingsToggleItem(stringResource(GraceButtonGesture.SwipeUp.labelRes), null,
+                    settings.protectSwipeUp, 1, 3, "home_pull_protection:SwipeUp") { enabled ->
+                    actions.updateSettings { it.copy(homeGestures = it.homeGestures.copy(protectSwipeUp = enabled)) }
+                }
+            }
+            item {
+                SettingsToggleItem(stringResource(GraceButtonGesture.SwipeDown.labelRes), null,
+                    settings.protectSwipeDown, 2, 3, "home_pull_protection:SwipeDown") { enabled ->
+                    actions.updateSettings { it.copy(homeGestures = it.homeGestures.copy(protectSwipeDown = enabled)) }
+                }
             }
         }
     }

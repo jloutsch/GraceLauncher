@@ -10,14 +10,14 @@ enum class GraceWidget(val key: String) {
 
     fun enabled(settings: LauncherSettings): Boolean = when (this) {
         ClockCalendar -> settings.homeLayout.clockCalendarEnabled &&
-            (settings.clockEnabled || settings.calendarAgenda || settings.weatherEnabled)
+            (settings.clockEnabled || settings.calendarAgenda || settings.weatherEnabled || settings.calendar.tasksOrg.enabled)
         Media -> settings.mediaPlayer
         Baseline -> settings.homeLayout.baselineEnabled
     }
 
     fun setEnabled(settings: LauncherSettings, value: Boolean): LauncherSettings = when (this) {
         ClockCalendar -> {
-            val restoreParts = value && !settings.clockEnabled && !settings.calendarAgenda && !settings.weatherEnabled
+            val restoreParts = value && !settings.clockEnabled && !settings.calendarAgenda && !settings.weatherEnabled && !settings.calendar.tasksOrg.enabled
             settings.copy(
                 homeLayout = settings.homeLayout.copy(clockCalendarEnabled = value),
                 clockEnabled = settings.clockEnabled || restoreParts,
@@ -64,7 +64,8 @@ internal fun orderedHomeItems(settings: LauncherSettings, favorites: List<String
 /** Both feature banners and the homepage editor use this same activation rule. */
 internal fun synchronizeGraceWidgetOrder(previous: LauncherSettings, next: LauncherSettings): LauncherSettings {
     val partActivated = (!previous.clockEnabled && next.clockEnabled) ||
-        (!previous.calendarAgenda && next.calendarAgenda) || (!previous.weatherEnabled && next.weatherEnabled)
+        (!previous.calendarAgenda && next.calendarAgenda) || (!previous.weatherEnabled && next.weatherEnabled) ||
+        (!previous.calendar.tasksOrg.enabled && next.calendar.tasksOrg.enabled)
     val activated = if (partActivated) next.copy(homeLayout = next.homeLayout.copy(clockCalendarEnabled = true)) else next
     val added = GraceWidget.entries.filter { !it.enabled(previous) && it.enabled(activated) }.map { it.key }
     val order = if (added.isEmpty()) activated.homeLayout.homeOrder?.let(::normalizeHomeOrder)

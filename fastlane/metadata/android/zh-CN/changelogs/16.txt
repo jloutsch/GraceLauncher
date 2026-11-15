@@ -1,0 +1,7 @@
+Grace Launcher 1.2.4
+• 支持连接 Tasks.org
+• Agenda Page 的每小时天气支持显示更多内容
+• 支持在 Agenda Page 放置一个小组件
+• 支持单独设置应用语言（Android 13 及以上）
+• 修复部分 UI 细节问题，包括主页时钟边距和各设置页面字体颜色
+• 修复 RTL 动画
