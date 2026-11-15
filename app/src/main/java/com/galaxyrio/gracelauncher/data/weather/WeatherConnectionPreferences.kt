@@ -24,11 +24,14 @@ data class WeatherConnectionPreferences(
     val mode: WeatherConnectionMode = WeatherConnectionMode.LocationUpdateNotifier,
     val gadgetbridgeLocationId: String? = null,
     val temperatureUnit: GadgetbridgeTemperatureUnit = GadgetbridgeTemperatureUnit.System,
+    /** A profile-qualified launcher activity; null preserves the original Breezy Weather target. */
+    val appKey: String? = null,
 ) {
     fun encode(): String = JSONObject()
         .put("mode", mode.name)
         .put("gadgetbridgeLocationId", gadgetbridgeLocationId)
         .put("temperatureUnit", temperatureUnit.name)
+        .put("appKey", appKey)
         .toString()
 
     companion object {
@@ -40,6 +43,7 @@ data class WeatherConnectionPreferences(
                 gadgetbridgeLocationId = (json.opt("gadgetbridgeLocationId") as? String)?.takeIf(String::isNotBlank),
                 temperatureUnit = GadgetbridgeTemperatureUnit.entries.firstOrNull { it.name == json.optString("temperatureUnit") }
                     ?: GadgetbridgeTemperatureUnit.System,
+                appKey = (json.opt("appKey") as? String)?.takeIf(String::isNotBlank),
             )
         }.getOrDefault(WeatherConnectionPreferences())
     }

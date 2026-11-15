@@ -46,8 +46,7 @@ import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.weather.WeatherAttribution
 
 @Composable
-internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit,
-    onWeatherApp: () -> Unit = {}) {
+internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit, onChooseApp: () -> Unit = {}) {
     val settings = uiState.settings
     val connection = settings.weatherConnection
     val gadgetbridge = connection.mode == WeatherConnectionMode.Gadgetbridge
@@ -57,8 +56,7 @@ internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions,
     val status = if (settings.weatherEnabled) weather.status else WeatherStatus.Disabled
     var dialog by rememberSaveable(connection.mode) { mutableStateOf<String?>(null) }
     val locationName = weather.locations.firstOrNull { it.id == preferredLocationId }?.name ?: firstLocation
-    // Forecast days and the fork's weather app are always shown.
-    val displayCount = 2 + (if (weather.locations.isNotEmpty()) 1 else 0) + (if (gadgetbridge) 1 else 0)
+    val displayCount = 1 + (if (weather.locations.isNotEmpty()) 1 else 0) + (if (gadgetbridge) 1 else 0)
 
     when (dialog) {
         "location" -> WeatherChoiceDialog(
@@ -120,6 +118,10 @@ internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions,
                     actions.updateSettings { it.copy(weatherConnection = it.weatherConnection.copy(mode = mode)) }
                 }
             }
+            item {
+                SettingsActionItem(stringResource(R.string.weather_app), weatherAppSummary(uiState),
+                    0, 1, "weather_app", onClick = onChooseApp)
+            }
             item { SettingsHeading(stringResource(if (gadgetbridge) R.string.weather_mode_gadgetbridge else R.string.weather_settings_connection)) }
             if (status != WeatherStatus.Ready && status != WeatherStatus.Disabled) item {
                 Text(
@@ -133,6 +135,14 @@ internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions,
                 Text(
                     stringResource(if (gadgetbridge) R.string.weather_gadgetbridge_setup else R.string.weather_settings_update_notifier),
                     Modifier.padding(horizontal = 4.dp, vertical = 8.dp).testTag("weather_update_notifier_hint"),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (settings.weatherEnabled && gadgetbridge) item {
+                Text(
+                    stringResource(R.string.weather_gadgetbridge_weathermaster_setup),
+                    Modifier.padding(horizontal = 4.dp, vertical = 8.dp).testTag("weather_weathermaster_hint"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -169,7 +179,6 @@ internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions,
                 }
             }
             item { SettingsHeading(stringResource(R.string.weather_settings_display)) }
-            val offset = if (weather.locations.isEmpty()) 0 else 1
             if (weather.locations.isNotEmpty()) item {
                 SettingsActionItem(
                     stringResource(R.string.weather_settings_location), locationName,
@@ -180,16 +189,9 @@ internal fun WeatherSettings(uiState: LauncherUiState, actions: LauncherActions,
                 SettingsActionItem(
                     stringResource(R.string.weather_settings_forecast_days),
                     pluralStringResource(R.plurals.weather_settings_days_value, settings.weatherForecastDays, settings.weatherForecastDays),
-                    offset, displayCount, "weather_forecast_days",
+                    if (weather.locations.isEmpty()) 0 else 1, displayCount,
+                    "weather_forecast_days",
                 ) { dialog = "days" }
-            }
-            item {
-                val app = settings.weatherAppKey?.let { key -> uiState.allApps.firstOrNull { it.key == key } }
-                SettingsActionItem(
-                    stringResource(R.string.weather_settings_app),
-                    app?.label ?: stringResource(if (settings.weatherAppKey == null) R.string.settings_none else R.string.weather_settings_app_missing),
-                    offset + 1, displayCount, "weather_app", onClick = onWeatherApp,
-                )
             }
             if (gadgetbridge) item {
                 SettingsActionItem(
@@ -296,16 +298,5 @@ private fun <T> WeatherChoiceDialog(
         },
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.settings_cancel)) } },
-    )
-}
-
-/** The app the hourly forecast opens. Any installed app can be chosen; weather apps have no common category. */
-@Composable
-internal fun WeatherAppSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit) {
-    AppSelectionSettings(
-        uiState, actions, onBack, title = stringResource(R.string.weather_settings_app), tag = "weather_app",
-        selectedKey = uiState.settings.weatherAppKey, showDefault = true, defaultLabel = stringResource(R.string.settings_none),
-        description = stringResource(R.string.weather_settings_app_description),
-        onSelect = { key -> actions.updateSettings { it.copy(weatherAppKey = key) } },
     )
 }

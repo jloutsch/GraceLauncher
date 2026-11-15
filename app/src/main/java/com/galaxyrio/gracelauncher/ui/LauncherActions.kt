@@ -10,9 +10,12 @@ import com.galaxyrio.gracelauncher.data.LauncherFolder
 import com.galaxyrio.gracelauncher.data.FolderPlacement
 import com.galaxyrio.gracelauncher.data.LauncherSettings
 import com.galaxyrio.gracelauncher.data.ClockStyle
+import com.galaxyrio.gracelauncher.data.AgendaAppearance
+import com.galaxyrio.gracelauncher.data.HomeLayout
 import com.galaxyrio.gracelauncher.data.MediaPlayerStyle
 import com.galaxyrio.gracelauncher.data.LauncherShortcut
 import com.galaxyrio.gracelauncher.data.ScheduleEvent
+import com.galaxyrio.gracelauncher.data.tasks.TaskItem
 import com.galaxyrio.gracelauncher.data.ShortcutResult
 import com.galaxyrio.gracelauncher.data.ShortcutStatus
 import com.galaxyrio.gracelauncher.data.WallpaperTextMode
@@ -49,15 +52,26 @@ data class LauncherActions(
     val copyPackageName: (LauncherApp) -> Unit = {},
     val storePage: (LauncherApp) -> Unit = {},
     val newEvent: () -> Unit = {},
+    val newTask: () -> Unit = {},
+    val addAgendaWidget: () -> Unit = {},
     val openEvent: (ScheduleEvent) -> Unit = {},
     val refreshAgenda: () -> Unit = {},
     val refreshCalendarSources: () -> Unit = {},
+    val requestTasksAccess: () -> Unit = {},
+    val openTasksAccessSettings: () -> Unit = {},
+    val refreshTasks: () -> Unit = {},
+    val openTasks: () -> Unit = {},
+    val getTasks: () -> Unit = {},
+    val openTask: (TaskItem) -> Unit = {},
+    val completeTask: (TaskItem) -> Unit = {},
     val textMode: (WallpaperTextMode) -> Unit = {},
     val themedIcons: (Boolean) -> Unit = {},
     val refreshIconPacks: () -> Unit = {},
     val refreshApps: () -> Unit = {},
     val updateSettings: ((LauncherSettings) -> LauncherSettings) -> Unit = {},
     val applyClockStyle: suspend (ClockStyle) -> Boolean = { false },
+    val applyAgendaAppearance: suspend (AgendaAppearance, HomeLayout?) -> Boolean = { _, _ -> false },
+    val discardAgendaWidgetDraft: suspend () -> Boolean = { false },
     val applyMediaStyle: suspend (MediaPlayerStyle) -> Boolean = { false },
     val deleteFonts: suspend (Set<String>) -> Boolean = { false },
     val applyIconDesign: suspend (ItemIcon) -> Boolean = { false },
@@ -94,7 +108,7 @@ data class LauncherActions(
     val removeWidget: () -> Unit = {},
     val moveWidget: () -> Unit = {},
     val refreshWeather: () -> Unit = {},
-    val openBreezyWeather: () -> Unit = {},
     val openWeatherApp: () -> Unit = {},
+    val openBreezyWeather: () -> Unit = {},
     val installBreezyWeather: () -> Unit = {},
 )

@@ -57,7 +57,7 @@ internal suspend fun PointerInputScope.observeBlankDoubleTaps(doubleTapSlop: Flo
     }
 }
 
-/** Home and search share the Lab sensitivity, distance and release-velocity thresholds. */
+/** Home and search share sensitivity; protected home gestures require a deliberate edge pull. */
 @Composable
 internal fun rememberLauncherListGestureConnection(
     effect: OverscrollEffect?,
@@ -65,17 +65,24 @@ internal fun rememberLauncherListGestureConnection(
     swipeSensitivity: Int,
     canTrigger: (GraceButtonGesture) -> Boolean,
     onGesture: (GraceButtonGesture) -> Unit,
+    protectSwipeUp: Boolean = false,
+    protectSwipeDown: Boolean = false,
+    onPullReady: () -> Unit = {},
 ): LauncherListGestureConnection {
     val density = LocalDensity.current
     val sensitivity = swipeSensitivity.coerceIn(50, 200) / 100f
     val latestCanTrigger by rememberUpdatedState(canTrigger)
     val latestOnGesture by rememberUpdatedState(onGesture)
-    return remember(effect, list, density, sensitivity) {
+    val latestOnPullReady by rememberUpdatedState(onPullReady)
+    return remember(effect, list, density, sensitivity, protectSwipeUp, protectSwipeDown) {
         LauncherListGestureConnection(effect, list,
             pullThreshold = with(density) { 96.dp.toPx() } / sensitivity,
             flingThreshold = with(density) { 3000.dp.toPx() } / sensitivity,
             canTrigger = { latestCanTrigger(it) },
-            onGesture = { latestOnGesture(it) })
+            onGesture = { latestOnGesture(it) },
+            protectSwipeUp = protectSwipeUp,
+            protectSwipeDown = protectSwipeDown,
+            onPullReady = { latestOnPullReady() })
     }
 }
 
@@ -112,13 +119,27 @@ internal class LauncherListGestureConnection(
     private val flingThreshold: Float,
     private val canTrigger: (GraceButtonGesture) -> Boolean,
     private val onGesture: (GraceButtonGesture) -> Unit,
+    private val protectSwipeUp: Boolean = false,
+    private val protectSwipeDown: Boolean = false,
+    private val protectedPullThreshold: Float = pullThreshold * 1.5f,
+    private val onPullReady: () -> Unit = {},
 ) : NestedScrollConnection {
     private var edgePull = 0f
     private var armed = false
     private var fired = false
 
-    fun beginGesture() { edgePull = 0f; armed = true; fired = false }
-    fun cancelGesture() { armed = false; edgePull = 0f }
+    private var upPullEligible = false
+    private var downPullEligible = false
+    private var readyFeedbackSent = false
+
+    fun beginGesture() {
+        edgePull = 0f; armed = true; fired = false; readyFeedbackSent = false
+        // A fling, or a drag that merely reaches the end, must finish before a
+        // fresh contact can deliberately pull beyond the bottom boundary.
+        upPullEligible = !list.isScrollInProgress && !list.canScrollForward
+        downPullEligible = !list.isScrollInProgress && !list.canScrollBackward
+    }
+    fun cancelGesture() { armed = false; edgePull = 0f; upPullEligible = false; downPullEligible = false }
 
     private fun boundaryGesture(delta: Float): GraceButtonGesture? = when {
         delta > 0 && !list.canScrollBackward -> GraceButtonGesture.SwipeDown
@@ -126,9 +147,21 @@ internal class LauncherListGestureConnection(
         else -> null
     }
 
-    private fun trigger(delta: Float): Boolean {
+    private fun protected(gesture: GraceButtonGesture?): Boolean = when (gesture) {
+        GraceButtonGesture.SwipeUp -> protectSwipeUp
+        GraceButtonGesture.SwipeDown -> protectSwipeDown
+        else -> false
+    }
+    private fun eligible(gesture: GraceButtonGesture): Boolean =
+        if (gesture == GraceButtonGesture.SwipeUp) upPullEligible else downPullEligible
+    private fun threshold(gesture: GraceButtonGesture?): Float =
+        if (protected(gesture)) protectedPullThreshold else pullThreshold
+
+    private fun trigger(delta: Float, fromFling: Boolean = false): Boolean {
         val gesture = boundaryGesture(delta) ?: return false
         if (!armed || fired || !canTrigger(gesture)) return false
+        if (protected(gesture) &&
+            (fromFling || !eligible(gesture) || abs(edgePull) < threshold(gesture))) return false
         fired = true
         onGesture(gesture)
         return true
@@ -155,6 +188,12 @@ internal class LauncherListGestureConnection(
                 if (edgePull * available.y < 0f) edgePull = 0f
                 edgePull += available.y
             }
+            val gesture = boundaryGesture(edgePull)
+            if (gesture != null && protected(gesture) && armed && eligible(gesture) && !fired &&
+                !readyFeedbackSent && abs(edgePull) >= threshold(gesture) && canTrigger(gesture)) {
+                readyFeedbackSent = true
+                onPullReady()
+            }
         }
         return effect?.applyToScroll(Offset(0f, available.y), source) { Offset.Zero } ?: Offset.Zero
     }
@@ -162,11 +201,12 @@ internal class LauncherListGestureConnection(
     override suspend fun onPreFling(available: Velocity): Velocity {
         // Commit on release, not halfway through a drag. This also handles slow,
         // deliberate pulls with almost zero release velocity on a short list.
+        val gesture = boundaryGesture(edgePull)
         val direction = when {
-            abs(edgePull) >= pullThreshold -> edgePull
+            abs(edgePull) >= threshold(gesture) -> edgePull
             // A nested widget gets to consume its own fling first unless the
             // pointer has already pulled past the list's boundary.
-            abs(edgePull) > 0.5f && edgePull * available.y > 0f && abs(available.y) >= flingThreshold -> available.y
+            !protected(gesture) && abs(edgePull) > 0.5f && edgePull * available.y > 0f && abs(available.y) >= flingThreshold -> available.y
             else -> 0f
         }
         if (!trigger(direction)) return Velocity.Zero
@@ -177,7 +217,7 @@ internal class LauncherListGestureConnection(
     override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity {
         // A fast fling may reach the boundary after release. Only its remaining
         // velocity counts; an ordinary fling ending inside the list does not.
-        if (abs(available.y) >= flingThreshold) trigger(available.y)
+        if (abs(available.y) >= flingThreshold) trigger(available.y, fromFling = true)
         armed = false
         effect?.applyToFling(Velocity(0f, available.y)) { Velocity.Zero }
         return if (effect == null) Velocity.Zero else Velocity(0f, available.y)

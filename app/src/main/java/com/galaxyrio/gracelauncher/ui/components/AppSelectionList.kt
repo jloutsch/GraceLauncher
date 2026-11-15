@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -103,10 +104,11 @@ internal fun AppSelectionRow(
     annotation: String? = null,
     onCheckboxClick: (() -> Unit)? = null,
     checkboxEnabled: Boolean = enabled,
+    shape: Shape = RoundedCornerShape(16.dp),
     trailing: @Composable () -> Unit = {},
 ) {
     Row(
-        modifier.fillMaxWidth().heightIn(min = 64.dp).clip(RoundedCornerShape(16.dp))
+        modifier.fillMaxWidth().heightIn(min = 64.dp).clip(shape)
             .then(when {
                 !selectable -> Modifier
                 onCheckboxClick != null -> Modifier.clickable(enabled = enabled, onClick = onClick)

@@ -17,7 +17,7 @@ import com.galaxyrio.gracelauncher.ui.ScheduleStatus
 @Composable
 internal fun CalendarSettings(
     uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit,
-    onCalendars: () -> Unit = {}, onCalendarApp: () -> Unit = {}, onAppearance: () -> Unit = {},
+    onCalendars: () -> Unit = {}, onCalendarApp: () -> Unit = {}, onTasks: () -> Unit = {}, onAppearance: () -> Unit = {},
 ) {
     val calendar = uiState.settings.calendar
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
@@ -89,6 +89,11 @@ internal fun CalendarSettings(
             item {
                 SettingsActionItem(stringResource(R.string.calendar_app), calendarAppSummary(uiState),
                     0, 1, "calendar_app", onClick = onCalendarApp)
+            }
+            item { SettingsHeading(stringResource(R.string.settings_tasks)) }
+            item {
+                SettingsActionItem(stringResource(R.string.tasks_org), tasksStatusSummary(uiState.tasks.status),
+                    0, 1, "calendar_tasks_org", onClick = onTasks)
             }
         }
     }

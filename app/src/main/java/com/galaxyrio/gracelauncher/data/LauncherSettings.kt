@@ -36,14 +36,13 @@ data class LauncherSettings(
     val weatherEnabled: Boolean = false,
     val weatherForecastDays: Int = 7,
     val weatherLocationId: String? = null,
-    /** Opened by tapping the hourly forecast; null leaves the forecast without a tap action. */
-    val weatherAppKey: String? = null,
     /** Folders shown as widget stacks (fork); the folder row itself has no column for this. */
     val widgetStackFolderIds: Set<String> = emptySet(),
     val weatherConnection: WeatherConnectionPreferences = WeatherConnectionPreferences(),
     /** null delegates to Android's standard SHOW_ALARMS action. */
     val clockAppKey: String? = null,
     val clockStyle: ClockStyle = ClockStyle(),
+    val agendaAppearance: AgendaAppearance = AgendaAppearance(),
     val homeLayout: HomeLayout = HomeLayout(),
     val hideStatusBar: Boolean = true,
     val hideAlphabet: Boolean = false,

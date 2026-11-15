@@ -186,7 +186,7 @@ class BackupRoundTripTest {
         assertTrue(importer().import(legacy.inputStream(), allApps, setOf("w/w.Provider", "v/v.Provider")) is ImportResult.Success)
 
         val snapshot = LauncherSettingsRepository(database).snapshots.first()
-        assertEquals("a/a.Main", snapshot.settings.weatherAppKey)
+        assertEquals("a/a.Main", snapshot.settings.weatherConnection.appKey)
         assertEquals(setOf("ws"), snapshot.settings.widgetStackFolderIds)
         assertTrue(snapshot.folders.single { it.id == "ws" }.isWidgetStack)
         assertEquals(LauncherDatabase.SCHEMA_VERSION, database.openHelper.readableDatabase.version)

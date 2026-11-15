@@ -139,6 +139,8 @@ internal fun SettingsScaffold(
             if (fixedCollapsed) Modifier else Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         ),
         containerColor = containerColor,
+        // Transparent wallpaper pages cannot infer an on-color from their container.
+        contentColor = MaterialTheme.colorScheme.onSurface,
         topBar = {
             LargeFlexibleTopAppBar(
                 title = {
@@ -316,10 +318,11 @@ internal fun SettingsToggleItem(
     tag: String,
     enabled: Boolean = true,
     leading: @Composable (() -> Unit)? = null,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceBright,
     onCheckedChange: (Boolean) -> Unit,
 ) {
     val shapes = ListItemDefaults.segmentedShapes(index = index, count = count)
-    val colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceBright)
+    val colors = ListItemDefaults.segmentedColors(containerColor = containerColor)
     SegmentedListItem(
         checked = checked,
         onCheckedChange = onCheckedChange,

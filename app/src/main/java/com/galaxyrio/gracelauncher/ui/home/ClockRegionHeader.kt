@@ -77,6 +77,9 @@ import com.galaxyrio.gracelauncher.ui.theme.resolvedFontColor
 import com.galaxyrio.gracelauncher.ui.weather.HomeWeather
 import com.galaxyrio.gracelauncher.ui.weather.hasHomeWeatherContent
 import java.time.Instant
+import com.galaxyrio.gracelauncher.data.tasks.TaskItem
+import com.galaxyrio.gracelauncher.data.tasks.TasksPreferences
+import com.galaxyrio.gracelauncher.data.tasks.visibleTaskItems
 import kotlin.math.roundToInt
 import kotlin.math.ceil
 
@@ -105,8 +108,12 @@ internal fun HomeClockHeader(
     clockActive: Boolean = true,
     deprioritizeAllDay: Boolean = true,
     batteryOverride: LauncherBatteryState? = null,
+    tasks: List<TaskItem> = emptyList(),
+    showTasks: Boolean = false,
+    onTaskClick: (TaskItem) -> Unit = {},
+    taskPreferences: TasksPreferences = TasksPreferences(),
 ) {
-    val regions = clockStyle.regions
+    val regions = clockStyle.regions ?: if (showTasks) clockStyle.resolvedRegions(calendarAboveClock) else null
     if (regions == null) {
         LegacyHomeClockHeader(now, event, onDateClick, onClockClick, showBattery, clockStyle, weather ?: weatherSnapshot?.current,
             modifier, interactive, clockTag, dateTag, onLongClick, onAnchorOffsetChange,
@@ -138,6 +145,9 @@ internal fun HomeClockHeader(
         }
         .let { rows -> if (regions.agenda.eventCount > 0) rows.take(regions.agenda.eventCount) else rows }
         else emptyList()
+    val taskRows = if (showTasks) visibleTaskItems(tasks, taskPreferences, locale = locale).mapNotNull { task ->
+        clockTaskFields(task, regions.tasks.visibleFields).takeIf { it.isNotEmpty() }?.let { task to it }
+    }.let { rows -> if (regions.tasks.taskCount > 0) rows.take(regions.tasks.taskCount) else rows } else emptyList()
     fun isVisible(element: ClockElement): Boolean = when (element) {
         ClockElement.Clock -> showClock
         ClockElement.Weekday, ClockElement.Date -> showCalendar
@@ -180,9 +190,9 @@ internal fun HomeClockHeader(
             ClockElement.Battery -> "${dateTag}_battery"
             ClockElement.Weather -> "home_weather"
         }
-        // Weather supplies its own descriptive semantics and independent pointer target.
+        // Compact rows own their agenda action; only weather keeps an independent pointer target.
         val contentModifier = elementModifier.testTag(tag).then(
-            if (element == ClockElement.Weather) Modifier else Modifier
+            if (!primary || element == ClockElement.Weather) Modifier else Modifier
                 .then(if (description == null) Modifier else Modifier.semantics { contentDescription = description })
                 .then(if (interactive && action != null) Modifier.combinedClickable(
                     interactionSource = remember { MutableInteractionSource() },
@@ -258,19 +268,31 @@ internal fun HomeClockHeader(
             fontSize = typography.size.sp, lineHeight = (typography.size * 1.5f).sp,
             fontWeight = FontWeight(typography.weight), shadow = clockFontShadow(typography.fontShadow),
         )
-        ClockRegionRowLayout(left.size, right.size,
-            Modifier.then(if (wrapWidth) Modifier else Modifier.fillMaxWidth())
-                .then(if (inset) Modifier.padding(horizontal = LauncherLayout.ContentInset) else Modifier)
-                .testTag("clock_region:$name"), wrapWidth = wrapWidth) {
-            (left + right).forEach { item ->
-                key(item) {
-                    if (interactive) element(item, false, rowStyle, Modifier,
-                        showSeconds = row.showSeconds, useLatinLetters = row.useLatinLetters,
-                        fixedClockWidth = row.fixedClockWidth)
-                    else ClockRegionItemMotion { movement -> element(item, false, rowStyle, movement,
-                        showSeconds = row.showSeconds, useLatinLetters = row.useLatinLetters,
-                        fixedClockWidth = row.fixedClockWidth) }
+        val interactions = remember { MutableInteractionSource() }
+        Box(Modifier.then(if (wrapWidth) Modifier else Modifier.fillMaxWidth())
+            .testTag("clock_region:$name")
+            .semantics { contentDescription = dateDescription }
+            .then(if (interactive) Modifier.combinedClickable(
+                interactionSource = interactions, indication = null,
+                role = Role.Button, onClick = onDateClick, onLongClick = onLongClick,
+            ) else Modifier), propagateMinConstraints = true) {
+            ClockRegionRowLayout(left.size, right.size,
+                Modifier.then(if (inset) Modifier.padding(horizontal = LauncherLayout.ContentInset) else Modifier),
+                wrapWidth = wrapWidth, centered = row.centered) {
+                (left + right).forEach { item ->
+                    key(item) {
+                        if (interactive) element(item, false, rowStyle, Modifier,
+                            showSeconds = row.showSeconds, useLatinLetters = row.useLatinLetters,
+                            fixedClockWidth = row.fixedClockWidth)
+                        else ClockRegionItemMotion { movement -> element(item, false, rowStyle, movement,
+                            showSeconds = row.showSeconds, useLatinLetters = row.useLatinLetters,
+                            fixedClockWidth = row.fixedClockWidth) }
+                    }
                 }
+            }
+            if (interactive) {
+                Box(Modifier.matchParentSize().clip(LauncherLayout.RowShape)
+                    .indication(interactions, ripple(color = appearance.text)))
             }
         }
     }
@@ -291,10 +313,11 @@ internal fun HomeClockHeader(
                     agendaRows.forEach { (current, fields) ->
                         key(current.id, current.startsAt) {
                             ClockAgendaContent(current, now, fields, regions.agenda.typography,
-                                if (inset) Modifier.padding(horizontal = LauncherLayout.ContentInset) else Modifier,
+                                Modifier.fillMaxWidth().then(if (inset) Modifier.padding(horizontal = LauncherLayout.ContentInset) else Modifier),
                                 animatePositions = !interactive,
                                 useLatinLetters = regions.agenda.useLatinLetters, wrapWidth = wrapWidth,
-                                color = colors.getValue(ClockColorPart.Agenda))
+                                color = colors.getValue(ClockColorPart.Agenda), centered = regions.agenda.centered,
+                                rightAligned = regions.agenda.rightAligned)
                         }
                     }
                 }
@@ -307,12 +330,36 @@ internal fun HomeClockHeader(
         }
     }
 
+    @Composable
+    fun taskRegion(inset: Boolean = true, wrapWidth: Boolean = false) {
+        if (taskRows.isEmpty()) return
+        val widthModifier = if (wrapWidth) Modifier else Modifier.fillMaxWidth()
+        Column(widthModifier.testTag("clock_region:Task")) {
+            taskRows.forEach { (task, fields) ->
+                key(task.id) {
+                    val interactions = remember { MutableInteractionSource() }
+                    Box(widthModifier.testTag("home_task:${task.id}")
+                        .then(if (interactive) Modifier.combinedClickable(interactionSource = interactions, indication = null,
+                            role = Role.Button, onClick = { onTaskClick(task) }, onLongClick = onLongClick) else Modifier),
+                        propagateMinConstraints = wrapWidth) {
+                        ClockTaskContent(task, now, fields, regions.tasks, colors.getValue(ClockColorPart.Task),
+                            Modifier.fillMaxWidth().then(if (inset) Modifier.padding(horizontal = LauncherLayout.ContentInset) else Modifier),
+                            animatePositions = !interactive, wrapWidth = wrapWidth)
+                        if (interactive) Box(Modifier.matchParentSize().clip(LauncherLayout.RowShape)
+                            .indication(interactions, ripple(color = colors.getValue(ClockColorPart.Task))))
+                    }
+                }
+            }
+        }
+    }
+
     val visibleRegions = regions.regionOrder.filter { region ->
         when (region) {
             ClockRegion.Primary -> primaryVisible
             ClockRegion.Secondary -> regions.secondary.selected.any(::isVisible)
             ClockRegion.Tertiary -> regions.tertiary.selected.any(::isVisible)
             ClockRegion.Agenda -> agendaRows.isNotEmpty()
+            ClockRegion.Task -> taskRows.isNotEmpty()
         }
     }
     @Composable
@@ -326,6 +373,7 @@ internal fun HomeClockHeader(
                             ClockRegion.Secondary -> rowRegion(regions.secondary, "Secondary", inset, wrapWidth = true)
                             ClockRegion.Tertiary -> rowRegion(regions.tertiary, "Tertiary", inset, wrapWidth = true)
                             ClockRegion.Agenda -> agendaRegion(inset, wrapWidth = true)
+                            ClockRegion.Task -> taskRegion(inset, wrapWidth = true)
                         }
                     }
                 }
@@ -345,6 +393,7 @@ internal fun HomeClockHeader(
                         ClockRegion.Secondary -> rowRegion(regions.secondary, "Secondary", inset, wrapWidth)
                         ClockRegion.Tertiary -> rowRegion(regions.tertiary, "Tertiary", inset, wrapWidth)
                         ClockRegion.Agenda -> agendaRegion(inset, wrapWidth)
+                        ClockRegion.Task -> taskRegion(inset, wrapWidth)
                     }
                 }
             }
@@ -386,6 +435,8 @@ internal fun HomeClockHeader(
                 }
                 else -> regionContent()
             }
+            // Keep the widget's bottom inset in screen coordinates, outside every rotation.
+            Spacer(Modifier.height(regions.bottomPadding.dp))
         }
     }
 }
@@ -492,7 +543,7 @@ private fun ClockRegionTime(
     val use24Hour = DateFormat.is24HourFormat(LocalContext.current)
     val text = formatHomeClock(clockNow, use24Hour, locale,
         leadingZero = style.face.showLeadingZero, showSeconds = showSeconds)
-    val description = stringResource(R.string.clock_action, text)
+    val description = if (primary) stringResource(R.string.clock_action, text) else text
     val described = modifier.semantics { contentDescription = description }
     val clockModifier = if (!primary && fixedClockWidth) described.width(rememberFixedClockWidth(
         textStyle = textStyle,
@@ -547,9 +598,10 @@ private fun ClockQuarterTurn(maxRotatedHeightPx: Int, content: @Composable () ->
     }
 }
 
-/** Preserve both edge groups when large text needs truncation; place them physically left and right. */
+/** Center the complete ordered row or preserve its two edge groups when text needs truncation. */
 @Composable
 private fun ClockRegionRowLayout(leftCount: Int, rightCount: Int, modifier: Modifier, wrapWidth: Boolean = false,
+    centered: Boolean = false,
     content: @Composable () -> Unit) {
     Layout(content = content, modifier = modifier) { measurables, constraints ->
         val gap = 8.dp.roundToPx()
@@ -571,10 +623,15 @@ private fun ClockRegionRowLayout(leftCount: Int, rightCount: Int, modifier: Modi
         val above = baselines.maxOrNull() ?: 0
         val below = placeables.indices.maxOfOrNull { placeables[it].height - baselines[it] } ?: 0
         layout(layoutWidth, constraints.constrainHeight(above + below), mapOf(FirstBaseline to above)) {
+            var centerX = (layoutWidth - placeables.sumOf { it.width } - leftGaps - rightGaps - betweenGroups)
+                .coerceAtLeast(0) / 2
             var leftX = 0
             var rightX = layoutWidth - placeables.drop(leftCount).sumOf { it.width } - rightGaps
             placeables.forEachIndexed { index, placeable ->
-                if (index < leftCount) {
+                if (centered) {
+                    placeable.place(centerX, above - baselines[index])
+                    centerX += placeable.width + gap
+                } else if (index < leftCount) {
                     placeable.place(leftX, above - baselines[index])
                     leftX += placeable.width + gap
                 } else {

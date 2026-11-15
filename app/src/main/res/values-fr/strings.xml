@@ -223,7 +223,7 @@
     <string name="settings_lab">Laboratoire</string>
     <string name="lab_animation">Animation</string>
     <string name="lab_swipe_sensitivity">Sensibilité du glissement</string>
-    <string name="lab_swipe_sensitivity_summary">Des valeurs plus élevées facilitent le déclenchement des gestes sur l\'écran d\'accueil et du glissement vers le bas pour fermer la recherche. À 100 %, les seuils par défaut de distance et de vitesse sont conservés.</string>
+    <string name="lab_swipe_sensitivity_summary" formatted="false">Des valeurs plus élevées facilitent le déclenchement des gestes sur l\'écran d\'accueil et du glissement vers le bas pour fermer la recherche. À 100 %, les seuils par défaut de distance et de vitesse sont conservés.</string>
     <string name="lab_double_tap_interval">Intervalle entre deux appuis</string>
     <string name="lab_double_tap_interval_summary">Délai maximal entre deux appuis sur une zone vide de l\'écran d\'accueil. Un délai plus long facilite le double appui.</string>
     <string name="lab_milliseconds">%1$d ms</string>
@@ -435,8 +435,8 @@
     <string name="icon_pack_unavailable">Pack d\'icônes indisponible · utilisation des icônes du système</string>
     <string name="icon_pack_missing">%1$s est indisponible. Les autres packs activés ou les icônes du système seront utilisés.</string>
     <string name="icon_pack_load_failed">Impossible de charger les packs d\'icônes. Réessayez.</string>
-    <string name="weather_settings_enabled_summary">Écran d\'accueil et agenda · Breezy Weather</string>
-    <string name="weather_settings_disabled_summary">Facultatif · nécessite Breezy Weather</string>
+    <string name="weather_settings_enabled_summary">Météo sur l\'écran d\'accueil et dans l\'agenda</string>
+    <string name="weather_settings_disabled_summary">Connecter une application de météo</string>
     <string name="weather_settings_enable">Afficher la météo</string>
     <string name="weather_settings_enable_summary">Afficher la météo à côté de la date et dans votre agenda.</string>
     <string name="weather_settings_about">La météo intégrée utilise les lieux et les prévisions enregistrés dans Breezy Weather. Autorisez le partage de ces données avec Grace Launcher.</string>
@@ -752,7 +752,7 @@
     <string name="settings_home_screen">Ecran d\'accueil</string>
     <string name="settings_feed_screen">Ecran de défilement</string>
     <string name="settings_status_screen">Statuts</string>
-    <string name="lab_dismiss_resistance_summary">Partagés par les notifications et le player média. Une valeur plus haute créée plus de résistance ; 0% suis le mouvement du doigt.</string>
+    <string name="lab_dismiss_resistance_summary" formatted="false">Partagés par les notifications et le player média. Une valeur plus haute créée plus de résistance ; 0% suis le mouvement du doigt.</string>
     <string name="lab_dismiss_threshold_summary">Distance avant que la résistance ne lâche. Partagée par les notifications et le player média ; limitée par la largeur disponible.</string>
     <string name="font_color_default">Couleur de police par défaut</string>
     <string name="font_color_theme">Couleur de police du thème</string>
@@ -824,7 +824,7 @@
     <string name="clock_color_date_group">Date</string>
     <string name="clock_color_month">Mois</string>
     <string name="clock_color_day">Jour</string>
-    <string name="clock_color_battery">Pourcentage de batterie</string>
+    <string name="clock_color_battery">Batterie</string>
     <string name="clock_color_weather">Texte de la météo</string>
     <string name="app_category_pinned">Epinglées</string>
     <string name="app_category_notification">Notification</string>
@@ -878,4 +878,78 @@
     <string name="list_appearance_tab_notification">Notification</string>
     <string name="list_preview_folder">Dossier</string>
     <string name="list_preview_notification_title">Test</string>
+    <plurals name="app_category_item_count">
+        <item quantity="one">un %1$d objet</item>
+        <item quantity="many">De nombreux %1$d objets</item>
+        <item quantity="other">%1$d objets</item>
+    </plurals>
+    <string name="media_keep_while_playing_summary">Balayer l\'écran ramène au menu au lieu d\'arrêter le processus pendant le visionnage</string>
+    <string name="settings_tasks">Tâches</string>
+    <string name="tasks_org">Tasks.org</string>
+    <string name="tasks_enable">Activer Tasks.org</string>
+    <string name="tasks_connection">Connexion</string>
+    <string name="tasks_data">Données des tâches</string>
+    <string name="tasks_sorting">Ordre des tâches</string>
+    <string name="tasks_sort_by">Trier par</string>
+    <string name="tasks_undated_first">Tâches sans date en premier</string>
+    <string name="tasks_connect">Connecter Tasks.org</string>
+    <string name="tasks_access_summary">Autoriser l\'accès en lecture aux tâches enregistrées dans Tasks.org sur cet appareil</string>
+    <string name="tasks_get_app">Obtenir Tasks.org</string>
+    <string name="tasks_update_app">Mettre à jour Tasks.org</string>
+    <string name="tasks_open_app">Ouvrir Tasks.org</string>
+    <string name="tasks_app_permissions">Autorisations de l\'application</string>
+    <string name="tasks_choose_lists">Choisir les listes de tâches</string>
+    <string name="tasks_all_lists">Toutes les listes</string>
+    <string name="tasks_no_lists">Aucune liste de tâches trouvée</string>
+    <string name="tasks_unnamed_list">Liste sans nom</string>
+    <string name="tasks_refresh_summary">Mise à jour lorsque Tasks.org est modifié et au retour dans le lanceur</string>
+    <string name="tasks_disabled">Désactivé</string>
+    <string name="tasks_loading">Chargement des tâches…</string>
+    <string name="tasks_connected">Connecté</string>
+    <string name="tasks_not_installed">Tasks.org n\'est pas installé</string>
+    <string name="tasks_permission_required">L\'accès aux tâches est nécessaire</string>
+    <string name="tasks_update_required">Mettez à jour Tasks.org vers une version compatible avec l\'accès local aux tâches</string>
+    <string name="tasks_error">Impossible de charger les tâches</string>
+    <plurals name="tasks_lists_selected">
+        <item quantity="one">%1$d liste sélectionnée</item>
+        <item quantity="many">%1$d listes sélectionnées</item>
+        <item quantity="other">%1$d listes sélectionnées</item>
+    </plurals>
+    <string name="clock_task_region">Zone des tâches</string>
+    <string name="clock_task_contents">Contenu des tâches</string>
+    <string name="clock_task_count">Nombre de tâches à afficher</string>
+    <string name="clock_color_task">Texte des tâches</string>
+    <string name="clock_task_field_title">Titre de la tâche</string>
+    <string name="clock_task_field_countdown">Compte à rebours</string>
+    <string name="clock_task_field_due_date">Date d\'échéance</string>
+    <string name="clock_task_field_due_time">Heure d\'échéance</string>
+    <string name="clock_task_field_start_date">Date de début</string>
+    <string name="clock_task_field_priority">Priorité</string>
+    <string name="clock_task_field_list">Liste de tâches</string>
+    <string name="clock_task_field_notes">Notes</string>
+    <string name="clock_task_field_color">Couleur de la liste</string>
+    <string name="clock_task_preview_title">Lire un chapitre</string>
+    <string name="clock_task_preview_list">Personnel</string>
+    <string name="clock_task_preview_notes">Prendre quelques notes</string>
+    <string name="clock_task_preview_task">Tâche %1$d</string>
+    <string name="tasks_priority_high">Priorité élevée</string>
+    <string name="tasks_priority_medium">Priorité moyenne</string>
+    <string name="tasks_priority_low">Priorité basse</string>
+    <string name="tasks_priority_none">Aucune priorité</string>
+    <string name="tasks_due_today">À échéance aujourd\'hui</string>
+    <string name="tasks_due_now">À échéance imminente</string>
+    <string name="tasks_overdue_now">En retard</string>
+    <string name="tasks_overdue_minutes">En retard de %1$dm</string>
+    <string name="tasks_overdue_hours">En retard de %1$dh</string>
+    <string name="tasks_overdue_days">En retard de %1$dd</string>
+    <string name="calendar_sources">Choisir les calendriers</string>
+    <string name="calendar_sources_visible">Calendriers visibles par le système</string>
+    <plurals name="calendar_sources_selected">
+        <item quantity="one">%1$d calendrier sélectionné</item>
+        <item quantity="many">%1$d calendrier sélectionné</item>
+        <item quantity="other">%1$d calendriers sélectionnés</item>
+    </plurals>
+    <string name="calendar_sources_loading">Chargement des calendriers…</string>
+    <string name="calendar_sources_error">Impossible de charger les calendriers</string>
+    <string name="calendar_sources_empty">Aucun calendrier trouvé</string>
 </resources>

@@ -12,16 +12,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -276,13 +270,13 @@ fun HomeWeather(
     }
 }
 
-private fun weatherNumber(value: Double, locale: Locale): String = NumberFormat.getNumberInstance(locale).apply {
+internal fun weatherNumber(value: Double, locale: Locale): String = NumberFormat.getNumberInstance(locale).apply {
     maximumFractionDigits = 1
     isGroupingUsed = false
 }.format(value)
 
 @Composable
-private fun homeWindText(wind: WeatherWind, locale: Locale): String {
+internal fun homeWindText(wind: WeatherWind, locale: Locale): String {
     val direction = if (!wind.hasDirection()) null else stringResource(
         if (wind.degree == -1.0) R.string.weather_wind_variable else {
             val directions = listOf(R.string.weather_wind_north, R.string.weather_wind_northeast,
@@ -308,113 +302,13 @@ private fun homeWindText(wind: WeatherWind, locale: Locale): String {
 }
 
 @Composable
-fun DailyWeather(
-    day: WeatherDay?,
-    current: WeatherCurrent?,
-    modifier: Modifier = Modifier,
+fun WeatherSourceNote(snapshot: WeatherSnapshot, now: Instant, onOpenWeatherApp: () -> Unit) =
+    WeatherSourceNote(snapshot, now, onOpenWeatherApp, trailing = {})
+
+@Composable
+fun WeatherSourceNote(snapshot: WeatherSnapshot, now: Instant, onOpenWeatherApp: (() -> Unit)?,
+    trailing: @Composable () -> Unit,
 ) {
-    if (day == null && (current == null || (current.temperature == null &&
-            current.condition == WeatherCondition.Unknown && current.description.isNullOrBlank()))) return
-    val condition = day?.condition ?: current!!.condition
-    val description = weatherDescription(condition, day?.description ?: current?.description)
-    val high = day?.high
-    val low = day?.low
-    val summary = if (high != null || low != null) {
-        stringResource(R.string.weather_daily_description, description, high.readableTemperature(), low.readableTemperature())
-    } else {
-        stringResource(R.string.weather_current_description, description, current?.temperature.readableTemperature())
-    }
-    Row(
-        modifier.clearAndSetSemantics { contentDescription = summary },
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(5.dp),
-    ) {
-        WeatherIcon(condition, isDaylight = day != null || current?.isDaylight != false, modifier = Modifier.size(21.dp))
-        if (high != null || low != null) {
-            Text(high?.format() ?: "—", fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-            Text("/ ${low?.format() ?: "—"}", color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 14.sp, maxLines = 1)
-        } else {
-            Text(current?.temperature?.format() ?: "—", fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-        }
-    }
-}
-
-@Composable
-fun HourlyWeather(snapshot: WeatherSnapshot, now: Instant, modifier: Modifier = Modifier,
-    /** Opens the user's weather app; taps only, so the row still scrolls sideways. */
-    onClick: (() -> Unit)? = null, onClickLabel: String? = null) {
-    val locale = LocalConfiguration.current.locales[0]
-    val use24Hour = DateFormat.is24HourFormat(LocalContext.current)
-    val timeFormat = remember(locale, use24Hour, snapshot.location.timeZone) {
-        DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, if (use24Hour) "HH" else "ha"), locale)
-            .withZone(snapshot.location.timeZone)
-    }
-    val spokenTimeFormat = remember(locale, use24Hour, snapshot.location.timeZone) {
-        DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, if (use24Hour) "EHm" else "Ehm"), locale)
-            .withZone(snapshot.location.timeZone)
-    }
-    val hours = remember(snapshot.hourly, now) {
-        snapshot.hourly.filter { it.at.isAfter(now) }.take(24)
-    }
-    val current = snapshot.current?.takeIf { it.temperature != null }
-    if (current == null && hours.isEmpty()) return
-    LazyRow(
-        modifier.fillMaxWidth().testTag("weather_hourly")
-            .clip(RoundedCornerShape(22.dp)).background(MaterialTheme.colorScheme.surfaceBright)
-            .then(if (onClick == null) Modifier else Modifier.clickable(onClickLabel = onClickLabel, role = Role.Button, onClick = onClick)),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 14.dp),
-    ) {
-        if (current != null) item(key = "now") {
-            HourlyWeatherCell(
-                time = stringResource(R.string.weather_now),
-                spokenTime = stringResource(R.string.weather_now),
-                condition = current.condition,
-                isDaylight = current.isDaylight,
-                description = current.description,
-                temperature = current.temperature,
-                tag = "weather_hour:now",
-            )
-        }
-        items(hours, key = { it.at }) { hour ->
-            HourlyWeatherCell(
-                time = timeFormat.format(hour.at),
-                spokenTime = spokenTimeFormat.format(hour.at),
-                condition = hour.condition,
-                isDaylight = hour.isDaylight,
-                description = hour.description,
-                temperature = hour.temperature,
-                tag = "weather_hour:${hour.at}",
-            )
-        }
-    }
-}
-
-@Composable
-private fun HourlyWeatherCell(
-    time: String,
-    spokenTime: String,
-    condition: WeatherCondition,
-    isDaylight: Boolean,
-    description: String?,
-    temperature: WeatherTemperature?,
-    tag: String,
-) {
-    val descriptionText = weatherDescription(condition, description)
-    val summary = stringResource(R.string.weather_hour_description, spokenTime, descriptionText, temperature.readableTemperature())
-    Column(
-        Modifier.width(72.dp).testTag(tag).clearAndSetSemantics { contentDescription = summary },
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(time, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-        Spacer(Modifier.height(12.dp))
-        WeatherIcon(condition, isDaylight, Modifier.size(27.dp))
-        Spacer(Modifier.height(12.dp))
-        Text(temperature?.format() ?: "—", fontSize = 16.sp, fontWeight = FontWeight.Medium, maxLines = 1)
-    }
-}
-
-@Composable
-fun WeatherSourceNote(snapshot: WeatherSnapshot, now: Instant, onOpenBreezy: () -> Unit) {
     val locale = LocalConfiguration.current.locales[0]
     val use24Hour = DateFormat.is24HourFormat(LocalContext.current)
     val timeFormat = remember(locale, use24Hour, snapshot.location.timeZone) {
@@ -426,19 +320,22 @@ fun WeatherSourceNote(snapshot: WeatherSnapshot, now: Instant, onOpenBreezy: () 
     val updateLabel = if (updated == null) stringResource(R.string.weather_update_unknown) else {
         stringResource(if (stale) R.string.weather_outdated else R.string.weather_updated, timeFormat.format(updated))
     }
-    Column(
+    Row(
         Modifier.fillMaxWidth().testTag("weather_source")
             .padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             "${snapshot.location.name} · $updateLabel",
-            modifier = Modifier.fillMaxWidth().testTag("weather_location")
-                .clip(RoundedCornerShape(8.dp)).clickable(role = Role.Button, onClick = onOpenBreezy)
+            modifier = Modifier.weight(1f).testTag("weather_location")
+                .clip(RoundedCornerShape(8.dp)).then(if (onOpenWeatherApp != null)
+                    Modifier.clickable(role = Role.Button, onClick = onOpenWeatherApp) else Modifier)
                 .padding(vertical = 4.dp),
             fontSize = 11.sp, lineHeight = 16.sp,
             color = if (stale) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 2, overflow = TextOverflow.Ellipsis,
         )
+        trailing()
     }
 }
 
@@ -486,7 +383,7 @@ private fun WeatherTemperature?.readableTemperature(): String =
     this?.format(showUnit = true) ?: stringResource(R.string.weather_temperature_unknown)
 
 @Composable
-private fun weatherDescription(condition: WeatherCondition, supplied: String?): String =
+internal fun weatherDescription(condition: WeatherCondition, supplied: String?): String =
     supplied?.takeIf { it.isNotBlank() } ?: stringResource(when (condition) {
         WeatherCondition.Clear -> R.string.weather_clear
         WeatherCondition.PartlyCloudy -> R.string.weather_partly_cloudy

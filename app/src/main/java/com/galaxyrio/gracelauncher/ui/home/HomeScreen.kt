@@ -95,6 +95,7 @@ import com.galaxyrio.gracelauncher.data.CategoryIcon
 import com.galaxyrio.gracelauncher.data.LauncherFolder
 import com.galaxyrio.gracelauncher.data.ScheduleEvent
 import com.galaxyrio.gracelauncher.data.ClockStyle
+import com.galaxyrio.gracelauncher.data.ClockRegions
 import com.galaxyrio.gracelauncher.data.ClockColorPart
 import com.galaxyrio.gracelauncher.data.GraceButtonGesture
 import com.galaxyrio.gracelauncher.data.nextVisibleEvent
@@ -268,6 +269,9 @@ fun HomeScreen(
         overscroll, listState, uiState.settings.homeGestures.swipeSensitivity,
         canTrigger = { latestEnabled && latestGestures.target(it).active },
         onGesture = { latestOnGesture(it, windowOffset + pointerPosition) },
+        protectSwipeUp = uiState.settings.homeGestures.protectSwipeUp,
+        protectSwipeDown = uiState.settings.homeGestures.protectSwipeDown,
+        onPullReady = { haptics.performHapticFeedback(HapticFeedbackType.GestureThresholdActivate) },
     )
     LaunchedEffect(gesturesEnabled) { if (!gesturesEnabled) scrollConnection.cancelGesture() }
     BoxWithConstraints(modifier.fillMaxSize()
@@ -367,6 +371,9 @@ fun HomeScreen(
                                 !uiState.isLoadingSettings && !uiState.settingsLoadFailed },
                             showClock = uiState.settings.clockEnabled, showCalendar = uiState.settings.calendarAgenda,
                             agendaEvents = if (uiState.settings.calendarAgenda) uiState.events else emptyList(),
+                            tasks = uiState.tasks.tasks, showTasks = uiState.settings.calendar.tasksOrg.enabled,
+                            taskPreferences = uiState.settings.calendar.tasksOrg,
+                            onTaskClick = { onDateClick() },
                             calendarAboveClock = uiState.settings.calendarAboveClock,
                             deprioritizeAllDay = uiState.settings.calendar.deprioritizeAllDay,
                             interactive = inputEnabled, onLongClick = {}, onWeatherClick = onWeatherClick,
@@ -506,7 +513,7 @@ internal fun LegacyHomeClockHeader(
     val agendaVisible = showCalendar && event != null
     val rowVisible = smallClockVisible || calendarText.isNotEmpty() || visibleWeather != null
     val calendarContentVisible = rowVisible || agendaVisible
-    val calendarAction = showCalendar && (calendarText.isNotEmpty() || agendaVisible)
+    val calendarAction = calendarContentVisible
 
     val clockContent: @Composable () -> Unit = {
         if (largeFaceVisible) ClockFace(
@@ -554,12 +561,7 @@ internal fun LegacyHomeClockHeader(
                             ClockTimeLabel(
                                 time = clockText, style = clockStyle, textStyle = dateStyle,
                                 modifier = Modifier.alignByBaseline().testTag("${clockTag}_time")
-                                    .semantics { contentDescription = clockDescription }
-                                    .then(if (interactive) Modifier.combinedClickable(
-                                        interactionSource = remember { MutableInteractionSource() }, indication = null,
-                                        onClick = onClockClick,
-                                        onLongClick = onLongClick,
-                                    ) else Modifier),
+                                    .semantics { contentDescription = clockText },
                                 color = appearance.text,
                                 digitColors = digitColors,
                             )
@@ -597,6 +599,7 @@ internal fun LegacyHomeClockHeader(
         Spacer(Modifier.height(if (largeFaceVisible && calendarContentVisible) 2.dp else 0.dp)
             .onGloballyPositioned { onAnchorOffsetChange(it.positionInParent().y.roundToInt()) })
         if (calendarAboveClock) clockContent() else calendarContent()
+        if (largeFaceVisible || calendarContentVisible) Spacer(Modifier.height(ClockRegions().bottomPadding.dp))
     }
 }
 

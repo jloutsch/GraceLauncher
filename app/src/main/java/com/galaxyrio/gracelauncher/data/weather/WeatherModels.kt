@@ -58,12 +58,30 @@ data class WeatherCurrent(
     val wind: WeatherWind? = null,
     val airQuality: WeatherMeasure? = null,
     val uv: WeatherMeasure? = null,
+    val precipitationProbability: WeatherPrecipitation? = null,
+    val dewPoint: WeatherTemperature? = null,
+    val pressure: WeatherMeasure? = null,
+    val cloudCover: WeatherMeasure? = null,
+    val visibility: WeatherMeasure? = null,
 )
 
 /** Keep the provider's unit and description rather than assuming a regional scale. */
 data class WeatherMeasure(val value: Double, val unit: String, val description: String? = null)
 
-data class WeatherWind(val degree: Double? = null, val speed: WeatherMeasure? = null)
+data class WeatherWind(
+    val degree: Double? = null,
+    val speed: WeatherMeasure? = null,
+    val gusts: WeatherMeasure? = null,
+)
+
+/** Amounts and probabilities retain independently reported totals and precipitation types. */
+data class WeatherPrecipitation(
+    val total: WeatherMeasure? = null,
+    val rain: WeatherMeasure? = null,
+    val snow: WeatherMeasure? = null,
+    val ice: WeatherMeasure? = null,
+    val thunderstorm: WeatherMeasure? = null,
+)
 
 data class WeatherHour(
     val at: Instant,
@@ -71,6 +89,17 @@ data class WeatherHour(
     val condition: WeatherCondition,
     val isDaylight: Boolean,
     val description: String?,
+    val feelsLike: WeatherTemperature? = null,
+    val humidity: WeatherMeasure? = null,
+    val wind: WeatherWind? = null,
+    val airQuality: WeatherMeasure? = null,
+    val uv: WeatherMeasure? = null,
+    val precipitationProbability: WeatherPrecipitation? = null,
+    val precipitation: WeatherPrecipitation? = null,
+    val dewPoint: WeatherTemperature? = null,
+    val pressure: WeatherMeasure? = null,
+    val cloudCover: WeatherMeasure? = null,
+    val visibility: WeatherMeasure? = null,
 )
 
 data class WeatherDay(
@@ -79,4 +108,9 @@ data class WeatherDay(
     val low: WeatherTemperature?,
     val condition: WeatherCondition,
     val description: String?,
+    val feelsLike: WeatherTemperature? = null,
+    val humidity: WeatherMeasure? = null,
+    val wind: WeatherWind? = null,
+    val airQuality: WeatherMeasure? = null,
+    val uv: WeatherMeasure? = null,
 )

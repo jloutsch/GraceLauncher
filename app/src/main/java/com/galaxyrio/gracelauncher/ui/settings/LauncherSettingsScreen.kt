@@ -3,6 +3,7 @@
 package com.galaxyrio.gracelauncher.ui.settings
 
 import android.net.Uri
+import android.os.Build
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.Animatable
@@ -79,14 +80,14 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 internal enum class SettingsPage {
-    Root, Productivity, Clock, ClockStyle, Calendar, CalendarSources, CalendarApp, Weather, Themes, Advanced, About, HiddenApps, Folders, FolderEditor,
+    Root, Productivity, Clock, ClockStyle, Calendar, CalendarSources, CalendarApp, Weather, WeatherApp, Themes, Advanced, Language, About, HiddenApps, Folders, FolderEditor,
     Changelog, Licenses, AppLicense, IconPacks, IconDesigner, IconDesignerApp, PrivateSpace, PrivateSpaceEditor, Search,
     MediaPlayer, GraceButton, GraceAction, GraceApp, GraceShortcut, GraceFolder, Gestures, WorkProfile, WorkProfileEditor,
     LabGraceButton, LabGesture, LabPopup, LabAccessibility, LabDismiss, Fonts, FontColors, ListAppearance, Alphabet, ShortcutsFolders, AppStacks,
     GraceButtonAppearance, GraceButtonPosition, AgendaAppearance, SearchAppearance, MediaPlayerAppearance,
     WidgetScreen, WidgetScreenEditor, Homepage, AppList, FeedScreen, StatusScreen, DigitalWellbeing, TabletsFoldables,
     Wallpaper, WallpaperDesigner,
-    AppCategories, CategoryEditor, Backup, WeatherApp,
+    AppCategories, CategoryEditor, TasksOrg, TaskLists, Backup,
 }
 
 /** The window's existing system-bar owner follows the active settings surface. */
@@ -308,7 +309,7 @@ fun LauncherSettingsScreen(
                             })
                     }
                     SettingsPage.Weather -> WeatherSettings(uiState, actions, back,
-                        onWeatherApp = { navigate(SettingsPage.WeatherApp) })
+                        onChooseApp = { navigate(SettingsPage.WeatherApp) })
                     SettingsPage.WeatherApp -> WeatherAppSettings(uiState, actions, back)
                     SettingsPage.Themes -> ThemeSettings(uiState, actions, back,
                         onClockStyle = { navigate(SettingsPage.ClockStyle) }, onIconPacks = { navigate(SettingsPage.IconPacks) },
@@ -320,7 +321,7 @@ fun LauncherSettingsScreen(
                     SettingsPage.GraceButtonAppearance -> IconDesignerSettings(uiState, actions, GraceButtonIcon.key, back,
                         onChooseApp = {}, onSelectApp = {}, onPositionAndSize = { navigate(SettingsPage.GraceButtonPosition) })
                     SettingsPage.GraceButtonPosition -> GraceButtonPositionSettings(uiState, actions, back)
-                    SettingsPage.AgendaAppearance -> SettingsPlaceholder(stringResource(R.string.settings_agenda), "agenda_appearance", back)
+                    SettingsPage.AgendaAppearance -> AgendaAppearanceSettings(uiState, actions, back)
                     SettingsPage.SearchAppearance -> SettingsPlaceholder(stringResource(R.string.settings_search), "search_appearance", back)
                     SettingsPage.MediaPlayerAppearance -> MediaPlayerAppearanceSettings(uiState, actions, back)
                     SettingsPage.ClockStyle -> ClockStyleSettings(uiState, actions, back) { navigate(SettingsPage.Fonts) }
@@ -354,11 +355,16 @@ fun LauncherSettingsScreen(
                     SettingsPage.Calendar -> CalendarSettings(uiState, actions, back,
                         onCalendars = { navigate(SettingsPage.CalendarSources) },
                         onCalendarApp = { navigate(SettingsPage.CalendarApp) },
+                        onTasks = { navigate(SettingsPage.TasksOrg) },
                         onAppearance = { navigate(SettingsPage.ClockStyle) })
                     SettingsPage.CalendarSources -> CalendarSourcesSettings(uiState, actions, back)
                     SettingsPage.CalendarApp -> CalendarAppSettings(uiState, actions, back)
+                    SettingsPage.TasksOrg -> TasksSettings(uiState, actions, back,
+                        onLists = { navigate(SettingsPage.TaskLists) }, onAppearance = { navigate(SettingsPage.ClockStyle) })
+                    SettingsPage.TaskLists -> TasksListsSettings(uiState, actions, back)
                     SettingsPage.Advanced -> AdvancedSettings(uiState, actions, back, navigate,
                         onChooseDefaultHome = { if (isCurrent()) actions.requestDefaultHome() })
+                    SettingsPage.Language -> LanguageSettings(back)
                     SettingsPage.LabGraceButton -> LabGraceButtonSettings(uiState, actions, back)
                     SettingsPage.LabGesture -> LabGestureSettings(uiState, actions, back)
                     SettingsPage.LabPopup -> LabPopupSettings(uiState, actions, back)
@@ -416,13 +422,17 @@ private fun SettingsHome(
     navigate: (SettingsPage) -> Unit,
 ) {
     val showDefaultHomeBanner = isDefaultHome == false
-    val categories = listOf(
-        SettingsPage.Productivity to LauncherSymbol.Star,
-        SettingsPage.Themes to LauncherSymbol.Palette,
-        SettingsPage.Advanced to LauncherSymbol.Settings,
-        SettingsPage.Backup to LauncherSymbol.History2,
-        SettingsPage.About to LauncherSymbol.Info,
-    )
+    val languageTag by rememberAppLanguage()
+    val categories = buildList {
+        add(SettingsPage.Productivity to LauncherSymbol.Star)
+        add(SettingsPage.Themes to LauncherSymbol.Palette)
+        add(SettingsPage.Advanced to LauncherSymbol.Settings)
+        add(SettingsPage.Backup to LauncherSymbol.History2)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            add(SettingsPage.Language to LauncherSymbol.Language)
+        }
+        add(SettingsPage.About to LauncherSymbol.Info)
+    }
     SettingsScaffold(stringResource(R.string.settings_title), "settings_root", onBack) { padding ->
         SettingsList(padding) {
             item(key = "settings_intro") { Spacer(Modifier.height(if (showDefaultHomeBanner) 32.dp else 24.dp)) }
@@ -437,17 +447,19 @@ private fun SettingsHome(
                         SettingsPage.Themes -> R.string.settings_themes
                         SettingsPage.Advanced -> R.string.settings_advanced
                         SettingsPage.Backup -> R.string.settings_backup
+                        SettingsPage.Language -> R.string.settings_language
                         else -> R.string.settings_about
                     }
                     val summary = when (page) {
-                        SettingsPage.Productivity -> R.string.settings_productivity_summary
-                        SettingsPage.Themes -> R.string.settings_themes_summary
-                        SettingsPage.Advanced -> R.string.settings_advanced_summary
-                        SettingsPage.Backup -> R.string.settings_backup_summary
-                        else -> R.string.settings_about_summary
+                        SettingsPage.Productivity -> stringResource(R.string.settings_productivity_summary)
+                        SettingsPage.Themes -> stringResource(R.string.settings_themes_summary)
+                        SettingsPage.Advanced -> stringResource(R.string.settings_advanced_summary)
+                        SettingsPage.Backup -> stringResource(R.string.settings_backup_summary)
+                        SettingsPage.Language -> appLanguageSummary(languageTag)
+                        else -> stringResource(R.string.settings_about_summary)
                     }
                     SettingsActionItem(
-                        stringResource(title), stringResource(summary), index, categories.size,
+                        stringResource(title), summary, index, categories.size,
                         tag = "settings_category_${page.name.lowercase()}",
                         leading = {
                             Box(
@@ -473,7 +485,7 @@ private fun SettingsHome(
 
 @Composable
 private fun DefaultHomeBanner(onClick: () -> Unit) {
-    // A separate highlighted action, not a checked switch or a fifth category.
+    // The default-home action has its own banner above the settings categories.
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth().testTag("settings_default_home"),

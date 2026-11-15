@@ -20,6 +20,13 @@ current content tint.
 
 ## Sources
 
+### Language icon added 2026-11-07
+
+- `ms_language.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/language/materialsymbolsoutlined/language_24px.xml
+
+Official Android vector path and viewport retained. Tint is supplied by Compose.
+Same Apache-2.0 license.
+
 ### Music widget icons added 2026-11-05
 
 - `ms_play_arrow_filled.xml` (fill 1): https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/play_arrow/materialsymbolsoutlined/play_arrow_fill1_24px.xml
@@ -263,3 +270,22 @@ modification; their official sources are listed above.
 
 Official Material Symbols Outlined SVG path retained using the 24dp conversion
 above (optical size 24, weight 400, grade 0, fill 0). Same Apache-2.0 license.
+
+### Hourly weather chart controls added 2026-11-13
+
+- `ms_thermostat.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/thermostat/materialsymbolsoutlined/thermostat_24px.xml
+- `ms_device_thermostat.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/device_thermostat/materialsymbolsoutlined/device_thermostat_24px.xml
+- `ms_storm.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/storm/materialsymbolsoutlined/storm_24px.xml
+- `ms_airwave.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/airwave/materialsymbolsoutlined/airwave_24px.xml
+- `ms_umbrella.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/umbrella/materialsymbolsoutlined/umbrella_24px.xml
+- `ms_rainy_light.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/rainy_light/materialsymbolsoutlined/rainy_light_24px.xml
+- `ms_snowing.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/snowing/materialsymbolsoutlined/snowing_24px.xml
+- `ms_severe_cold.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/severe_cold/materialsymbolsoutlined/severe_cold_24px.xml
+- `ms_water_drop.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/water_drop/materialsymbolsoutlined/water_drop_24px.xml
+- `ms_ac_unit.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/ac_unit/materialsymbolsoutlined/ac_unit_24px.xml
+- `ms_dew_point.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/dew_point/materialsymbolsoutlined/dew_point_24px.xml
+- `ms_speed.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/speed/materialsymbolsoutlined/speed_24px.xml
+- `ms_visibility.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/visibility/materialsymbolsoutlined/visibility_24px.xml
+- `ms_show_chart.xml`: https://raw.githubusercontent.com/google/material-design-icons/master/symbols/android/show_chart/materialsymbolsoutlined/show_chart_24px.xml
+
+Official Android vector geometry and viewports retained. Theme tint is supplied by Compose. Same Apache-2.0 license.

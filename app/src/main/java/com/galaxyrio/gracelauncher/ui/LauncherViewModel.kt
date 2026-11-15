@@ -33,6 +33,11 @@ import com.galaxyrio.gracelauncher.data.CalendarRefreshMode
 import com.galaxyrio.gracelauncher.data.CalendarSnapshot
 import com.galaxyrio.gracelauncher.data.CalendarQuery
 import com.galaxyrio.gracelauncher.data.CalendarSource
+import com.galaxyrio.gracelauncher.data.tasks.TasksRepository
+import com.galaxyrio.gracelauncher.data.tasks.TaskCompletionResult
+import com.galaxyrio.gracelauncher.data.tasks.TasksSnapshot
+import com.galaxyrio.gracelauncher.data.tasks.TasksState
+import com.galaxyrio.gracelauncher.data.tasks.TasksStatus
 import com.galaxyrio.gracelauncher.data.CatalogRefreshState
 import com.galaxyrio.gracelauncher.data.FavoritesStore
 import com.galaxyrio.gracelauncher.data.LauncherApp
@@ -104,6 +109,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -132,6 +138,8 @@ data class LauncherUiState(
     val scheduleStatus: ScheduleStatus = ScheduleStatus.PermissionRequired,
     val calendarSources: List<CalendarSource> = emptyList(),
     val calendarSourcesStatus: ScheduleStatus = ScheduleStatus.Loading,
+    val tasks: TasksState = TasksState(),
+    val completingTaskIds: Set<Long> = emptySet(),
     val hasShortcutAccess: Boolean = false,
     val categories: Map<String, String> = emptyMap(),
     val textMode: WallpaperTextMode = WallpaperTextMode.Auto,
@@ -358,6 +366,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private var privateRawSerial: Long = -1
     val privateSpaceController = PrivateSpaceController.get(application)
     private val calendarRepository = CalendarRepository(application)
+    private val tasksRepository = TasksRepository(application)
     private val favoritesStore = FavoritesStore(application)
     private val preferences = LauncherPreferences(application)
     private val shortcutRepository = ShortcutRepository(application)
@@ -396,6 +405,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     private var privateAppLoadJob: Job? = null
     private var scheduleLoadJob: Job? = null
     private var calendarSourcesLoadJob: Job? = null
+    private var tasksObservationJob: Job? = null
+    private var tasksLoadJob: Job? = null
+    private var tasksReadPending = false
     private data class ScheduleReadRequest(val query: CalendarQuery, val automatic: Boolean)
     private var activeScheduleRead: ScheduleReadRequest? = null
     private var pendingScheduleRead: ScheduleReadRequest? = null
@@ -421,6 +433,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
     init {
         viewModelScope.launch {
             calendarRepository.snapshots.collect { snapshot -> adoptCalendarSnapshot(snapshot) }
+        }
+        viewModelScope.launch {
+            tasksRepository.snapshots.collect { snapshot -> adoptTasksSnapshot(snapshot) }
         }
         viewModelScope.launch {
             appRepository.revision.collect {
@@ -530,6 +545,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                         // A source edit applies immediately, including in manual refresh mode.
                         requestScheduleRead(automatic = false)
                     }
+                    if (previous.isLoadingSettings ||
+                        previous.settings.calendar.tasksOrg.enabled != snapshot.settings.calendar.tasksOrg.enabled ||
+                        previous.settings.calendar.tasksOrg.selectedListIds != snapshot.settings.calendar.tasksOrg.selectedListIds
+                    ) {
+                        updateTasksPolicy()
+                    }
                     if (previous.isLoadingSettings || previous.settings.mediaPlayer != snapshot.settings.mediaPlayer) {
                         mediaRepository.setEnabled(snapshot.settings.mediaPlayer)
                     }
@@ -550,7 +571,9 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                     }
                     if (previous.isLoadingSettings || previous.settings.weatherEnabled != snapshot.settings.weatherEnabled ||
                         previous.settings.weatherLocationId != snapshot.settings.weatherLocationId ||
-                        previous.settings.weatherConnection != snapshot.settings.weatherConnection
+                        previous.settings.weatherConnection.mode != snapshot.settings.weatherConnection.mode ||
+                        previous.settings.weatherConnection.gadgetbridgeLocationId != snapshot.settings.weatherConnection.gadgetbridgeLocationId ||
+                        previous.settings.weatherConnection.temperatureUnit != snapshot.settings.weatherConnection.temperatureUnit
                     ) refreshWeather()
                     if (previous.isLoadingSettings) {
                         val favorites = _uiState.value.favoriteApps
@@ -576,8 +599,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (renamingApps?.isActive == true) return
         val state = _uiState.value
         val saved = favorites + state.hiddenAppKeys + state.popups.flatMap { (owner, items) -> items.map { it.key } + owner } +
-            listOfNotNull(state.settings.mediaAppKey, state.settings.clockAppKey, state.settings.weatherAppKey) +
-            state.settings.appCategories.orEmpty().flatMap { it.itemKeys }
+            state.settings.appCategories.orEmpty().flatMap { it.itemKeys } +
+            listOfNotNull(state.settings.mediaAppKey, state.settings.clockAppKey, state.settings.weatherConnection.appKey)
         val renames = renamedAppKeys(saved, installed)
         if (renames.isEmpty()) return
         renamingApps = viewModelScope.launch {
@@ -1023,6 +1046,96 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         if (calendarForeground == active) return
         calendarForeground = active
         updateCalendarRefreshPolicy()
+        updateTasksPolicy()
+    }
+
+    fun refreshTasks() = updateTasksPolicy()
+
+    fun completeTask(id: Long, onResult: (TaskCompletionResult) -> Unit) {
+        val state = _uiState.value
+        if (state.isLoadingSettings || state.settingsLoadFailed || !state.settings.calendar.tasksOrg.enabled ||
+            id in state.completingTaskIds) return
+        val task = state.tasks.tasks.firstOrNull { it.id == id } ?: return
+        if (task.isReadOnly) {
+            onResult(TaskCompletionResult.ReadOnly)
+            return
+        }
+        _uiState.update { it.copy(completingTaskIds = it.completingTaskIds + id) }
+        viewModelScope.launch {
+            try {
+                val result = tasksRepository.completeTask(id)
+                if (result == TaskCompletionResult.Success || result == TaskCompletionResult.NotFound) {
+                    val current = _uiState.value
+                    if (current.settings.calendar.tasksOrg.enabled && !current.settingsLoadFailed) {
+                        // A recurring task can keep its ID and advance to the next date. Adopt the
+                        // provider result before re-enabling its checkbox, rather than deleting it.
+                        tasksRepository.refresh(current.settings.calendar.tasksOrg.selectedListIds)?.let(::adoptTasksSnapshot)
+                    }
+                }
+                onResult(result)
+            } finally {
+                _uiState.update { it.copy(completingTaskIds = it.completingTaskIds - id) }
+            }
+        }
+    }
+
+    private fun adoptTasksSnapshot(snapshot: TasksSnapshot?) {
+        val state = _uiState.value
+        if (state.isLoadingSettings || state.settingsLoadFailed) return
+        val preferences = state.settings.calendar.tasksOrg
+        if (!preferences.enabled) {
+            _uiState.update { it.copy(tasks = TasksState()) }
+            return
+        }
+        val matching = snapshot?.takeIf { it.listIds == preferences.selectedListIds }
+        _uiState.update {
+            val cached = matching?.state ?: it.tasks.copy(status = TasksStatus.Loading, tasks = emptyList())
+            val hasCachedData = cached.status == TasksStatus.Ready || cached.tasks.isNotEmpty() || cached.lists.isNotEmpty()
+            it.copy(tasks = if (hasCachedData && !tasksRepository.hasReadPermission())
+                TasksState(TasksStatus.PermissionRequired) else cached)
+        }
+    }
+
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    private fun updateTasksPolicy() {
+        tasksObservationJob?.cancel()
+        tasksObservationJob = null
+        val state = _uiState.value
+        if (state.isLoadingSettings || state.settingsLoadFailed) return
+        if (!state.settings.calendar.tasksOrg.enabled) {
+            tasksReadPending = false
+            tasksRepository.clearSnapshot()
+            _uiState.update { it.copy(tasks = TasksState()) }
+            return
+        }
+        adoptTasksSnapshot(tasksRepository.snapshots.value)
+        if (!calendarForeground) return
+        tasksObservationJob = viewModelScope.launch {
+            // A provider edit may notify several endpoints. One trailing read handles the burst.
+            tasksRepository.changes().debounce(250L).collect { requestTasksRead() }
+        }
+    }
+
+    private fun requestTasksRead() {
+        val state = _uiState.value
+        if (state.isLoadingSettings || state.settingsLoadFailed || !state.settings.calendar.tasksOrg.enabled) return
+        if (tasksLoadJob?.isActive == true) {
+            tasksReadPending = true
+            return
+        }
+        val load = viewModelScope.launch(start = CoroutineStart.LAZY) {
+            try {
+                do {
+                    tasksReadPending = false
+                    val current = _uiState.value
+                    if (!current.settings.calendar.tasksOrg.enabled || current.isLoadingSettings || current.settingsLoadFailed) break
+                    _uiState.update { it.copy(tasks = it.tasks.copy(status = TasksStatus.Loading)) }
+                    tasksRepository.refresh(current.settings.calendar.tasksOrg.selectedListIds)?.let(::adoptTasksSnapshot)
+                } while (tasksReadPending && calendarForeground)
+            } finally { tasksLoadJob = null }
+        }
+        tasksLoadJob = load
+        load.start()
     }
 
     fun setCalendarHomeVisible(visible: Boolean) {
@@ -1385,6 +1498,35 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         settingsRepository.mutateSettings(transform)
     }
 
+    suspend fun applyAgendaAppearance(style: com.galaxyrio.gracelauncher.data.AgendaAppearance,
+        widget: com.galaxyrio.gracelauncher.data.HomeLayout?): Boolean = settingsWriteMutex.withLock {
+        try {
+            val removed = settingsRepository.saveAgendaAppearance(style, widget)
+            val host = com.galaxyrio.gracelauncher.platform.HomeWidgetHost(getApplication())
+            removed.forEach { runCatching { host.deleteAppWidgetId(it) } }
+            _uiState.update { it.copy(settingsSaveFailed = false) }
+            true
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            Log.e("LauncherViewModel", "Unable to save agenda appearance", error)
+            _uiState.update { it.copy(settingsSaveFailed = true) }
+            false
+        }
+    }
+
+    suspend fun discardAgendaWidgetDraft(): Boolean = settingsWriteMutex.withLock {
+        try {
+            val removed = settingsRepository.discardAgendaWidgetDraft()
+            val host = com.galaxyrio.gracelauncher.platform.HomeWidgetHost(getApplication())
+            removed.forEach { runCatching { host.deleteAppWidgetId(it) } }
+            true
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            Log.e("LauncherViewModel", "Unable to discard agenda widget draft", error)
+            false
+        }
+    }
+
     suspend fun applyMediaStyle(style: MediaPlayerStyle): Boolean = settingsWriteMutex.withLock {
         try {
             settingsRepository.mutateSettings { it.copy(mediaStyle = style.normalized()) }
@@ -1404,7 +1546,8 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
             val available = com.galaxyrio.gracelauncher.data.ClockFontStore(getApplication()).list().map { it.id }.toSet()
             val regions = style.resolvedRegions()
             val fontIds = (listOf(style.singleLine, style.twoLines) + style.presets.values + regions.primaryFaces.values).mapNotNull { it.fontId } +
-                listOfNotNull(regions.secondary.typography.fontId, regions.tertiary.typography.fontId, regions.agenda.typography.fontId)
+                listOfNotNull(regions.secondary.typography.fontId, regions.tertiary.typography.fontId,
+                    regions.agenda.typography.fontId, regions.tasks.typography.fontId)
             val missing = fontIds
                 .filter { com.galaxyrio.gracelauncher.data.ClockFontStore.displayName(it) != null && it !in available }.toSet()
             settingsRepository.mutateSettings { it.copy(clockStyle = style.withoutFonts(missing)) }
