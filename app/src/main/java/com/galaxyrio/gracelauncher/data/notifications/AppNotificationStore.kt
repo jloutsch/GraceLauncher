@@ -140,9 +140,12 @@ internal class AppNotificationStore {
         val messaging = NotificationCompat.MessagingStyle.extractMessagingStyleFromNotification(notification)
         val messages = messaging?.messages.orEmpty().takeLast(8)
         val title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.trim().orEmpty()
+        val selfName = messaging?.user?.name?.toString()?.trim().orEmpty()
+        fun senderOf(message: NotificationCompat.MessagingStyle.Message) = message.person?.name?.toString()?.trim().orEmpty()
+        val otherSenders = messages.map(::senderOf).filter { it.isNotEmpty() && it != selfName }.toSet()
         val body = when {
             messages.isNotEmpty() -> messages.joinToString("\n") { message ->
-                messageLine(message.person?.name?.toString()?.trim().orEmpty(), message.text?.toString().orEmpty(), title)
+                messageLine(senderOf(message), message.text?.toString().orEmpty(), title, otherSenders)
             }
             !extras.getCharSequence(Notification.EXTRA_BIG_TEXT).isNullOrBlank() -> extras.getCharSequence(Notification.EXTRA_BIG_TEXT).toString()
             !extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES).isNullOrEmpty() -> extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES)!!.joinToString("\n")
@@ -163,6 +166,9 @@ internal class AppNotificationStore {
 
 internal val appNotifications = AppNotificationStore()
 
-/** A one-to-one chat's title is already the sender's name, so its lines show only the message. */
-internal fun messageLine(sender: String, text: String, title: String): String =
-    if (sender.isEmpty() || sender == title) text else "$sender: $text"
+/**
+ * A one-to-one chat's title is already the other person's name, so their lines show only the message.
+ * An untitled group is titled with its latest sender, so names stay when anyone else (besides the user) wrote.
+ */
+internal fun messageLine(sender: String, text: String, title: String, otherSenders: Set<String>): String =
+    if (sender.isEmpty() || (sender == title && otherSenders == setOf(title))) text else "$sender: $text"
