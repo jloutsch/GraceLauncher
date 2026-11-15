@@ -59,6 +59,8 @@ import com.galaxyrio.gracelauncher.ui.LauncherScreen
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.ScheduleStatus
 import com.galaxyrio.gracelauncher.ui.overlays.AgendaSheet
+import com.galaxyrio.gracelauncher.ui.overlays.LocalLauncherSheetLayout
+import com.galaxyrio.gracelauncher.ui.overlays.launcherSheetLayout
 import com.galaxyrio.gracelauncher.ui.theme.GraceLauncherTheme
 import com.galaxyrio.gracelauncher.ui.weather.WeatherSourceNote
 import com.galaxyrio.gracelauncher.ui.weather.WeatherAttribution
@@ -200,7 +202,9 @@ class WeatherUiTest {
         var opens = 0
         compose.setContent {
             GraceLauncherTheme(dynamicColor = false) {
-                Surface { AgendaSheet(state, LauncherActions(openWeatherApp = { opens++ }), onRequestCalendar = {}) }
+                CompositionLocalProvider(LocalLauncherSheetLayout provides launcherSheetLayout(hideStatusBar = false)) {
+                    Surface { AgendaSheet(state, LauncherActions(openWeatherApp = { opens++ }), onRequestCalendar = {}) }
+                }
             }
         }
         compose.onNodeWithTag("weather_hourly").performTouchInput { swipeLeft() }
