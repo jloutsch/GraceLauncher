@@ -2,6 +2,7 @@ package com.galaxyrio.gracelauncher
 
 import android.content.ComponentName
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
@@ -10,15 +11,21 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.platform.app.InstrumentationRegistry
 import com.galaxyrio.gracelauncher.data.FolderPlacement
+import com.galaxyrio.gracelauncher.data.HomeLayout
 import com.galaxyrio.gracelauncher.data.LauncherApp
 import com.galaxyrio.gracelauncher.data.LauncherFolder
+import com.galaxyrio.gracelauncher.data.PopupItem
 import com.galaxyrio.gracelauncher.data.ShortcutResult
 import com.galaxyrio.gracelauncher.data.ShortcutStatus
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.components.AppStack
 import com.galaxyrio.gracelauncher.ui.overlays.PopupEditorScreen
+import com.galaxyrio.gracelauncher.ui.settings.FolderEditorSettings
 import com.galaxyrio.gracelauncher.ui.theme.GraceLauncherTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -69,6 +76,30 @@ class WidgetStackUiTest {
         compose.onNodeWithText(context.getString(R.string.app_stack_edit)).assertIsDisplayed()
         compose.onNodeWithText(app.label).performScrollTo().assertIsDisplayed()
         compose.onNodeWithTag("popup_add_widget").assertDoesNotExist()
+    }
+
+    @Test fun stackHeightButtonsStepOneDpAndAutomaticIsOneStepBelowTheMinimum() {
+        var items = listOf(PopupItem("widget:7", HomeLayout(widgetId = 7, widgetHeightDp = 150)))
+        var stackState by mutableStateOf(state.copy(popups = mapOf(widgetStack.key to items)))
+        val actions = LauncherActions(shortcuts = { ShortcutResult(ShortcutStatus.Ready) },
+            updatePopup = { _, _, transform -> items = transform(items); stackState = stackState.copy(popups = mapOf(widgetStack.key to items)) })
+        compose.setContent {
+            GraceLauncherTheme(dynamicColor = false) { FolderEditorSettings(widgetStack.id, stackState, actions, onBack = {}) }
+        }
+        fun height() = compose.runOnIdle { items.single().widget!!.widgetHeightDp }
+        compose.onNodeWithTag("widget_stack_height_increase").performScrollTo().performClick()
+        assertEquals(151, height())
+        compose.onNodeWithTag("widget_stack_height_decrease").performClick()
+        compose.onNodeWithTag("widget_stack_height_decrease").performClick()
+        assertEquals(149, height())
+
+        compose.runOnIdle { items = listOf(items.single().let { it.copy(widget = it.widget!!.copy(widgetHeightDp = 48)) })
+            stackState = stackState.copy(popups = mapOf(widgetStack.key to items)) }
+        compose.onNodeWithTag("widget_stack_height_decrease").performClick()
+        assertEquals("One step below the minimum is Automatic", 0, height())
+        compose.onNodeWithTag("widget_stack_height_decrease").assertIsNotEnabled()
+        compose.onNodeWithTag("widget_stack_height_increase").performClick()
+        assertEquals(48, height())
     }
 
     private fun showEditor(folder: LauncherFolder) = compose.setContent {

@@ -21,6 +21,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -381,6 +382,14 @@ internal fun FolderSettings(
 private const val MinWidgetStackHeight = 48f
 private const val MaxWidgetStackHeight = 640f
 
+/** − and + move one dp so any height can be reached exactly; Automatic (0) sits one step below the minimum. */
+internal fun stepStackHeight(current: Int, delta: Int): Int {
+    val min = MinWidgetStackHeight.toInt()
+    if (current < min) return if (delta > 0) min else 0
+    val next = current + delta
+    return if (next < min) 0 else next.coerceAtMost(MaxWidgetStackHeight.toInt())
+}
+
 @Composable
 internal fun FolderEditorSettings(folderId: String?, uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit,
     onEditIcon: (LauncherApp) -> Unit = {}) {
@@ -415,16 +424,34 @@ internal fun FolderEditorSettings(folderId: String?, uiState: LauncherUiState, a
             if (!widgets) SettingsToggleItem(stringResource(R.string.settings_folder_auto_hide), stringResource(R.string.settings_folder_auto_hide_summary),
                 folder.autoHideApps, 2, 3, "folder_auto_hide") { actions.setFolderAutoHide(folder.id, it) }
             else DesignerSegment(2, 3, "widget_stack_height_item") {
-                DesignerSlider(stringResource(R.string.widget_stack_height), stackHeight, 0f, 0f..MaxWidgetStackHeight,
-                    LocalSettingsStorageState.current.canEdit && uiState.popups[folder.key].orEmpty().any { it.widget != null },
-                    "widget_stack_height", suffix = " dp",
-                    valueText = if (stackHeight < MinWidgetStackHeight) stringResource(R.string.text_auto) else null,
-                    onFinished = { value ->
-                        val height = if (value < MinWidgetStackHeight) 0 else value.toInt()
-                        actions.updatePopup(app, emptyList()) { items ->
-                            items.map { item -> item.widget?.let { item.copy(widget = it.copy(widgetHeightDp = height)) } ?: item }
-                        }
-                    }) { stackHeight = it }
+                val enabled = LocalSettingsStorageState.current.canEdit && uiState.popups[folder.key].orEmpty().any { it.widget != null }
+                fun save(value: Float) {
+                    val height = if (value < MinWidgetStackHeight) 0 else value.toInt()
+                    actions.updatePopup(app, emptyList()) { items ->
+                        items.map { item -> item.widget?.let { item.copy(widget = it.copy(widgetHeightDp = height)) } ?: item }
+                    }
+                }
+                fun step(delta: Int) {
+                    stackHeight = stepStackHeight(stackHeight.toInt(), delta).toFloat()
+                    save(stackHeight)
+                }
+                // The slider gets close; − and + land on an exact height one dp at a time.
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton({ step(-1) }, enabled = enabled && stackHeight >= MinWidgetStackHeight,
+                        modifier = Modifier.testTag("widget_stack_height_decrease")) {
+                        Icon(painterResource(R.drawable.ms_remove), stringResource(R.string.widget_stack_height_decrease))
+                    }
+                    Box(Modifier.weight(1f)) {
+                        DesignerSlider(stringResource(R.string.widget_stack_height), stackHeight, 0f, 0f..MaxWidgetStackHeight,
+                            enabled, "widget_stack_height", suffix = " dp",
+                            valueText = if (stackHeight < MinWidgetStackHeight) stringResource(R.string.text_auto) else null,
+                            onFinished = ::save) { stackHeight = it }
+                    }
+                    IconButton({ step(+1) }, enabled = enabled && stackHeight < MaxWidgetStackHeight,
+                        modifier = Modifier.testTag("widget_stack_height_increase")) {
+                        Icon(painterResource(R.drawable.ms_add), stringResource(R.string.widget_stack_height_increase))
+                    }
+                }
             }
             TextButton(onClick = { confirmDelete = true }, enabled = LocalSettingsStorageState.current.canEdit, modifier = Modifier.testTag("folder_delete")) {
                 Text(stringResource(if (widgets) R.string.widget_stack_delete else if (folder.isAppStack) R.string.app_stack_delete else R.string.settings_folder_delete), color = MaterialTheme.colorScheme.error)
