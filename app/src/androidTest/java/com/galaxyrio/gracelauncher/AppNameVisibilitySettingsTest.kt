@@ -36,7 +36,9 @@ class AppNameVisibilitySettingsTest {
         compose.runOnIdle { assertEquals(AppNameVisibility.AppList, state.settings.listAppearance.names) }
         compose.onNodeWithTag("list_names_app_list").performClick().assertIsOff()
         compose.runOnIdle { assertEquals(AppNameVisibility.Neither, state.settings.listAppearance.names) }
-        compose.onNodeWithTag("list_names_in_folders").performScrollTo().assertIsOff()
+        // Fork: taller slider rows put the switch under the floating toolbar after a minimal scroll; scroll to the end instead.
+        compose.onNodeWithTag("list_appearance_controls").performScrollToIndex(9)
+        compose.onNodeWithTag("list_names_in_folders").assertIsOff()
         val home = compose.onNodeWithTag("list_names_home").fetchSemanticsNode().boundsInRoot
         val appList = compose.onNodeWithTag("list_names_app_list").fetchSemanticsNode().boundsInRoot
         val toggle = compose.onNodeWithTag("list_names_in_folders").fetchSemanticsNode().boundsInRoot

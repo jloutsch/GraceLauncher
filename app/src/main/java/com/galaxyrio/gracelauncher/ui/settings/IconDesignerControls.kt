@@ -367,15 +367,33 @@ internal fun DesignerSegment(index: Int, count: Int, tag: String, content: @Comp
 internal fun DesignerSlider(label: String, value: Float, default: Float, range: ClosedFloatingPointRange<Float>,
     enabled: Boolean, tag: String, suffix: String = "%", onFinished: ((Float) -> Unit)? = null,
     resetEnabled: Boolean = value != default, onReset: (() -> Unit)? = null, centered: Boolean = false,
-    valueText: String? = null, onChange: (Float) -> Unit) {
+    valueText: String? = null, step: (Float, Int) -> Float = { current, delta -> sliderStep(current, delta, range) },
+    onChange: (Float) -> Unit) {
     // A final input event can precede recomposition. Commit that exact value,
     // not the previous frame's captured parameter.
     var latest by remember { mutableFloatStateOf(value) }
     SideEffect { latest = value }
+    // Fork: − and + land on an exact value that a drag can't reliably hit.
+    fun stepBy(delta: Int) {
+        latest = step(value, delta)
+        onChange(latest)
+        onFinished?.invoke(latest)
+    }
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             val sign = if (centered && value > 0f) "+" else ""
-            Text("$label · ${valueText ?: "$sign${value.roundToInt()}$suffix"}", style = MaterialTheme.typography.labelLarge)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("$label · ${valueText ?: "$sign${value.roundToInt()}$suffix"}", Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelLarge)
+                IconButton({ stepBy(-1) }, enabled = enabled && step(value, -1) != value,
+                    modifier = Modifier.testTag("${tag}_decrease")) {
+                    Icon(painterResource(R.drawable.ms_remove), stringResource(R.string.slider_decrease, label))
+                }
+                IconButton({ stepBy(+1) }, enabled = enabled && step(value, +1) != value,
+                    modifier = Modifier.testTag("${tag}_increase")) {
+                    Icon(painterResource(R.drawable.ms_add), stringResource(R.string.slider_increase, label))
+                }
+            }
             Slider(value, { latest = it.roundToInt().toFloat(); onChange(latest) }, valueRange = range, enabled = enabled,
                 onValueChangeFinished = { onFinished?.invoke(latest) },
                 track = { state -> if (centered) SliderDefaults.CenteredTrack(state, enabled = enabled)
@@ -390,6 +408,10 @@ internal fun DesignerSlider(label: String, value: Float, default: Float, range: 
         }
     }
 }
+
+/** Fork: one whole unit per tap, kept inside the slider's range. */
+internal fun sliderStep(value: Float, delta: Int, range: ClosedFloatingPointRange<Float>): Float =
+    (value.roundToInt() + delta).toFloat().coerceIn(range)
 
 @Composable
 private fun DesignerColorRow(label: String, choice: IconColor?, default: IconColor?, theme: Int, appColor: Int?, allowFromApp: Boolean, enabled: Boolean, tag: String,
