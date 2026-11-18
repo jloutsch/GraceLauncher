@@ -381,6 +381,14 @@ internal fun FolderSettings(
 private const val MinWidgetStackHeight = 48f
 private const val MaxWidgetStackHeight = 640f
 
+/** − and + move one dp so any height can be reached exactly; Automatic (0) sits one step below the minimum. */
+internal fun stepStackHeight(current: Int, delta: Int): Int {
+    val min = MinWidgetStackHeight.toInt()
+    if (current < min) return if (delta > 0) min else 0
+    val next = current + delta
+    return if (next < min) 0 else next.coerceAtMost(MaxWidgetStackHeight.toInt())
+}
+
 @Composable
 internal fun FolderEditorSettings(folderId: String?, uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit,
     onEditIcon: (LauncherApp) -> Unit = {}) {
@@ -419,6 +427,7 @@ internal fun FolderEditorSettings(folderId: String?, uiState: LauncherUiState, a
                     LocalSettingsStorageState.current.canEdit && uiState.popups[folder.key].orEmpty().any { it.widget != null },
                     "widget_stack_height", suffix = " dp",
                     valueText = if (stackHeight < MinWidgetStackHeight) stringResource(R.string.text_auto) else null,
+                    step = { current, delta -> stepStackHeight(current.toInt(), delta).toFloat() },
                     onFinished = { value ->
                         val height = if (value < MinWidgetStackHeight) 0 else value.toInt()
                         actions.updatePopup(app, emptyList()) { items ->

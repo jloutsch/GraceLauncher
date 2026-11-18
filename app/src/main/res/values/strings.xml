@@ -840,6 +840,8 @@
     <string name="clock_show_colon">Show colon</string>
     <string name="clock_show_colon_summary">Separate time units with colons</string>
     <string name="clock_reset_value">Reset %1$s to default</string>
+    <string name="slider_decrease">Decrease %1$s by 1</string>
+    <string name="slider_increase">Increase %1$s by 1</string>
 
     <!-- Search -->
     <string name="settings_search">Search</string>
