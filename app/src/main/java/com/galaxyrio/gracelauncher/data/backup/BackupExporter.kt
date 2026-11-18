@@ -8,6 +8,7 @@ import android.os.UserManager
 import com.galaxyrio.gracelauncher.data.FavoritesStore
 import com.galaxyrio.gracelauncher.data.LauncherDatabase
 import com.galaxyrio.gracelauncher.data.PopupItem
+import com.galaxyrio.gracelauncher.data.isAppKey
 import java.io.File
 import java.io.OutputStream
 import java.security.MessageDigest

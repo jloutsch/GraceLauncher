@@ -17,8 +17,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.galaxyrio.gracelauncher.data.AppRepository
-import com.galaxyrio.gracelauncher.data.backup.BackupImporter
-import com.galaxyrio.gracelauncher.data.backup.renamedAppKeys
 import com.galaxyrio.gracelauncher.data.backup.widgetIdsToDelete
 import com.galaxyrio.gracelauncher.data.backup.pendingWidgetCount
 import com.galaxyrio.gracelauncher.data.backup.withoutWidgetPlaceholders
@@ -68,6 +66,7 @@ import com.galaxyrio.gracelauncher.data.LauncherItemsRepository
 import com.galaxyrio.gracelauncher.data.LauncherItemsSnapshot
 import com.galaxyrio.gracelauncher.data.PrivateSpaceFolderId
 import com.galaxyrio.gracelauncher.data.RecentlyInstalledFolderId
+import com.galaxyrio.gracelauncher.data.renamedAppKeys
 import com.galaxyrio.gracelauncher.data.PrivateSpaceFolderKey
 import com.galaxyrio.gracelauncher.data.PrivateSpaceDefaultName
 import com.galaxyrio.gracelauncher.data.PrivateSpaceDisplay
@@ -604,8 +603,18 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val renames = renamedAppKeys(saved, installed)
         if (renames.isEmpty()) return
         renamingApps = viewModelScope.launch {
-            if (BackupImporter(getApplication()).renameApps(renames)) refreshApps()
-            else Log.w("GraceApps", "could not follow renamed apps: ${renames.keys}")
+            settingsWriteMutex.withLock {
+                try {
+                    settingsRepository.renameApps(renames)
+                    favoritesStore.renameApps(renames)
+                    preferences.renameApps(renames)
+                } catch (error: Exception) {
+                    if (error is CancellationException) throw error
+                    Log.w("LauncherViewModel", "Unable to follow renamed apps: ${renames.keys}", error)
+                    return@launch
+                }
+            }
+            refreshApps()
         }
     }
 
@@ -890,7 +899,6 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                         inputs.repositoryRevision, inputs.iconPackRevision, inputs.profiles, inputs.day, inputs.shortcutAccess, entries, status,
                         catalog.complete && packsComplete))
                     refreshIconPackChoices()
-                    followRenamedApps(apps.map { it.key }, favorites)
                     // Publish first; PNG encoding and disk I/O run on Dispatchers.IO.
                     appCache.save(cacheKey, entries, entryKeys = entryKeys)
                     shortcutRepository.prefetch(_uiState.value.favoriteApps)

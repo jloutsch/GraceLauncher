@@ -169,7 +169,11 @@ class WidgetSetupActivity : ComponentActivity() {
             }.firstOrNull { it.provider.flattenToString() == wanted }
         }
         Log.i(TAG, "restore placeholder=$placeholderId provider=$provider found=${info != null}")
-        if (info == null) { cancelSetup(); return }
+        if (info == null) {
+            // Fork: the slot can never be set up, so drop it as before, but say why instead of closing silently.
+            Toast.makeText(this, R.string.widget_restore_app_missing, Toast.LENGTH_LONG).show()
+            cancelSetup(); return
+        }
         busy = false
         select(info)
     }

@@ -78,28 +78,13 @@ class BackupImporter(
     suspend fun import(input: InputStream, installedAppKeys: Set<String>, installedProviders: Set<String>): ImportResult =
         BackupLock.withLock { withContext(Dispatchers.IO) { run(input, installedAppKeys, installedProviders, restoring = false) } }
 
-    /**
-     * Rewrites every saved reference to apps whose launcher activity an update renamed ([renamedAppKeys]),
-     * by re-applying this phone's own data with the new keys. Returns whether it was saved.
-     */
-    suspend fun renameApps(renames: Map<String, String>): Boolean = BackupLock.withLock { withContext(Dispatchers.IO) {
-        val current = File(context.cacheDir, "rename-apps-${UUID.randomUUID()}")
-        try {
-            current.outputStream().use { BackupExporter(context, database, databaseFile).write(it, emptyMap()) }
-            current.inputStream().use { run(it, emptySet(), emptySet(), restoring = true, renames) } is ImportResult.Success
-        } finally {
-            current.delete()
-        }
-    } }
-
     /** Restoring applies this phone's own safety export: no new safety export, no hook, and widget IDs stay real. */
-    private suspend fun run(input: InputStream, installedAppKeys: Set<String>, installedProviders: Set<String>, restoring: Boolean,
-        renames: Map<String, String> = emptyMap()): ImportResult {
+    private suspend fun run(input: InputStream, installedAppKeys: Set<String>, installedProviders: Set<String>, restoring: Boolean): ImportResult {
         val dir = File(context.cacheDir, "backup-import-${UUID.randomUUID()}")
         try {
             BackupArchive.extract(input, dir)?.let { return ImportResult.Rejected(it) }
             val contents = try { read(dir) } catch (e: Rejection) { return ImportResult.Rejected(e.problem) }
-            val backup = contents.remapped(if (restoring) emptyMap() else profileSerials(contents.manifest.profiles), renames)
+            val backup = contents.remapped(if (restoring) emptyMap() else profileSerials(contents.manifest.profiles))
             if (!restoring) {
                 try { writeSafetyExport() } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     return ImportResult.Failed(e, restored = true)
@@ -293,9 +278,9 @@ private fun replaceDirectory(source: File, target: File) {
 private fun packageOf(key: String) =
     (if (key.startsWith("profile:")) key.substringAfter(':').substringAfter(':') else key).substringBefore('/')
 
-private fun BackupContents.remapped(serials: Map<Long, Long>, renames: Map<String, String> = emptyMap()): BackupContents {
-    if (serials.isEmpty() && renames.isEmpty()) return this
-    fun key(value: String) = renameValue(remapValue(value, serials), renames)
+private fun BackupContents.remapped(serials: Map<Long, Long>): BackupContents {
+    if (serials.isEmpty()) return this
+    fun key(value: String) = remapValue(value, serials)
     fun json(value: String?) = value?.let(::key)
     return copy(
         settings = settings.map {
@@ -337,17 +322,6 @@ internal fun remapValue(value: String, serials: Map<Long, Long>): String {
     val at = value.indexOf("profile:")
     return value.substring(0, at) + remapProfileKey(value.substring(at), serials)
 }
-
-/** Replaces whole app keys in a stored value: bare, after a preference prefix such as `label:`, or as any string inside JSON. */
-internal fun renameValue(value: String, renames: Map<String, String>): String {
-    // JSON escapes '/', so look for the package part.
-    if (renames.keys.none { it.substringBefore('/') in value }) return value
-    mapJsonStrings(value) { renameValue(it, renames) }?.let { return it }
-    val prefix = KeyPrefixes.firstOrNull { value.startsWith(it) && value.removePrefix(it) in renames } ?: ""
-    return renames[value.removePrefix(prefix)]?.let { prefix + it } ?: value
-}
-
-private val KeyPrefixes = listOf("label:", "category:")
 
 /** Applies [each] to every string in a JSON value, keys included; null when [value] is not JSON. Unchanged JSON keeps its text. */
 private fun mapJsonStrings(value: String, each: (String) -> String): String? {

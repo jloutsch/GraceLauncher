@@ -736,6 +736,7 @@
         <item quantity="other">%1$d widgets from your backup are waiting</item>
     </plurals>
     <string name="widget_restore_next">Set up next</string>
+    <string name="widget_restore_app_missing">This widget\'s app isn\'t installed, so the widget was removed from the list.</string>
     <string name="widget_bind_note_title">Allow Grace to add widgets</string>
     <string name="widget_bind_note_text">Android will ask whether Grace can create widgets. Tick “Always allow” so it doesn\'t ask again for each widget from your backup.</string>
     <string name="widget_bind_note_continue">Continue</string>
