@@ -27,3 +27,7 @@ local.properties
 *.pfx
 keystore.properties
 signing.properties
+
+# Personal files kept in the repo root, never committed
+*.nlb
+HANDOFF.md

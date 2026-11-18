@@ -1,10 +1,9 @@
 package com.galaxyrio.gracelauncher.data.backup
 
-import com.galaxyrio.gracelauncher.data.HomeContentKey
-import com.galaxyrio.gracelauncher.data.WidgetScreenKey
+import com.galaxyrio.gracelauncher.data.AgendaWidgetDraftKey
+import com.galaxyrio.gracelauncher.data.AgendaWidgetKey
+import com.galaxyrio.gracelauncher.data.renamedAppKeys
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BackupKeysTest {
@@ -13,21 +12,12 @@ class BackupKeysTest {
         assertEquals(listOf("b/b.Main"), missingAppKeys(referenced, setOf("a/a.Main")))
     }
 
-    @Test fun appKeysExcludeEverythingElse() {
-        assertTrue(isAppKey("a/a.Main"))
-        assertTrue(isAppKey("profile:10:a/a.Main"))
-        listOf(
-            "folder:x", "widget:-2", "grace:clock", HomeContentKey, WidgetScreenKey,
-            "shortcut:a/id%201", "profile:10:shortcut:a/id%201", "plain", "",
-        ).forEach { assertFalse(it, isAppKey(it)) }
-    }
-
-    @Test fun renamedAppsFollowTheOnlyActivityLeftInTheirPackageAndProfile() {
-        val installed = listOf("d/d.New", "two/two.A", "two/two.B", "profile:10:d/d.Work", "kept/kept.Main")
-        val saved = listOf("d/d.Old", "two/two.Old", "profile:10:d/d.Old", "profile:11:d/d.Old", "gone/gone.Main",
-            "kept/kept.Main", "folder:x", "d/d.Old")
-        // Several activities, another profile, or an uninstalled package stay as they were rather than guessing.
-        assertEquals(mapOf("d/d.Old" to "d/d.New", "profile:10:d/d.Old" to "profile:10:d/d.Work"), renamedAppKeys(saved, installed))
+    @Test fun agendaWidgetIsNeverTreatedAsAMissingOrRenamedApp() {
+        // Regression: the fork's own key check once moved the agenda widget onto Grace Settings.
+        val settings = "com.galaxyrio.gracelauncher/com.galaxyrio.gracelauncher.SettingsActivity"
+        val saved = listOf(AgendaWidgetKey, AgendaWidgetDraftKey)
+        assertEquals(emptyList<String>(), missingAppKeys(saved, setOf(settings)))
+        assertEquals(emptyMap<String, String>(), renamedAppKeys(saved, listOf(settings)))
     }
 
     @Test fun profileSerialRemapped() {
