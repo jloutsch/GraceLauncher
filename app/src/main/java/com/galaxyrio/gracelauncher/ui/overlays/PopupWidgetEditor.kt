@@ -68,9 +68,16 @@ internal fun PopupWidgetControls(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.popup_widget_content_scale, layout.popupContentScale),
                 modifier = Modifier.widthIn(max = 112.dp), style = MaterialTheme.typography.labelMedium)
+            // Fork: keep the dragged value here. TalkBack's set-progress calls both callbacks with no
+            // recomposition between them, so saving `layout` in onValueChangeFinished saved the old scale.
+            var dragged by remember { mutableStateOf<HomeLayout?>(null) }
             Slider(value = layout.popupContentScale.toFloat(),
-                onValueChange = { onChange(layout.copy(popupContentScale = it.roundToInt()), false) },
-                onValueChangeFinished = { onChange(layout, true) }, valueRange = 50f..150f,
+                onValueChange = {
+                    val next = (dragged ?: layout).copy(popupContentScale = it.roundToInt())
+                    dragged = next
+                    onChange(next, false)
+                },
+                onValueChangeFinished = { onChange(dragged ?: layout, true); dragged = null }, valueRange = 50f..150f,
                 modifier = Modifier.weight(1f).testTag("popup_widget_scale"))
         }
     }
