@@ -6,6 +6,7 @@ import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import android.view.MotionEvent
+import androidx.annotation.VisibleForTesting
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -28,12 +29,14 @@ import com.galaxyrio.gracelauncher.data.backup.nextToRestore
 import com.galaxyrio.gracelauncher.platform.LauncherAppTransitions
 import com.galaxyrio.gracelauncher.ui.LauncherAppTheme
 import com.galaxyrio.gracelauncher.ui.LauncherRoute
+import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.LauncherViewModel
 import com.galaxyrio.gracelauncher.ui.components.LocalAppTransitions
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -74,6 +77,14 @@ class MainActivity : ComponentActivity() {
                     }
             }
         }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                // On a cold start the catalog is still loading when the activity resumes.
+                val state = launcherViewModel.uiState
+                    .first { !it.isLoadingApps && !it.appLoadFailed && it.apps.isNotEmpty() }
+                runAutoBackup(state)
+            }
+        }
         setContent {
             CompositionLocalProvider(LocalAppTransitions provides appTransitions) {
                 LauncherAppTheme(launcherViewModel) {
@@ -94,7 +105,6 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         launcherViewModel.refreshOnResume()
-        runAutoBackup()
     }
 
     /** Sets up one imported widget when the home card is tapped; nothing starts on its own. */
@@ -116,16 +126,17 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun runAutoBackup() {
+    private fun runAutoBackup(state: LauncherUiState) {
         if (autoBackupInFlight) return
-        // Right after process start the app list is still loading; a backup now would carry no labels.
-        val state = launcherViewModel.uiState.value
         if (state.isLoadingApps || state.appLoadFailed || state.apps.isEmpty()) return
         autoBackupInFlight = true
         val labels = state.apps.associate { it.key to it.label }
         lifecycleScope.launch {
-            try { withContext(Dispatchers.IO) { AutoBackupRunner(this@MainActivity).runIfDue(labels) } }
-            finally { autoBackupInFlight = false }
+            try {
+                val override = autoBackup
+                if (override != null) override(state)
+                else withContext(Dispatchers.IO) { AutoBackupRunner(this@MainActivity).runIfDue(labels) }
+            } finally { autoBackupInFlight = false }
         }
     }
 
@@ -154,5 +165,12 @@ class MainActivity : ComponentActivity() {
         return super.dispatchTouchEvent(event)
     }
 
-    companion object { const val EXTRA_EDIT_WIDGET = "editHomeWidget" }
+    companion object {
+        const val EXTRA_EDIT_WIDGET = "editHomeWidget"
+
+        /** Instrumented-test hook: observes the state instead of writing a backup. */
+        @Volatile
+        @VisibleForTesting
+        var autoBackup: (suspend (LauncherUiState) -> Unit)? = null
+    }
 }

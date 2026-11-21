@@ -75,7 +75,7 @@ The APK will be generated at `app/build/outputs/apk/debug/app-debug.apk`.
 
 ## Privacy
 
-Grace Launcher does not request Android's `INTERNET` permission and contains no advertising or tracking. All launcher data is stored locally on your device.
+Grace Launcher does not request Android's `INTERNET` permission and contains no advertising or tracking. Launcher data stays on your device unless you export a backup to a folder you choose. Android Auto Backup is disabled and the app's data is excluded from cloud backup and device-to-device transfer rules.
 
 Calendar permission and notification access are optional. Calendar permission enables the agenda; notification access enables home screen notifications and controls for active media sessions. Weather is supplied by the separately installed Breezy Weather app.
 
