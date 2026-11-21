@@ -70,9 +70,13 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 
 @Stable
-class ShortcutRevealState(expanded: Boolean = true, dragging: Boolean = false, val animationsEnabled: Boolean = true) {
+class ShortcutRevealState(expanded: Boolean = true, dragging: Boolean = false, val animationsEnabled: Boolean = true,
+    /** Window y for the panel's top edge, so a folder opened from a pop-up lines up with it; null centres on the anchor. */
+    val alignTop: Float? = null) {
     var dragging by mutableStateOf(dragging)
     var expanded by mutableStateOf(expanded)
+    /** Where this panel's top edge was last placed, in window coordinates. Layout output, not state. */
+    var placedTop: Float? = null
 }
 
 /** Folders differ only in their owner and initial contents, not their popup UI. */
@@ -443,8 +447,9 @@ internal fun SwipeRevealPanel(
                 maxHeight = (constraints.maxHeight - margin * 2).coerceAtLeast(1),
             ))
             val left = (constraints.maxWidth - panel.width) / 2
-            val top = (anchor.center.y - origin.y - panel.height / 2f).roundToInt()
+            val top = (reveal.alignTop?.let { it - origin.y } ?: (anchor.center.y - origin.y - panel.height / 2f)).roundToInt()
                 .coerceIn(margin, (constraints.maxHeight - panel.height - margin).coerceAtLeast(margin))
+            reveal.placedTop = top + origin.y
             val target = Rect(left.toFloat(), top.toFloat(), (left + panel.width).toFloat(), (top + panel.height).toFloat())
             val frame = popupMorphFrame(anchor.translate(-origin), target, spatial.value, 24.dp.toPx())
             val container = measurables[0].measure(Constraints.fixed(
