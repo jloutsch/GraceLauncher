@@ -100,8 +100,14 @@ internal fun LauncherOverlays(
     val launchPopupItem: (LauncherApp, Rect) -> Unit = { item, bounds ->
         if (item.folderId != null) {
             // Built-in protected profiles cannot be members of an app/folder pop-up.
+            // A folder opened from a pop-up keeps that pop-up's top edge, so its apps start where the parent's did.
+            val parentTop = when (overlay) {
+                is LauncherOverlay.Folder -> overlay.reveal.placedTop
+                is LauncherOverlay.Shortcuts -> overlay.reveal.placedTop
+                else -> null
+            }
             uiState.folders.firstOrNull { it.id == item.folderId }?.let {
-                onChange(LauncherOverlay.Folder(it, bounds))
+                onChange(LauncherOverlay.Folder(it, bounds, ShortcutRevealState(alignTop = parentTop)))
             }
         } else {
             onChange(null)

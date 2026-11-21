@@ -86,6 +86,47 @@ class PopupMotionTest {
         compose.onNodeWithTag("motion_panel").assertDoesNotExist()
     }
 
+    // Fork: a folder opened from a pop-up keeps the parent's top edge instead of centring on the tapped row.
+    @Test fun childPanelOpenedWithTheParentsTopLinesUpWithItInsteadOfCentringOnItsRow() {
+        var reveal by mutableStateOf<ShortcutRevealState?>(null)
+        var rows by mutableIntStateOf(5)
+        var fromRow by mutableStateOf(false)
+        compose.setContent {
+            GraceLauncherTheme(darkTheme = false, dynamicColor = false) {
+                var icon by remember { mutableStateOf(Rect.Zero) }
+                var row by remember { mutableStateOf(Rect.Zero) }
+                Box(Modifier.fillMaxSize()) {
+                    Box(Modifier.offset(x = 40.dp, y = 300.dp).size(40.dp).onGloballyPositioned { icon = it.boundsInWindow() })
+                    Box(Modifier.offset(x = 40.dp, y = 420.dp).size(40.dp).onGloballyPositioned { row = it.boundsInWindow() })
+                    reveal?.let { state ->
+                        SwipeRevealPanel(if (fromRow) row else icon, state, "motion_panel", "Folder", onDismiss = { reveal = null }) {
+                            repeat(rows) { Text("App ${it + 1}", Modifier.fillMaxWidth().height(56.dp).padding(16.dp)) }
+                        }
+                    }
+                }
+            }
+        }
+        val parentState = ShortcutRevealState(animationsEnabled = false)
+        compose.runOnIdle { reveal = parentState }
+        compose.waitForIdle()
+        val parent = bounds("motion_panel")
+        val parentTop = compose.runOnIdle { parentState.placedTop }
+        assertNotNull("The panel records where its top was placed", parentTop)
+
+        // Without the parent's top, a shorter child centred on a lower row opens lower.
+        compose.runOnIdle { reveal = null }
+        compose.waitForIdle()
+        compose.runOnIdle { rows = 2; fromRow = true; reveal = ShortcutRevealState(animationsEnabled = false) }
+        compose.waitForIdle()
+        assertTrue("Centring on the row moves the child down", bounds("motion_panel").top > parent.top + 20f)
+
+        compose.runOnIdle { reveal = null }
+        compose.waitForIdle()
+        compose.runOnIdle { reveal = ShortcutRevealState(animationsEnabled = false, alignTop = parentTop) }
+        compose.waitForIdle()
+        assertEquals("The child's top matches the parent's", parent.top, bounds("motion_panel").top, 1f)
+    }
+
     private fun bounds(tag: String) = compose.onNodeWithTag(tag).fetchSemanticsNode().boundsInRoot
     private fun progress() = compose.onNodeWithTag("motion_panel").fetchSemanticsNode()
         .config[SemanticsProperties.ProgressBarRangeInfo].current
