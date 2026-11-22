@@ -388,6 +388,8 @@
     <string name="media_control_unavailable">The player is no longer available</string>
 
     <!-- Settings -->
+    <string name="settings_search_hint">Search settings</string>
+    <string name="settings_search_none">No settings match</string>
     <string name="settings_title">Settings</string>
     <string name="settings_back">Back</string>
     <string name="settings_productivity">Productivity</string>

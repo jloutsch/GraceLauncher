@@ -14,6 +14,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -45,6 +46,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
@@ -71,6 +74,7 @@ import com.galaxyrio.gracelauncher.ui.components.ShortcutPickerScreen
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.components.LauncherIcon
+import com.galaxyrio.gracelauncher.ui.components.LauncherSearchBar
 import com.galaxyrio.gracelauncher.ui.components.LauncherSymbol
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherTypography
 import com.galaxyrio.gracelauncher.ui.theme.SystemLauncherTypography
@@ -433,8 +437,35 @@ private fun SettingsHome(
         }
         add(SettingsPage.About to LauncherSymbol.Info)
     }
+    // Fork: settings search (#36). Labels resolve per configuration so results follow the app language.
+    val searchState = rememberTextFieldState()
+    val query = searchState.text.toString()
+    val resources = LocalContext.current.resources
+    val configuration = LocalConfiguration.current
+    val results = remember(query, configuration) {
+        searchSettings(query, resources::getString)
+            .filter { Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU || it.page != SettingsPage.Language }
+    }
     SettingsScaffold(stringResource(R.string.settings_title), "settings_root", onBack) { padding ->
         SettingsList(padding) {
+            item(key = "settings_search") {
+                LauncherSearchBar(searchState, stringResource(R.string.settings_search_hint), "settings_search_query",
+                    Modifier.fillMaxWidth().padding(top = 16.dp))
+            }
+            if (query.isNotBlank()) {
+                if (results.isEmpty()) item(key = "settings_search_none") {
+                    Text(stringResource(R.string.settings_search_none), Modifier.padding(24.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                results.forEachIndexed { index, result ->
+                    item(key = "settings_search_result:$index:${result.page.name}:${result.title}") {
+                        Spacer(Modifier.height(if (index == 0) 16.dp else 0.dp))
+                        SettingsActionItem(result.title, result.path.joinToString(" › ").ifEmpty { null }, index, results.size,
+                            tag = "settings_search_result:${result.page.name}") { navigate(result.page) }
+                    }
+                }
+                return@SettingsList
+            }
             item(key = "settings_intro") { Spacer(Modifier.height(if (showDefaultHomeBanner) 32.dp else 24.dp)) }
             if (showDefaultHomeBanner) {
                 item(key = "default_home_banner") { DefaultHomeBanner(onSetDefaultHome) }
