@@ -72,6 +72,17 @@ class WidgetPlaceholdersTest {
         assertEquals(homeKeys, result.homeOrder)
     }
 
+    @Test fun repairingAStoredLayoutRenumbersOnlyRepeatedPlaceholders() {
+        val stored = WidgetLayout(mapOf(HomeContentKey to listOf(widget(-2), widget(41)), "folder:a" to listOf(widget(-2))), listOf("widget:-2"))
+        val repaired = stored.withUniquePlaceholders()
+        assertEquals(41, repaired.popups.getValue(HomeContentKey).last().widget!!.widgetId)
+        assertEquals(2, repaired.pending().map { it.placeholderId }.toSet().size)
+        assertEquals(listOf("widget:-2"), repaired.homeOrder)
+        // Nothing to repair: the same layout, so the repository writes nothing.
+        assertEquals(repaired, repaired.withUniquePlaceholders())
+        assertEquals(layout(), layout().withUniquePlaceholders())
+    }
+
     @Test fun replaceKeepsPlacementAndUpdatesOrder() {
         val base = layout().toPlaceholders()
         val screenId = base.popups.getValue(WidgetScreenKey).single().widget!!.widgetId

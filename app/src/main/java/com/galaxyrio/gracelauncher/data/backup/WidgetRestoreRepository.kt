@@ -13,7 +13,10 @@ class WidgetRestoreRepository(private val database: LauncherDatabase) {
     /** Binds the placeholder to [newId], or removes its slot when [newId] is null. */
     suspend fun resolve(placeholderId: Int, newId: Int?) = database.withTransaction {
         val before = layout()
-        val after = if (newId == null) before.dropWidget(placeholderId) else before.replaceWidget(placeholderId, newId)
+        save(before, if (newId == null) before.dropWidget(placeholderId) else before.replaceWidget(placeholderId, newId))
+    }
+
+    private suspend fun save(before: WidgetLayout, after: WidgetLayout) {
         val dao = database.backupDao()
         val changed = after.popups.filter { (owner, items) -> items != before.popups[owner] }
         if (changed.isNotEmpty()) dao.insertPopups(changed.map { (owner, items) -> AppPopupEntity(owner, PopupItem.encode(items)) })
@@ -23,10 +26,15 @@ class WidgetRestoreRepository(private val database: LauncherDatabase) {
         }
     }
 
-    private suspend fun layout(): WidgetLayout = WidgetLayout(
-        database.backupDao().allPopups().associate { it.ownerKey to PopupItem.decode(it.itemsJson) },
-        database.settingsDao().readSettings()?.let { HomeLayout.decode(it.homeLayoutJson) }?.homeOrder,
-    )
+    private suspend fun layout(): WidgetLayout {
+        val stored = WidgetLayout(
+            database.backupDao().allPopups().associate { it.ownerKey to PopupItem.decode(it.itemsJson) },
+            database.settingsDao().readSettings()?.let { HomeLayout.decode(it.homeLayoutJson) }?.homeOrder,
+        )
+        // Fork (#38): an import made before repeats were renumbered may have saved one placeholder ID twice;
+        // restoring it would bind both entries to one widget and drop one. Repair it once, where it is read.
+        return stored.withUniquePlaceholders().also { if (it != stored) save(stored, it) }
+    }
 }
 
 /** Placeholders are not host IDs; passing one to AppWidgetHost.deleteAppWidgetId is never valid. */

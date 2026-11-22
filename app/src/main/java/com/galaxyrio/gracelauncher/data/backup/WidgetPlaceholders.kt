@@ -13,7 +13,13 @@ data class PendingWidget(val ownerKey: String, val placeholderId: Int, val provi
 
 private fun widgetKey(id: Int) = "widget:$id"
 
-fun WidgetLayout.toPlaceholders(): WidgetLayout {
+fun WidgetLayout.toPlaceholders(): WidgetLayout = renumbered(bound = true)
+
+/** Fork (#38): only renumbers repeated placeholders, for layouts saved by an import before toPlaceholders() did. */
+fun WidgetLayout.withUniquePlaceholders(): WidgetLayout = renumbered(bound = false)
+
+/** [bound]: also turn bound widget IDs into placeholders, as an import does. */
+private fun WidgetLayout.renumbered(bound: Boolean): WidgetLayout {
     // Skip used IDs instead of counting down from the lowest one: a hand-made file can hold Int.MIN_VALUE.
     val used = popups.values.flatten().mapNotNull { it.widget?.widgetId }.filter(::isWidgetPlaceholder).toMutableSet()
     var free = FIRST_PLACEHOLDER_ID
@@ -26,7 +32,7 @@ fun WidgetLayout.toPlaceholders(): WidgetLayout {
     val remapped = popups.toSortedMap().mapValues { (_, items) ->
         items.map { item ->
             val widget = item.widget
-            if (widget == null || (widget.widgetId < 0 && (!isWidgetPlaceholder(widget.widgetId) ||
+            if (widget == null || (!bound && widget.widgetId >= 0) || (widget.widgetId < 0 && (!isWidgetPlaceholder(widget.widgetId) ||
                     kept.add(widget.widgetId).also { if (it) keptKeys += item.key }))) item else {
                 val id = nextFree()
                 if (item.key !in keptKeys) renamed.putIfAbsent(item.key, widgetKey(id))
