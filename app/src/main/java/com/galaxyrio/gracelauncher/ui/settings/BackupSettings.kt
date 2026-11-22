@@ -8,8 +8,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
@@ -24,6 +26,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -38,7 +41,12 @@ import com.galaxyrio.gracelauncher.data.backup.BackupTask
 import com.galaxyrio.gracelauncher.data.backup.ImportResult
 import com.galaxyrio.gracelauncher.data.backup.ImportSummary
 import com.galaxyrio.gracelauncher.data.backup.manualBackupName
+import com.galaxyrio.gracelauncher.data.NotificationDisplay
+import com.galaxyrio.gracelauncher.data.weather.WeatherConnectionMode
+import com.galaxyrio.gracelauncher.data.weather.WeatherStatus
+import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
+import com.galaxyrio.gracelauncher.ui.ScheduleStatus
 import com.galaxyrio.gracelauncher.ui.components.LauncherIcon
 import com.galaxyrio.gracelauncher.ui.components.LauncherSymbol
 import java.time.Instant
@@ -53,7 +61,7 @@ private const val DayMillis = 86_400_000L
 private const val TreeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
 
 @Composable
-fun BackupSettings(uiState: LauncherUiState, onBack: () -> Unit) {
+fun BackupSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit) {
     val context = LocalContext.current
     val store = remember(context) { BackupStatusStore(context) }
     val task by BackupController.state.collectAsState()
@@ -150,7 +158,7 @@ fun BackupSettings(uiState: LauncherUiState, onBack: () -> Unit) {
             dismissButton = { TextButton(onClick = { pendingImport = null }) { Text(stringResource(R.string.settings_cancel)) } })
     }
     when (val current = task) {
-        is BackupTask.Imported -> ImportResultDialog(current.result, BackupController::dismiss)
+        is BackupTask.Imported -> ImportResultDialog(current.result, BackupController::dismiss, missingImportAccess(uiState), actions)
         is BackupTask.ExportFailed -> AlertDialog(onDismissRequest = BackupController::dismiss,
             text = { Text(stringResource(R.string.backup_export_failed)) },
             confirmButton = { TextButton(onClick = BackupController::dismiss) { Text(stringResource(R.string.backup_ok)) } })
@@ -159,7 +167,8 @@ fun BackupSettings(uiState: LauncherUiState, onBack: () -> Unit) {
 }
 
 @Composable
-internal fun ImportResultDialog(result: ImportResult, onDismiss: () -> Unit) {
+internal fun ImportResultDialog(result: ImportResult, onDismiss: () -> Unit, access: List<ImportAccess> = emptyList(),
+    actions: LauncherActions = LauncherActions()) {
     val title = when (result) {
         is ImportResult.Success -> R.string.backup_summary_title
         is ImportResult.Rejected -> R.string.backup_rejected_title
@@ -169,7 +178,10 @@ internal fun ImportResultDialog(result: ImportResult, onDismiss: () -> Unit) {
         title = { Text(stringResource(title)) },
         text = {
             when (result) {
-                is ImportResult.Success -> ImportSummaryText(result.summary)
+                is ImportResult.Success -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ImportSummaryText(result.summary)
+                    ImportAccessRows(access, actions)
+                }
                 is ImportResult.Rejected -> Text(stringResource(when (result.problem) {
                     is BackupProblem.NewerFormat, is BackupProblem.NewerSchema -> R.string.backup_rejected_newer
                     BackupProblem.NotABackup -> R.string.backup_rejected_not_backup
@@ -207,6 +219,45 @@ private fun ImportSummaryText(summary: ImportSummary) {
             Text(stringResource(R.string.backup_summary_widgets_missing, summary.widgetsMissingProvider.joinToString(", ")))
         if (summary.leftOut.isNotEmpty())
             Text(stringResource(R.string.backup_summary_left_out, summary.leftOut.joinToString(", ")))
+    }
+}
+
+/** Fork #9: a restored feature that needs a permission Android does not restore from a backup. */
+internal enum class ImportAccess { Calendar, Weather, Notifications }
+
+internal fun missingImportAccess(state: LauncherUiState): List<ImportAccess> = buildList {
+    val settings = state.settings
+    if (settings.calendarAgenda && state.scheduleStatus == ScheduleStatus.PermissionRequired) add(ImportAccess.Calendar)
+    if (settings.weatherEnabled && settings.weatherConnection.mode != WeatherConnectionMode.Gadgetbridge &&
+        state.weather.status == WeatherStatus.PermissionRequired) add(ImportAccess.Weather)
+    val popups = settings.shortcutsFolders
+    val previews = popups.enabled &&
+        (popups.normalNotifications != NotificationDisplay.Hidden || popups.silentNotifications != NotificationDisplay.Hidden)
+    if ((settings.mediaPlayer || previews) && !state.media.hasAccess) add(ImportAccess.Notifications)
+}
+
+/** Says up front that each Allow brings up Android's own request; a row goes away once its access is granted. */
+@Composable
+private fun ImportAccessRows(missing: List<ImportAccess>, actions: LauncherActions) {
+    if (missing.isEmpty()) return
+    Column(Modifier.testTag("backup_access")) {
+        Text(stringResource(R.string.backup_access_title), style = MaterialTheme.typography.titleSmall)
+        Text(stringResource(R.string.backup_access_explanation), style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant)
+        missing.forEach { access ->
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(when (access) {
+                    ImportAccess.Calendar -> R.string.backup_access_calendar
+                    ImportAccess.Weather -> R.string.backup_access_weather
+                    ImportAccess.Notifications -> R.string.backup_access_notifications
+                }), Modifier.weight(1f))
+                TextButton(onClick = when (access) {
+                    ImportAccess.Calendar -> actions.requestCalendarAccess
+                    ImportAccess.Weather -> actions.requestWeatherAccess
+                    ImportAccess.Notifications -> actions.requestMediaAccess
+                }, modifier = Modifier.testTag("backup_access:${access.name}")) { Text(stringResource(R.string.backup_access_allow)) }
+            }
+        }
     }
 }
 

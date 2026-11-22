@@ -25,6 +25,7 @@ import com.galaxyrio.gracelauncher.data.backup.ImportSummary
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.settings.BackupSettings
+import com.galaxyrio.gracelauncher.ui.settings.ImportAccess
 import com.galaxyrio.gracelauncher.ui.settings.ImportResultDialog
 import com.galaxyrio.gracelauncher.ui.settings.LauncherSettingsScreen
 import com.galaxyrio.gracelauncher.ui.theme.GraceLauncherTheme
@@ -82,7 +83,7 @@ class BackupSettingsTest {
         compose.setContent {
             val owner = remember { object : ActivityResultRegistryOwner { override val activityResultRegistry = registry } }
             CompositionLocalProvider(LocalActivityResultRegistryOwner provides owner) {
-                GraceLauncherTheme(dynamicColor = false) { if (visible.value) BackupSettings(state, onBack = {}) }
+                GraceLauncherTheme(dynamicColor = false) { if (visible.value) BackupSettings(state, LauncherActions(), onBack = {}) }
             }
         }
         compose.waitForIdle()
@@ -162,6 +163,33 @@ class BackupSettingsTest {
         compose.onNodeWithText("Not installed yet", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Widgets that need setup", substring = true).assertDoesNotExist()
         compose.onNodeWithText("Widgets left out", substring = true).assertDoesNotExist()
+    }
+
+    @Test fun summaryOffersAnAllowButtonForEachMissingPermission() {
+        val asked = mutableListOf<String>()
+        val actions = LauncherActions(requestCalendarAccess = { asked += "calendar" }, requestWeatherAccess = { asked += "weather" },
+            requestMediaAccess = { asked += "notifications" })
+        compose.setContent {
+            GraceLauncherTheme(dynamicColor = false) {
+                ImportResultDialog(ImportResult.Success(ImportSummary(1, 1, 1, 0, true, emptyList(), emptyList())), onDismiss = {},
+                    access = listOf(ImportAccess.Calendar, ImportAccess.Weather, ImportAccess.Notifications), actions = actions)
+            }
+        }
+        compose.onNodeWithText("Needs your permission").assertIsDisplayed()
+        compose.onNodeWithText("Each Allow shows Android's own request", substring = true).assertIsDisplayed()
+        compose.onNodeWithTag("backup_access:Calendar").performClick()
+        compose.onNodeWithTag("backup_access:Weather").performClick()
+        compose.onNodeWithTag("backup_access:Notifications").performClick()
+        compose.runOnIdle { assertEquals(listOf("calendar", "weather", "notifications"), asked) }
+    }
+
+    @Test fun summaryHasNoPermissionSectionWhenNothingIsMissing() {
+        compose.setContent {
+            GraceLauncherTheme(dynamicColor = false) {
+                ImportResultDialog(ImportResult.Success(ImportSummary(1, 1, 1, 0, true, emptyList(), emptyList())), onDismiss = {})
+            }
+        }
+        compose.onNodeWithTag("backup_access").assertDoesNotExist()
     }
 
     @Test fun importProblemsUsePlainSentences() {

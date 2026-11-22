@@ -396,7 +396,7 @@ fun LauncherSettingsScreen(
                     SettingsPage.LabAccessibility -> LabAccessibilitySettings(uiState, actions, back)
                     SettingsPage.LabDismiss -> LabDismissSettings(uiState, actions, back)
                     SettingsPage.About -> AboutSettings(back, navigate)
-                    SettingsPage.Backup -> BackupSettings(uiState, back)
+                    SettingsPage.Backup -> BackupSettings(uiState, actions, back)
                     SettingsPage.HiddenApps -> HiddenAppsSettings(uiState, actions, back)
                     SettingsPage.PrivateSpace -> ProfileSettingsScreen(uiState, actions, back) { navigate(SettingsPage.PrivateSpaceEditor) }
                     SettingsPage.WorkProfile -> ProfileSettingsScreen(uiState, actions, back, work = true) { navigate(SettingsPage.WorkProfileEditor) }
