@@ -202,8 +202,12 @@ internal object SettingsSearchIndex {
 /** A searchable row; [section] names the tab or sub-page inside [page] that holds it, when there is one. */
 internal data class SettingsSearchItem(val page: SettingsPage, @StringRes val title: Int, @StringRes val section: Int? = null)
 
-/** [pages] is the route from the settings home to [page], so back returns through the [path] shown. */
-internal data class SettingsSearchResult(val page: SettingsPage, val title: String, val path: List<String>, val pages: List<SettingsPage>)
+/**
+ * [pages] is the route from the settings home to [page], so back returns through the [path] shown.
+ * [row] is the setting row's title to scroll to and highlight; null when the result is a page.
+ */
+internal data class SettingsSearchResult(val page: SettingsPage, val title: String, val path: List<String>, val pages: List<SettingsPage>,
+    val row: String? = null)
 
 /** Pages and setting rows whose title contains [query], best match first. [label] resolves string resources. */
 internal fun searchSettings(query: String, label: (Int) -> String): List<SettingsSearchResult> {
@@ -214,7 +218,9 @@ internal fun searchSettings(query: String, label: (Int) -> String): List<Setting
     fun path(page: SettingsPage) = route(page).map { label(pages.getValue(it).first) }
     val entries = pages.map { (page, entry) -> SettingsSearchResult(page, label(entry.first), path(entry.second), route(page)) } +
         SettingsSearchIndex.items.filter { it.page in pages }.map { item ->
-            SettingsSearchResult(item.page, label(item.title), path(item.page) + listOfNotNull(item.section?.let(label)), route(item.page))
+            label(item.title).let { title ->
+                SettingsSearchResult(item.page, title, path(item.page) + listOfNotNull(item.section?.let(label)), route(item.page), row = title)
+            }
         }
     return entries.mapNotNull { result -> SearchNames(result.title).score(term)?.let { it to result } }
         .sortedWith(compareBy({ it.first }, { it.second.path.size }, { it.second.title })).map { it.second }

@@ -29,6 +29,8 @@ internal fun AgendaDailyContentSettings(uiState: LauncherUiState, draft: AgendaA
     onChange: (AgendaAppearance) -> Unit, modifier: Modifier = Modifier,
 ) {
     val controlsState = rememberLazyListState()
+    // Fork: settings search scrolls these to the row it opened (#36).
+    SettingsSearchScroll(controlsState)
     val heroSpec = MaterialTheme.motionScheme.slowSpatialSpec<Rect>()
     val heroBounds = remember(heroSpec) { BoundsTransform { _, _ -> heroSpec } }
     val heroShape = ListItemDefaults.segmentedShapes(0, 1).shape

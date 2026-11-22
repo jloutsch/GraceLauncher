@@ -254,6 +254,9 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
     val styleListState = rememberLazyListState()
     val presetsListState = rememberLazyListState()
     val colorsListState = rememberLazyListState()
+    // Fork: settings search scrolls these to the row it opened (#36).
+    SettingsSearchScroll(styleListState)
+    SettingsSearchScroll(colorsListState)
     val pageTransition = updateTransition(page, label = "clockEditorPage")
     val reportSystemBarBackground = LocalSettingsSystemBarBackground.current
     val systemBarBackground = if (pageTransition.currentState == ClockEditorPage.Presets &&

@@ -18,6 +18,12 @@ class SettingsSearchTest {
         assertEquals(listOf("settings advanced"), result.path)
     }
 
+    @Test fun aRowResultNamesTheRowToHighlightAndAPageResultNamesNone() {
+        val row = search("allow screen rotation").single()
+        assertEquals(row.title, row.row)
+        assertEquals(null, search("tasks choose lists").single().row)
+    }
+
     @Test fun aPageIsFoundWithThePathToItAndTheRouteThroughItsParents() {
         val result = search("tasks choose lists").single()
         assertEquals(SettingsPage.TaskLists, result.page)

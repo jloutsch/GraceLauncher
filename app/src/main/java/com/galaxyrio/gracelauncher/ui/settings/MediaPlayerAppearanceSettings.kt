@@ -123,6 +123,9 @@ internal fun MediaPlayerAppearanceSettings(uiState: LauncherUiState, actions: La
     val presetsState = rememberLazyListState()
     val styleState = rememberLazyListState()
     val colorsState = rememberLazyListState()
+    // Fork: settings search scrolls these to the row it opened (#36).
+    SettingsSearchScroll(styleState)
+    SettingsSearchScroll(colorsState)
     val transition = updateTransition(page, label = "mediaEditorPage")
     val reportSystemBarBackground = LocalSettingsSystemBarBackground.current
     val systemBarBackground = if (transition.currentState == MediaAppearancePage.Presets &&

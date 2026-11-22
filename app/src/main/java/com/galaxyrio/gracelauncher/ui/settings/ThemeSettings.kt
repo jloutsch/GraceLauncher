@@ -181,10 +181,11 @@ private fun AccentColorItem(isDynamic: Boolean, selectedColor: Int, style: Palet
     val pages = remember { AccentColors.chunked(5) }
     val initialPage = (AccentColors.indexOfFirst { it.toArgb() == selectedColor }.coerceAtLeast(0) / 5)
     val pager = rememberPagerState(initialPage = initialPage, pageCount = { pages.size })
+    val highlight = rememberSearchHighlight(stringResource(R.string.settings_accent_color))
     SegmentedListItem(
         shapes = ListItemDefaults.segmentedShapes(0, 5),
-        colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceBright),
-        modifier = Modifier.testTag("settings_accent_color"),
+        colors = ListItemDefaults.segmentedColors(containerColor = highlight.containerColor(MaterialTheme.colorScheme.surfaceBright)),
+        modifier = highlight.modifier.testTag("settings_accent_color"),
         content = {
             Column(Modifier.fillMaxWidth()) {
                 Text(stringResource(R.string.settings_accent_color))

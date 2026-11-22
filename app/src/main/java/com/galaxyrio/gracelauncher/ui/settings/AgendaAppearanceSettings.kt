@@ -7,6 +7,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.Saver
@@ -160,8 +161,11 @@ internal fun AgendaAppearanceSettings(uiState: LauncherUiState, actions: Launche
                 ) { padding ->
                     val contentModifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding()
                         .padding(horizontal = 16.dp)
+                    // Fork: settings search scrolls this to the row it opened (#36).
+                    val overviewState = rememberLazyListState()
+                    SettingsSearchScroll(overviewState)
                     when (displayed) {
-                        AgendaEditorPage.Overview -> LazyColumn(contentModifier.testTag("agenda_appearance_controls"),
+                        AgendaEditorPage.Overview -> LazyColumn(contentModifier.testTag("agenda_appearance_controls"), state = overviewState,
                             userScrollEnabled = !saving && !resizingWidget,
                             verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
                             contentPadding = PaddingValues(bottom = 24.dp + LocalSettingsBottomInset.current),

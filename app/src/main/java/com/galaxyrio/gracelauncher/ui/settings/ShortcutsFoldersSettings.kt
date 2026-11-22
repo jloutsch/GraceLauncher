@@ -81,11 +81,12 @@ internal fun ShortcutsFoldersSettingsScreen(uiState: LauncherUiState, actions: L
 private fun NotificationDisplayItem(title: String, selected: NotificationDisplay, enabled: Boolean,
     index: Int, count: Int, tag: String, onSelect: (NotificationDisplay) -> Unit) {
     val canEdit = enabled && LocalSettingsStorageState.current.canEdit
+    val highlight = rememberSearchHighlight(title)
     SegmentedListItem(
         shapes = ListItemDefaults.segmentedShapes(index, count),
-        colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceBright),
+        colors = ListItemDefaults.segmentedColors(containerColor = highlight.containerColor(MaterialTheme.colorScheme.surfaceBright)),
         enabled = canEdit,
-        modifier = Modifier.testTag(tag),
+        modifier = highlight.modifier.testTag(tag),
         content = {
             Column(Modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(title)

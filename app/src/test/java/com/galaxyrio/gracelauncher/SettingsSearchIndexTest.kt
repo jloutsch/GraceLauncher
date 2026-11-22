@@ -84,6 +84,29 @@ class SettingsSearchIndexTest {
         assertEquals("No longer settings rows; remove from notSearchable", emptySet<String>(), notSearchable - rows)
     }
 
+    private val settingsFiles get() = File("src/main/java/com/galaxyrio/gracelauncher/ui/settings").listFiles { file -> file.extension == "kt" }!!
+
+    @Test fun everyRowComponentCanBeHighlightedBySearch() {
+        // A result scrolls to its row and flashes it; a component without the hook opens the page but shows nothing.
+        val components = listOf("SettingsToggleItem", "SettingsActionItem", "DesignerSlider", "SettingsFeatureBanner", "LabSliderItem", "NotificationDisplayItem", "WallpaperEffectItem", "UsageOption", "AgendaNavigationToggle", "AccentColorItem")
+        val text = settingsFiles.joinToString("\n") { it.readText() }
+        val missing = components.filterNot { name ->
+            val body = text.substringAfter("fun $name(").substringBefore("\n}\n")
+            "rememberSearchHighlight(" in body || "SettingsActionItem(" in body
+        }
+        assertEquals(emptyList<String>(), missing)
+    }
+
+    @Test fun everyLazyListHoldingSettingRowsScrollsToTheSearchTarget() {
+        // A lazy list composes only the rows on screen, so a row further down needs SettingsSearchScroll to be found.
+        val rowCall = Regex("""(?:SettingsToggleItem|SettingsActionItem|DesignerSlider|SettingsFeatureBanner|LabSliderItem|NotificationDisplayItem|WallpaperEffectItem|UsageOption|AgendaNavigationToggle)\(""")
+        val missing = settingsFiles.filter { file ->
+            val text = file.readText()
+            "LazyColumn(" in text && rowCall.containsMatchIn(text) && "SettingsSearchScroll(" !in text
+        }.map { it.name }
+        assertEquals(emptyList<String>(), missing)
+    }
+
     @Test fun rowComponentsWithATitleParameterAreAllScanned() {
         // A new row component would hide its rows from the scan above; list it there when this fails.
         val scanned = setOf("SettingsToggleItem", "SettingsActionItem", "DesignerSlider", "SettingsFeatureBanner", "LabSliderItem", "NotificationDisplayItem", "WallpaperEffectItem", "UsageOption", "AgendaNavigationToggle", "AccentColorItem")

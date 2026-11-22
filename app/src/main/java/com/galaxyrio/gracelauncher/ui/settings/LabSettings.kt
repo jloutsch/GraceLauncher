@@ -220,8 +220,10 @@ private fun LabSliderItem(title: String, value: Int, default: Int, range: IntRan
     onReset: () -> Unit, onChange: (Int) -> Unit) {
     var draft by remember(value) { mutableFloatStateOf(value.coerceIn(range).toFloat()) }
     val editable = enabled && LocalSettingsStorageState.current.canEdit
+    val highlight = rememberSearchHighlight(title)
     SegmentedListItem(shapes = ListItemDefaults.segmentedShapes(index, count),
-        colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceBright),
+        colors = ListItemDefaults.segmentedColors(containerColor = highlight.containerColor(MaterialTheme.colorScheme.surfaceBright)),
+        modifier = highlight.modifier,
         content = {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Text(title, Modifier.weight(1f))
