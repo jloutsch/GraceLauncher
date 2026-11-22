@@ -80,9 +80,10 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 // On a cold start the catalog is still loading when the activity resumes.
+                val loadingAtResume = launcherViewModel.uiState.value.isLoadingApps
                 val state = launcherViewModel.uiState
                     .first { !it.isLoadingApps && !it.appLoadFailed && it.apps.isNotEmpty() }
-                runAutoBackup(state)
+                runAutoBackup(state, loadingAtResume)
             }
         }
         setContent {
@@ -126,7 +127,7 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun runAutoBackup(state: LauncherUiState) {
+    private fun runAutoBackup(state: LauncherUiState, loadingAtResume: Boolean) {
         if (autoBackupInFlight) return
         if (state.isLoadingApps || state.appLoadFailed || state.apps.isEmpty()) return
         autoBackupInFlight = true
@@ -134,7 +135,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             try {
                 val override = autoBackup
-                if (override != null) override(state)
+                if (override != null) override(state, loadingAtResume)
                 else withContext(Dispatchers.IO) { AutoBackupRunner(this@MainActivity).runIfDue(labels) }
             } finally { autoBackupInFlight = false }
         }
@@ -171,6 +172,6 @@ class MainActivity : ComponentActivity() {
         /** Instrumented-test hook: observes the state instead of writing a backup. */
         @Volatile
         @VisibleForTesting
-        var autoBackup: (suspend (LauncherUiState) -> Unit)? = null
+        var autoBackup: (suspend (state: LauncherUiState, loadingAtResume: Boolean) -> Unit)? = null
     }
 }

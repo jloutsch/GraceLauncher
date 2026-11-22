@@ -112,7 +112,9 @@ private val ClockColorGroups = listOf(
 )
 
 @Composable
-internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit, onManageFonts: () -> Unit) {
+internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit,
+    /** Fork: opened from settings search, so the searched row is not hidden in a collapsed group. */
+    expandAllGroups: Boolean = false, onManageFonts: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val presetContent = rememberClockPresetPreviewContent()
@@ -126,7 +128,9 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
     var confirmExit by rememberSaveable { mutableStateOf(false) }
     var page by rememberSaveable { mutableStateOf(ClockEditorPage.Style) }
     // Expansion belongs to this editor visit, not the saved widget configuration.
-    var expandedGroups by remember { mutableStateOf(emptySet<String>()) }
+    var expandedGroups by remember {
+        mutableStateOf(if (expandAllGroups) ClockRegion.entries.map { it.name }.toSet() + "Layout" else emptySet())
+    }
     var presetLayout by rememberSaveable {
         mutableStateOf(uiState.settings.clockStyle.layout.takeIf {
             uiState.settings.clockStyle.regions == null && !it.allowsCustomFont

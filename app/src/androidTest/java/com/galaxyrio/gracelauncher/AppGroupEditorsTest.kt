@@ -155,6 +155,39 @@ class AppGroupEditorsTest {
         compose.onNodeWithTag("settings_navigation").assertDoesNotExist()
     }
 
+    // Fork (#45): a folder opened from a pop-up opens at that pop-up's top edge, from an app pop-up and from a folder.
+    @Test fun aFolderOpenedFromAPopupOpensAtThatPopupsTop() {
+        val inner = LauncherFolder("inner", "Inner folder", listOf(member.key), FolderPlacement.AppList)
+        val outer = LauncherFolder("outer", "Outer folder", listOf(inner.key), FolderPlacement.AppList)
+        val state = LauncherUiState(apps = listOf(owner, member), folders = listOf(inner, outer), isLoadingApps = false,
+            popups = mapOf(owner.key to listOf(PopupItem(outer.key))))
+        // An anchor low on the screen: a child centred on its tapped row would open well below the parent's top.
+        val parent = ShortcutRevealState(animationsEnabled = false)
+        var overlay by mutableStateOf<LauncherOverlay?>(LauncherOverlay.Shortcuts(owner, Rect(24f, 900f, 64f, 940f), parent))
+        compose.setContent {
+            GraceLauncherTheme(dynamicColor = false) {
+                LauncherOverlays(overlay, state, LauncherActions(), onChange = { overlay = it },
+                    onLaunchApp = {}, onToggleFavorite = {}, onRequestCalendar = {})
+            }
+        }
+        val parentTop = compose.onNodeWithTag("shortcut_popup").fetchSemanticsNode().boundsInRoot.top
+        compose.onNodeWithTag("shortcut:${outer.key}").performClick()
+        compose.waitForIdle()
+        val outerReveal = compose.runOnIdle { (overlay as LauncherOverlay.Folder).reveal }
+        compose.runOnIdle { assertEquals(parent.placedTop, outerReveal.alignTop) }
+        val outerTop = compose.onNodeWithTag("folder_popup").fetchSemanticsNode().boundsInRoot.top
+        assertEquals(parentTop, outerTop, 1f)
+
+        compose.onNodeWithTag("folder_app:${inner.key}").performClick()
+        compose.waitForIdle()
+        compose.runOnIdle {
+            val folder = overlay as LauncherOverlay.Folder
+            assertEquals(inner.id, folder.folder.id)
+            assertEquals(outerReveal.placedTop, folder.reveal.alignTop)
+        }
+        assertEquals(outerTop, compose.onNodeWithTag("folder_popup").fetchSemanticsNode().boundsInRoot.top, 1f)
+    }
+
     @Test fun popupFolderClickReplacesThePanelWithoutImmediatelyDismissingIt() {
         val state = LauncherUiState(apps = listOf(owner, member), folders = listOf(folder), isLoadingApps = false,
             popups = mapOf(owner.key to listOf(PopupItem(folder.key))))

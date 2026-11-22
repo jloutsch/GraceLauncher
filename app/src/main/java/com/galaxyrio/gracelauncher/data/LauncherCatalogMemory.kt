@@ -22,6 +22,10 @@ internal object LauncherCatalogMemory {
 
     fun read(key: String): Snapshot? = snapshot?.takeIf { it.key == key }
 
+    /** Fork: lets a test start from a real cold load instead of the previous launch's catalog. */
+    @androidx.annotation.VisibleForTesting
+    fun clear() { snapshot = null }
+
     fun publish(value: Snapshot) {
         snapshot = value.copy(entries = value.entries.filter {
             !it.isPrivateSpace && it.shortcut?.isPrivateSpace != true

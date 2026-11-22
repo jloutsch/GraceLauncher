@@ -60,6 +60,27 @@ class WidgetRestoreTest {
         assertEquals(emptyList<PendingWidget>(), restore.pending())
     }
 
+    // Fork (#38): a placeholder ID that an older import saved twice is repaired when the queue is read.
+    @Test
+    fun aPlaceholderSavedTwiceByAnOlderImportRestoresAsTwoWidgets() = runBlocking {
+        settings.updateSettings(LauncherSettings(homeLayout = HomeLayout(homeOrder = listOf("widget:-2"))))
+        settings.saveFolder(LauncherFolder("f1", "Work", listOf("a/a.Main"), FolderPlacement.AppList))
+        items.updatePopup(HomeContentKey, emptyList()) { listOf(widget(-2)) }
+        items.updatePopup("folder:f1", emptyList()) { listOf(widget(7), widget(-2)) }
+        val restore = WidgetRestoreRepository(database)
+
+        val pending = restore.pending()
+        assertEquals(2, pending.map { it.placeholderId }.toSet().size)
+        pending.forEachIndexed { index, widget -> restore.resolve(widget.placeholderId, 300 + index) }
+
+        val popups = items.snapshots.first().popups
+        val ids = (popups.getValue(HomeContentKey) + popups.getValue("folder:f1")).map { it.widget!!.widgetId }.sorted()
+        assertEquals("the bound widget stays bound and each copy gets its own ID", listOf(7, 300, 301), ids)
+        val homeKey = popups.getValue(HomeContentKey).single().key
+        assertEquals(listOf(homeKey), settings.snapshots.first().settings.homeLayout.homeOrder)
+        assertEquals(emptyList<PendingWidget>(), restore.pending())
+    }
+
     @Test
     fun placeholdersNeverReachWidgetHost() = runBlocking {
         settings.saveFolder(LauncherFolder("f1", "Work", listOf("a/a.Main"), FolderPlacement.AppList))
