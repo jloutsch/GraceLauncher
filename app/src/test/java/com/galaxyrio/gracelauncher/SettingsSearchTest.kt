@@ -47,6 +47,23 @@ class SettingsSearchTest {
         assertTrue(search("no such setting anywhere").isEmpty())
     }
 
+    @Test fun aRowIsFoundByAWordThatIsNotInItsTitle() {
+        val result = search("hash").single()
+        assertEquals(SettingsPage.Alphabet, result.page)
+        assertEquals("alphabet numbers first", result.row)
+    }
+
+    @Test fun titleMatchesComeBeforeExtraWordMatches() {
+        // "letter" is in the title "alphabet letter color" and an extra word for the A-Z "clock size" row.
+        val titles = search("letter").map { it.title }
+        assertTrue(titles.indexOf("alphabet letter color") < titles.indexOf("clock size"))
+    }
+
+    @Test fun everyExtraWordListBelongsToAnIndexedTitle() {
+        val indexed = SettingsSearchIndex.items.map { it.title } + SettingsSearchIndex.pages.values.map { it.first }
+        assertEquals(emptySet<String>(), (SettingsSearchIndex.keywords.keys - indexed.toSet()).map(names::getValue).toSet())
+    }
+
     @Test fun everyIndexedPageReachesTheSettingsHome() {
         SettingsSearchIndex.pages.keys.forEach { page ->
             val seen = mutableSetOf<SettingsPage>()

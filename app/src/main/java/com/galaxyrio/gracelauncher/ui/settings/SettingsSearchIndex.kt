@@ -197,6 +197,42 @@ internal object SettingsSearchIndex {
         SettingsSearchItem(SettingsPage.WorkProfile, R.string.private_space_display),
         SettingsSearchItem(SettingsPage.AppStacks, R.string.widget_stack_create),
     )
+
+    /**
+     * Other words people may type for a page or row, by its title. English only, and kept here rather than in
+     * strings.xml so an upstream release never conflicts with them. A title match always ranks first.
+     */
+    val keywords: Map<Int, List<String>> = mapOf(
+        R.string.alphabet_numbers_first to listOf("numbers", "digits", "hash"),
+        R.string.settings_alphabet to listOf("alphabet", "letters", "scrollbar", "index"),
+        R.string.clock_size to listOf("letter size", "text size"),
+        R.string.icon_designer_icon_size to listOf("icon size"),
+        R.string.settings_themes to listOf("theme", "look", "style"),
+        R.string.settings_theme_mode to listOf("night", "light mode", "theme"),
+        R.string.settings_amoled_mode to listOf("black", "oled"),
+        R.string.settings_dynamic_colors to listOf("material you", "wallpaper colors", "accent"),
+        R.string.settings_wallpaper_dim_color to listOf("tint", "dim color"),
+        R.string.settings_font to listOf("typeface", "text"),
+        R.string.settings_icons to listOf("icon pack"),
+        R.string.settings_allow_haptics to listOf("vibration", "vibrate"),
+        R.string.settings_hide_status_bar to listOf("fullscreen", "notification bar"),
+        R.string.settings_allow_screen_rotation to listOf("landscape", "orientation", "auto-rotate"),
+        R.string.choose_default_launcher to listOf("home app"),
+        R.string.settings_language to listOf("locale", "translation"),
+        R.string.settings_changelog to listOf("what's new", "release notes", "version"),
+        R.string.settings_licenses to listOf("open source"),
+        R.string.popups_title to listOf("shortcuts", "long press"),
+        R.string.widget_screen_columns to listOf("columns", "grid"),
+        R.string.recently_installed to listOf("new apps"),
+        R.string.settings_media_player to listOf("music", "now playing"),
+        R.string.media_cover_border to listOf("album art", "cover"),
+        R.string.media_cover_shadow to listOf("album art", "cover"),
+        R.string.weather_temperature_unit to listOf("celsius", "fahrenheit"),
+        R.string.settings_clock_style to listOf("date", "time"),
+        R.string.tasks_org to listOf("to-do", "todo"),
+        R.string.digital_wellbeing to listOf("screen time"),
+        R.string.search_fuzzy to listOf("typo"),
+    )
 }
 
 /** A searchable row; [section] names the tab or sub-page inside [page] that holds it, when there is one. */
@@ -209,19 +245,25 @@ internal data class SettingsSearchItem(val page: SettingsPage, @StringRes val ti
 internal data class SettingsSearchResult(val page: SettingsPage, val title: String, val path: List<String>, val pages: List<SettingsPage>,
     val row: String? = null)
 
-/** Pages and setting rows whose title contains [query], best match first. [label] resolves string resources. */
+/** Added to an extra-word match so it ranks after every title match. */
+private const val KEYWORD_RANK = 100
+
+/** Pages and setting rows whose title or extra words contain [query], best match first. [label] resolves string resources. */
 internal fun searchSettings(query: String, label: (Int) -> String): List<SettingsSearchResult> {
     val term = SearchQuery(query, fuzzy = false)
     if (term.literal.isEmpty()) return emptyList()
     val pages = SettingsSearchIndex.pages
     fun route(page: SettingsPage) = generateSequence(page) { pages[it]?.second }.filter { it in pages }.toList().asReversed()
     fun path(page: SettingsPage) = route(page).map { label(pages.getValue(it).first) }
-    val entries = pages.map { (page, entry) -> SettingsSearchResult(page, label(entry.first), path(entry.second), route(page)) } +
+    // Each result with the string resource of its title, which keys its extra words.
+    val entries = pages.map { (page, entry) -> SettingsSearchResult(page, label(entry.first), path(entry.second), route(page)) to entry.first } +
         SettingsSearchIndex.items.filter { it.page in pages }.map { item ->
             label(item.title).let { title ->
-                SettingsSearchResult(item.page, title, path(item.page) + listOfNotNull(item.section?.let(label)), route(item.page), row = title)
+                SettingsSearchResult(item.page, title, path(item.page) + listOfNotNull(item.section?.let(label)), route(item.page), row = title) to item.title
             }
         }
-    return entries.mapNotNull { result -> SearchNames(result.title).score(term)?.let { it to result } }
+    fun score(result: SettingsSearchResult, title: Int) = SearchNames(result.title).score(term)
+        ?: SettingsSearchIndex.keywords[title]?.let { SearchNames(it).score(term) }?.plus(KEYWORD_RANK)
+    return entries.mapNotNull { (result, title) -> score(result, title)?.let { it to result } }
         .sortedWith(compareBy({ it.first }, { it.second.path.size }, { it.second.title })).map { it.second }
 }
