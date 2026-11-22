@@ -8,6 +8,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import org.junit.After
+import com.galaxyrio.gracelauncher.data.LauncherCatalogMemory
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
@@ -34,15 +36,21 @@ class AutoBackupTriggerTest {
 
     @Test fun coldStartRunsAutoBackupAfterTheAppListLoads() {
         val calls = Collections.synchronizedList(mutableListOf<LauncherUiState>())
+        var loadingAtResume: Boolean? = null
         val triggered = CountDownLatch(1)
-        MainActivity.autoBackup = { state ->
+        MainActivity.autoBackup = { state, loading ->
             calls += state
+            if (loadingAtResume == null) loadingAtResume = loading
             triggered.countDown()
         }
+        // Drop the previous launch's in-memory catalog so this is a real cold load.
+        LauncherCatalogMemory.clear()
         launch().use {
             assertTrue("auto-backup was not triggered after the app list loaded",
                 triggered.await(30, TimeUnit.SECONDS))
         }
+        // The case the old code missed: still loading when the activity resumed, so it skipped the backup.
+        assertEquals("the app list had already loaded at resume, so this run did not test the wait", true, loadingAtResume)
         val state = calls.first()
         assertFalse("auto-backup ran while the app list was still loading", state.isLoadingApps)
         assertFalse(state.appLoadFailed)
@@ -53,7 +61,7 @@ class AutoBackupTriggerTest {
         val calls = Collections.synchronizedList(mutableListOf<LauncherUiState>())
         val first = CountDownLatch(1)
         val second = CountDownLatch(1)
-        MainActivity.autoBackup = { state ->
+        MainActivity.autoBackup = { state, _ ->
             calls += state
             if (calls.size == 1) first.countDown() else second.countDown()
         }
