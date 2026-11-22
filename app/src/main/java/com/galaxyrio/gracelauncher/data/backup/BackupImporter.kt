@@ -48,6 +48,8 @@ data class ImportSummary(
 )
 
 private const val SafetyFile = "backup-safety.zip"
+/** Fork #7: present while an import is being applied; still there at the next start means the process died mid-import. */
+private const val ImportMarkerFile = "backup-import-in-progress"
 // No user has a negative serial, so keys moved here match no profile on this phone instead of a wrong one.
 private const val NoProfile = -1L
 private val DatabaseSections = setOf(BackupSection.Settings, BackupSection.HiddenApps, BackupSection.Folders,
@@ -75,8 +77,26 @@ class BackupImporter(
 ) {
     private val context = context.applicationContext
 
+    companion object {
+        /** A cheap file check, so starting the app does no backup work unless an import was cut off. */
+        fun wasInterrupted(context: Context): Boolean = File(context.noBackupFilesDir, ImportMarkerFile).exists()
+    }
+
     suspend fun import(input: InputStream, installedAppKeys: Set<String>, installedProviders: Set<String>): ImportResult =
         BackupLock.withLock { withContext(Dispatchers.IO) { run(input, installedAppKeys, installedProviders, restoring = false) } }
+
+    private val marker get() = File(context.noBackupFilesDir, ImportMarkerFile)
+
+    /**
+     * Fork #7: rolls back an import the process did not live to finish, by applying the safety export taken before it.
+     * Tried once: the marker goes either way, so a safety export that won't apply can't block every start.
+     */
+    suspend fun recoverInterrupted(): Boolean = BackupLock.withLock {
+        withContext(Dispatchers.IO + NonCancellable) {
+            if (!marker.exists()) return@withContext false
+            try { restoreSafetyExport() } finally { marker.delete() }
+        }
+    }
 
     /** Restoring applies this phone's own safety export: no new safety export, no hook, and widget IDs stay real. */
     private suspend fun run(input: InputStream, installedAppKeys: Set<String>, installedProviders: Set<String>, restoring: Boolean): ImportResult {
@@ -92,17 +112,20 @@ class BackupImporter(
             catch (_: StackOverflowError) { return ImportResult.Rejected(BackupProblem.NotABackup) }
             catch (_: OutOfMemoryError) { return ImportResult.Rejected(BackupProblem.NotABackup) }
             if (!restoring) {
-                try { writeSafetyExport() } catch (e: CancellationException) { throw e } catch (e: Exception) {
+                try { writeSafetyExport(); check(marker.createNewFile() || marker.isFile) { "Unable to mark the import" } }
+                catch (e: CancellationException) { throw e } catch (e: Exception) {
                     return ImportResult.Failed(e, restored = true)
                 }
             }
             // A cancel here could leave the DB committed but preferences and files old; finish or restore instead.
             return withContext(NonCancellable) {
+                // The marker is removed only once this ends normally; an Error or a killed process leaves it for recoverInterrupted.
                 try {
                     apply(backup, dir, restoring)
+                    if (!restoring) marker.delete()
                     ImportResult.Success(summary(backup, installedAppKeys, installedProviders))
                 } catch (e: Exception) {
-                    ImportResult.Failed(e, restored = !restoring && restoreSafetyExport())
+                    ImportResult.Failed(e, restored = !restoring && restoreSafetyExport().also { marker.delete() })
                 }
             }
         } finally {

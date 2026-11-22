@@ -46,6 +46,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import com.galaxyrio.gracelauncher.data.backup.BackupController
+import com.galaxyrio.gracelauncher.data.backup.BackupTask
+import com.galaxyrio.gracelauncher.data.backup.ImportResult
+import com.galaxyrio.gracelauncher.ui.settings.ImportResultDialog
+import com.galaxyrio.gracelauncher.ui.settings.missingImportAccess
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -632,6 +638,20 @@ fun LauncherRoute(
             actions = actions,
         )
     }
+    BackupResult(uiState, actions)
+}
+
+/**
+ * Fork #7: an import's result shows wherever the user is, not only on the Backup page, and an import that finished
+ * while settings were closed still reloads the in-memory app and favorites lists.
+ */
+@Composable
+private fun BackupResult(uiState: LauncherUiState, actions: LauncherActions) {
+    val task by BackupController.state.collectAsState()
+    LaunchedEffect(task) {
+        if ((task as? BackupTask.Imported)?.result is ImportResult.Success) actions.refreshApps()
+    }
+    (task as? BackupTask.Imported)?.let { ImportResultDialog(it.result, BackupController::dismiss, missingImportAccess(uiState), actions) }
 }
 
 @Composable

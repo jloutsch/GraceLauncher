@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -50,12 +52,14 @@ class WidgetRestoreTest {
         val restore = WidgetRestoreRepository(database)
         assertEquals(listOf(PendingWidget(HomeContentKey, -2, provider), PendingWidget("folder:f1", -3, provider)), restore.pending())
 
-        restore.resolve(-2, 120)
+        assertFalse("another widget must not fill the slot", restore.resolve(-2, 121, "other/other.Widget"))
+        assertEquals(listOf(widget(-2)), items.snapshots.first().popups[HomeContentKey])
+        assertTrue(restore.resolve(-2, 120, provider))
         assertEquals(listOf(PopupItem("widget:120", HomeLayout(widgetId = 120, widgetProvider = provider, widgetHeightDp = 180))),
             items.snapshots.first().popups[HomeContentKey])
         assertEquals(listOf(GraceWidget.ClockCalendar.key, "widget:120"), settings.snapshots.first().settings.homeLayout.homeOrder)
 
-        restore.resolve(-3, null)
+        restore.drop(-3)
         assertEquals(listOf(PopupItem("a/a.Main")), items.snapshots.first().popups["folder:f1"])
         assertEquals(emptyList<PendingWidget>(), restore.pending())
     }
@@ -71,7 +75,7 @@ class WidgetRestoreTest {
 
         val pending = restore.pending()
         assertEquals(2, pending.map { it.placeholderId }.toSet().size)
-        pending.forEachIndexed { index, widget -> restore.resolve(widget.placeholderId, 300 + index) }
+        pending.forEachIndexed { index, widget -> assertTrue(restore.resolve(widget.placeholderId, 300 + index, widget.provider!!)) }
 
         val popups = items.snapshots.first().popups
         val ids = (popups.getValue(HomeContentKey) + popups.getValue("folder:f1")).map { it.widget!!.widgetId }.sorted()

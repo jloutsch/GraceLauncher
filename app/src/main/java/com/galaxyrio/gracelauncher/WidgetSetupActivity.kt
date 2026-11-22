@@ -323,8 +323,10 @@ class WidgetSetupActivity : ComponentActivity() {
                 val placeholder = restorePlaceholder
                 val owner = popupOwner ?: com.galaxyrio.gracelauncher.data.HomeContentKey
                 // A widget re-bound after a backup import goes back to its saved slot.
-                val removed = if (placeholder != null) { restoreRepository.resolve(placeholder, id); emptyList() }
-                else itemsRepository.updatePopup(owner, emptyList()) { entries ->
+                val removed = if (placeholder != null) {
+                    // A slot that now expects another widget keeps waiting; this one is not used.
+                    if (restoreRepository.resolve(placeholder, id, info.provider.flattenToString())) emptyList() else listOf(id)
+                } else itemsRepository.updatePopup(owner, emptyList()) { entries ->
                     if (owner == com.galaxyrio.gracelauncher.data.AgendaWidgetDraftKey) listOf(PopupItem("widget:$id", layout))
                     else if (entries.any { it.widget?.widgetId == id }) entries else entries + PopupItem("widget:$id", layout)
                 }
@@ -365,7 +367,7 @@ class WidgetSetupActivity : ComponentActivity() {
         // Finish only after the slot is gone, so the home screen's next resume sees the shorter queue.
         // A repeated cancel repeats the drop, which is then a no-op.
         lifecycleScope.launch {
-            try { withContext(NonCancellable) { restoreRepository.resolve(placeholder, null) } }
+            try { withContext(NonCancellable) { restoreRepository.drop(placeholder) } }
             catch (error: Exception) {
                 if (error is CancellationException) throw error
                 Log.e(TAG, "restore drop failed placeholder=$placeholder", error)

@@ -83,7 +83,7 @@ class BackupSettingsTest {
         compose.setContent {
             val owner = remember { object : ActivityResultRegistryOwner { override val activityResultRegistry = registry } }
             CompositionLocalProvider(LocalActivityResultRegistryOwner provides owner) {
-                GraceLauncherTheme(dynamicColor = false) { if (visible.value) BackupSettings(state, LauncherActions(), onBack = {}) }
+                GraceLauncherTheme(dynamicColor = false) { if (visible.value) BackupSettings(state, onBack = {}) }
             }
         }
         compose.waitForIdle()

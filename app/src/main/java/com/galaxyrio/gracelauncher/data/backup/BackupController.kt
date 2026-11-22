@@ -6,6 +6,7 @@ import android.net.Uri
 import android.os.Process
 import android.provider.DocumentsContract
 import android.util.Log
+import com.galaxyrio.gracelauncher.data.FontFilesVersion
 import java.io.FileNotFoundException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -36,8 +37,8 @@ object BackupController {
         try {
             val exporter = BackupExporter(app)
             val output = app.contentResolver.openOutputStream(target, "w") ?: throw FileNotFoundException("no output stream")
-            output.use { exporter.export(it, labels) }
-            BackupStatusStore(app).recordExport(System.currentTimeMillis(), exporter.contentHash())
+            val hash = output.use { exporter.exportWithHash(it, labels) }
+            BackupStatusStore(app).recordExport(System.currentTimeMillis(), hash)
             BackupTask.Exported
         } catch (error: Exception) {
             if (error is CancellationException) throw error
@@ -64,6 +65,20 @@ object BackupController {
         BackupTask.Imported(result)
     }
 
+    /** Fork #7: at start, rolls back an import the process died during, and reports it as a failed import. */
+    fun recoverInterruptedImport(context: Context) {
+        val app = context.applicationContext
+        if (!BackupImporter.wasInterrupted(app)) return
+        start(BackupTask.Importing) {
+            val restored = try { BackupImporter(app).recoverInterrupted() } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                Log.e("GraceBackup", "interrupted import rollback failed", error); false
+            }
+            Log.w("GraceBackup", "rolled back an interrupted import, restored=$restored")
+            BackupTask.Imported(ImportResult.Failed(IllegalStateException("import interrupted"), restored))
+        }
+    }
+
     /** Clears a finished result once the page has shown it; a running task stays. */
     fun dismiss() = _state.update { if (it == BackupTask.Exporting || it == BackupTask.Importing) it else null }
 
@@ -75,7 +90,11 @@ object BackupController {
         }
         scope.launch {
             var finished: BackupTask? = null
-            try { finished = work() } finally { _state.value = finished }
+            try { finished = work() } finally {
+                // Import and rollback both replace the imported font files.
+                if (finished is BackupTask.Imported) FontFilesVersion.bump()
+                _state.value = finished
+            }
         }
         return true
     }

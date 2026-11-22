@@ -102,7 +102,7 @@ class BackupRoundTripTest {
         val restore = WidgetRestoreRepository(database)
         assertEquals(listOf("v/v.Provider", "w/w.Provider"), restore.pending().map { it.provider })
         assertTrue(restore.pending().all { it.ownerKey == "folder:ws" })
-        restore.pending().forEachIndexed { index, pending -> restore.resolve(pending.placeholderId, 200 + index) }
+        restore.pending().forEachIndexed { index, pending -> assertTrue(restore.resolve(pending.placeholderId, 200 + index, pending.provider!!)) }
         assertEquals(listOf("widget:200", "widget:201"), PopupItem.decode(database.itemsDao().popup("folder:ws")!!.itemsJson).map { it.key })
         assertEquals("deleting the stack hands back its widget IDs to free", listOf(200, 201), settings.deleteFolder("ws"))
     }
@@ -224,6 +224,27 @@ class BackupRoundTripTest {
         assertEquals(listOf("B label"), (result as ImportResult.Success).summary.notInstalled)
         val folder = database.backupDao().allPopups().single { it.ownerKey == "folder:f1" }
         assertEquals(listOf("a/a.Main", "b/b.Main"), PopupItem.decode(folder.itemsJson).map { it.key })
+    }
+
+    @Test
+    fun anImportCutOffByTheProcessDyingIsRolledBackAtTheNextStart() = runBlocking {
+        seed()
+        val backup = export()
+        LauncherSettingsRepository(database).deleteFolder("f2")
+        val before = state()
+        val importer = BackupImporter(context, database, databaseFile)
+        assertTrue(importer.import(backup.inputStream(), allApps, emptySet()) is ImportResult.Success)
+        assertFalse("a finished import leaves no marker", BackupImporter.wasInterrupted(context))
+        assertFalse(before == state())
+        // What a process killed while applying leaves behind: the safety export of the earlier state, and the marker.
+        assertTrue(File(context.noBackupFilesDir, "backup-import-in-progress").createNewFile())
+        assertTrue(BackupImporter.wasInterrupted(context))
+
+        assertTrue(importer.recoverInterrupted())
+
+        assertEquals(before, state())
+        assertFalse(BackupImporter.wasInterrupted(context))
+        assertFalse("nothing left to roll back", importer.recoverInterrupted())
     }
 
     @Test

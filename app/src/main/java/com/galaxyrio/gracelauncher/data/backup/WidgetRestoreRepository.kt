@@ -10,10 +10,21 @@ import com.galaxyrio.gracelauncher.data.PopupItem
 class WidgetRestoreRepository(private val database: LauncherDatabase) {
     suspend fun pending(): List<PendingWidget> = database.withTransaction { layout().pending() }
 
-    /** Binds the placeholder to [newId], or removes its slot when [newId] is null. */
-    suspend fun resolve(placeholderId: Int, newId: Int?) = database.withTransaction {
+    /** Removes the placeholder's slot: the user cancelled its setup. */
+    suspend fun drop(placeholderId: Int) = database.withTransaction {
         val before = layout()
-        save(before, if (newId == null) before.dropWidget(placeholderId) else before.replaceWidget(placeholderId, newId))
+        save(before, before.dropWidget(placeholderId))
+    }
+
+    /**
+     * Binds the placeholder to [newId]. Returns false, changing nothing, when the slot is gone or was saved for another
+     * widget than [provider]; the caller then deletes [newId].
+     */
+    suspend fun resolve(placeholderId: Int, newId: Int, provider: String): Boolean = database.withTransaction {
+        val before = layout()
+        if (!before.accepts(placeholderId, provider)) return@withTransaction false
+        save(before, before.replaceWidget(placeholderId, newId))
+        true
     }
 
     private suspend fun save(before: WidgetLayout, after: WidgetLayout) {
