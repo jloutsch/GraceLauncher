@@ -89,6 +89,16 @@ class SettingsSearchUiTest {
         compose.onNodeWithTag("alphabet_numbers_first").assertIsDisplayed()
     }
 
+    @Test fun aWordThatIsNotInTheTitleFindsTheRow() {
+        show()
+        // "numbers" is an extra search word for "Show # at the top".
+        compose.onNodeWithTag("settings_search_query").performTextReplacement("numbers")
+        compose.onNodeWithTag("settings_search_result:Alphabet")
+            .assertTextContains(context.getString(R.string.alphabet_numbers_first))
+            .performClick()
+        compose.onNodeWithTag("alphabet_numbers_first").assertIsDisplayed()
+    }
+
     @Test fun backClearsATypedSearchBeforeClosingSettings() {
         show()
         compose.onNodeWithTag("settings_search_query").performTextReplacement("rotation")
