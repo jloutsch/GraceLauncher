@@ -68,16 +68,20 @@ internal fun PopupWidgetControls(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(stringResource(R.string.popup_widget_content_scale, layout.popupContentScale),
                 modifier = Modifier.widthIn(max = 112.dp), style = MaterialTheme.typography.labelMedium)
-            // Fork: keep the dragged value here. TalkBack's set-progress calls both callbacks with no
-            // recomposition between them, so saving `layout` in onValueChangeFinished saved the old scale.
-            var dragged by remember { mutableStateOf<HomeLayout?>(null) }
+            // Fork: keep only the dragged scale. TalkBack's set-progress calls both callbacks with no recomposition
+            // between them, so `layout` can still hold the old scale; every other field always comes from the
+            // current widget, so switching widgets mid-drag cannot save one widget's layout onto another.
+            val current by rememberUpdatedState(layout)
+            var draggedScale by remember(layout.widgetId) { mutableStateOf<Int?>(null) }
             Slider(value = layout.popupContentScale.toFloat(),
                 onValueChange = {
-                    val next = (dragged ?: layout).copy(popupContentScale = it.roundToInt())
-                    dragged = next
-                    onChange(next, false)
+                    draggedScale = it.roundToInt()
+                    onChange(current.copy(popupContentScale = it.roundToInt()), false)
                 },
-                onValueChangeFinished = { onChange(dragged ?: layout, true); dragged = null }, valueRange = 50f..150f,
+                onValueChangeFinished = {
+                    onChange(current.copy(popupContentScale = draggedScale ?: current.popupContentScale), true)
+                    draggedScale = null
+                }, valueRange = 50f..150f,
                 modifier = Modifier.weight(1f).testTag("popup_widget_scale"))
         }
     }

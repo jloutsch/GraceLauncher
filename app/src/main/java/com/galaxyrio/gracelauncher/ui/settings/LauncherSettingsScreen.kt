@@ -4,6 +4,7 @@ package com.galaxyrio.gracelauncher.ui.settings
 
 import android.net.Uri
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.core.Animatable
@@ -14,6 +15,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -49,6 +51,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -230,7 +234,9 @@ fun LauncherSettingsScreen(
                     SettingsScaffold(stringResource(R.string.settings_title), "settings_storage_blocked", back) { }
                 } else when (page) {
                     SettingsPage.Root -> SettingsHome(uiState.isDefaultHome, actions.requestDefaultHome,
-                        onOpenHome = { if (isCurrent()) actions.openHome() }, onBack = back, navigate = navigate)
+                        onOpenHome = { if (isCurrent()) actions.openHome() }, onBack = back, navigate = navigate,
+                        // Fork: a search result opens its parent pages too, so back walks up the path it showed.
+                        navigateRoute = { route -> if (isCurrent()) route.forEach { navController.navigate(it.name) } })
                     SettingsPage.Productivity -> ProductivitySettings(uiState, actions, back, navigate)
                     SettingsPage.AppCategories -> AppCategoriesSettings(uiState, actions, back, onEdit = { id ->
                         if (isCurrent()) navController.navigate("CategoryEditor/${Uri.encode(id)}") { launchSingleTop = true }
@@ -424,6 +430,7 @@ private fun SettingsHome(
     onOpenHome: () -> Unit,
     onBack: () -> Unit,
     navigate: (SettingsPage) -> Unit,
+    navigateRoute: (List<SettingsPage>) -> Unit = { it.lastOrNull()?.let(navigate) },
 ) {
     val showDefaultHomeBanner = isDefaultHome == false
     val languageTag by rememberAppLanguage()
@@ -446,6 +453,10 @@ private fun SettingsHome(
         searchSettings(query, resources::getString)
             .filter { Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU || it.page != SettingsPage.Language }
     }
+    val keyboard = LocalSoftwareKeyboardController.current
+    val focus = LocalFocusManager.current
+    // Back clears a typed search before it closes Settings.
+    BackHandler(enabled = query.isNotEmpty()) { searchState.clearText() }
     SettingsScaffold(stringResource(R.string.settings_title), "settings_root", onBack) { padding ->
         SettingsList(padding) {
             item(key = "settings_search") {
@@ -461,7 +472,10 @@ private fun SettingsHome(
                     item(key = "settings_search_result:$index:${result.page.name}:${result.title}") {
                         Spacer(Modifier.height(if (index == 0) 16.dp else 0.dp))
                         SettingsActionItem(result.title, result.path.joinToString(" › ").ifEmpty { null }, index, results.size,
-                            tag = "settings_search_result:${result.page.name}") { navigate(result.page) }
+                            tag = "settings_search_result:${result.page.name}") {
+                            // The keyboard would otherwise stay up over the opened page.
+                            focus.clearFocus(); keyboard?.hide(); navigateRoute(result.pages)
+                        }
                     }
                 }
                 return@SettingsList

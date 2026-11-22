@@ -18,10 +18,21 @@ class SettingsSearchTest {
         assertEquals(listOf("settings advanced"), result.path)
     }
 
-    @Test fun aPageIsFoundWithThePathToIt() {
+    @Test fun aPageIsFoundWithThePathToItAndTheRouteThroughItsParents() {
         val result = search("tasks choose lists").single()
         assertEquals(SettingsPage.TaskLists, result.page)
         assertEquals(listOf("settings productivity", "settings calendar agenda", "tasks org"), result.path)
+        assertEquals(listOf(SettingsPage.Productivity, SettingsPage.Calendar, SettingsPage.TasksOrg, SettingsPage.TaskLists), result.pages)
+    }
+
+    @Test fun aRowOnASubPageNamesTheSubPageInItsPath() {
+        val result = search("weather hour show chart").single()
+        assertEquals(SettingsPage.AgendaAppearance, result.page)
+        assertEquals(listOf("settings themes", "settings agenda", "agenda hourly weather"), result.path)
+    }
+
+    @Test fun workProfileDoesNotOfferPrivateSpaceOnlyRows() {
+        assertEquals(listOf(SettingsPage.PrivateSpace), search("private space password").map { it.page })
     }
 
     @Test fun exactMatchesComeBeforeLongerTitlesAndBlankFindsNothing() {

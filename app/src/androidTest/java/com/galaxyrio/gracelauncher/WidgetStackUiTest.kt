@@ -12,6 +12,18 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasText
+import com.galaxyrio.gracelauncher.ui.widgets.LocalWidgetHost
+import com.galaxyrio.gracelauncher.ui.widgets.LocalWidgetSurfaceShown
+import com.galaxyrio.gracelauncher.ui.widgets.rememberWidgetHost
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.unit.dp
 import com.galaxyrio.gracelauncher.data.WidgetScreenKey
@@ -130,6 +142,33 @@ class WidgetStackUiTest {
         compose.onNodeWithTag("widget_stack_height_decrease").assertIsNotEnabled()
         compose.onNodeWithTag("widget_stack_height_increase").performClick()
         assertEquals(48, height())
+    }
+
+    // Fork (#39): a stack shown in two places hosts each widget in one copy only, never in a hidden one.
+    @Test fun twoCopiesOfAStackHostItsWidgetOnceAndNeverInAHiddenCopy() {
+        val items = listOf(PopupItem("widget:7", HomeLayout(widgetId = 7, widgetProvider = "w/w.Provider")))
+        val stacked = state.copy(popups = mapOf(widgetStack.key to items))
+        var secondShown by mutableStateOf(true)
+        compose.setContent {
+            GraceLauncherTheme(dynamicColor = false) {
+                CompositionLocalProvider(LocalWidgetHost provides rememberWidgetHost()) {
+                    Column {
+                        Box(Modifier.testTag("first")) { AppStack(widgetStack, stacked, onLaunch = { _, _ -> }, onDetails = {}, onEdit = {}) }
+                        CompositionLocalProvider(LocalWidgetSurfaceShown provides secondShown) {
+                            Box(Modifier.testTag("second")) { AppStack(widgetStack, stacked, onLaunch = { _, _ -> }, onDetails = {}, onEdit = {}) }
+                        }
+                    }
+                }
+            }
+        }
+        // An unbound widget ID shows the "widget unavailable" card, so the card marks the hosting copy.
+        val card = hasText(context.getString(R.string.widget_unavailable))
+        compose.waitUntil(5_000) { compose.onAllNodes(card).fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodes(card).assertCountEquals(1)
+        compose.runOnIdle { secondShown = false }
+        compose.waitUntil(5_000) { compose.onAllNodes(card and hasAnyAncestor(hasTestTag("first"))).fetchSemanticsNodes().size == 1 }
+        compose.onAllNodes(card).assertCountEquals(1)
+        compose.onAllNodes(card and hasAnyAncestor(hasTestTag("second"))).assertCountEquals(0)
     }
 
     // Fork: on the Widget Screen a long-press moves and resizes, so a selected stack offers its editor.

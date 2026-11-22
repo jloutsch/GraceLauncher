@@ -21,12 +21,15 @@ fun WidgetLayout.toPlaceholders(): WidgetLayout {
     val renamed = mutableMapOf<String, String>()
     // Fork: a placeholder ID seen twice would be restored into both entries and one dropped on save, so renumber repeats.
     val kept = mutableSetOf<Int>()
+    // Keys that still name a kept placeholder: a repeat sharing that key must not take over its home position.
+    val keptKeys = mutableSetOf<String>()
     val remapped = popups.toSortedMap().mapValues { (_, items) ->
         items.map { item ->
             val widget = item.widget
-            if (widget == null || (widget.widgetId < 0 && (!isWidgetPlaceholder(widget.widgetId) || kept.add(widget.widgetId)))) item else {
+            if (widget == null || (widget.widgetId < 0 && (!isWidgetPlaceholder(widget.widgetId) ||
+                    kept.add(widget.widgetId).also { if (it) keptKeys += item.key }))) item else {
                 val id = nextFree()
-                renamed.putIfAbsent(item.key, widgetKey(id))
+                if (item.key !in keptKeys) renamed.putIfAbsent(item.key, widgetKey(id))
                 item.copy(key = widgetKey(id), widget = widget.copy(widgetId = id))
             }
         }
