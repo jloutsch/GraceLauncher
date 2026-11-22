@@ -86,11 +86,11 @@ class BackupRoundTripTest {
         settings.saveFolder(LauncherFolder("ws", "Stack", emptyList(), FolderPlacement.Favorites, isAppStack = true, isWidgetStack = true))
         val items = LauncherItemsRepository(database)
         items.updatePopup("folder:ws", emptyList()) {
-            listOf(PopupItem("a/a.Main"), PopupItem("widget:52", HomeLayout(widgetId = 52, widgetProvider = "v/v.Provider")),
+            listOf(PopupItem("widget:52", HomeLayout(widgetId = 52, widgetProvider = "v/v.Provider")),
                 PopupItem("folder:f9"), PopupItem("widget:51", HomeLayout(widgetId = 51, widgetProvider = "w/w.Provider")))
         }
         val stored = PopupItem.decode(database.itemsDao().popup("folder:ws")!!.itemsJson)
-        assertEquals("apps and folders are dropped from widget stacks", listOf("widget:52", "widget:51"), stored.map { it.key })
+        assertEquals("folders are dropped from widget stacks", listOf("widget:52", "widget:51"), stored.map { it.key })
         val backup = export()
         wipe()
 

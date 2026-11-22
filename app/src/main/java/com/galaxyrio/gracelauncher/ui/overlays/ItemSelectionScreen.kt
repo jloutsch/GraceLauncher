@@ -385,15 +385,14 @@ internal fun PopupEditorScreen(owner: LauncherApp, uiState: LauncherUiState, act
             else if (isStack) stringResource(R.string.app_stack_edit) else stringResource(R.string.edit_app_popup, owner.label),
         tag = if (widgetScreen) "widget_screen_editor" else "popup_editor", selected = selected,
         emptyMessage = if (isWidgetStack) stringResource(R.string.widget_stack_empty) else if (isStack) stringResource(R.string.app_stack_empty) else null,
-        apps = if (isWidgetStack) emptyList() else uiState.allApps.filterNot { it.key == owner.key }, enabled = ready,
-        showApps = !isWidgetStack,
+        apps = uiState.allApps.filterNot { it.key == owner.key }, enabled = ready,
         shortcuts = shortcuts.takeUnless { isFolder }, shortcutTitle = stringResource(R.string.popup_app_shortcuts, owner.label),
         header = header,
         shortcutStatus = result.status, onRetry = { retry++ }, onRequestAccess = actions.requestDefaultHome,
         onAddWidget = if (isStack && !isWidgetStack) null else ({ actions.addPopupWidget(owner, shortcuts) }),
         onAddFolder = if (!isStack) ({ choosingGroup = false }) else null,
         onAddStack = if (!isStack) ({ choosingGroup = true }) else null,
-        onAddShortcut = if (isWidgetStack) null else ({ choosingShortcut = true }),
+        onAddShortcut = { choosingShortcut = true },
         appGroupChoices = if (widgetScreen) profileGroupChoices(uiState, entries.map { it.key }.toSet()) else emptyList(),
         onToggle = { app -> actions.updatePopup(owner, shortcuts) { current ->
             if (current.any { it.key == app.key }) current.filterNot { it.key == app.key } else current + PopupItem(app.key)

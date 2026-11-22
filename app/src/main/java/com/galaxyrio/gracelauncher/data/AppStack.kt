@@ -24,3 +24,16 @@ internal fun collapseWidgetStacks(cells: List<WidgetGridCell>, stackKeys: Set<St
     cell.copy(row = (cell.row - shift).coerceAtLeast(0),
         size = if (cell.key in stackKeys) cell.size.copy(rows = 1) else cell.size)
 }
+
+/**
+ * Fork: pages for a widget stack that also holds apps. Each widget is its own page; each run of
+ * apps between widgets fills rows of [columns] icons. Order follows the editor.
+ */
+internal fun <T> stackPages(items: List<T>, isWidget: (T) -> Boolean, columns: Int): List<List<T>> {
+    val pages = mutableListOf<List<T>>()
+    val apps = mutableListOf<T>()
+    fun flushApps() { pages += apps.chunked(columns.coerceAtLeast(1)); apps.clear() }
+    items.forEach { if (isWidget(it)) { flushApps(); pages += listOf(it) } else apps += it }
+    flushApps()
+    return pages
+}

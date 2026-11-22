@@ -43,7 +43,8 @@ internal fun AppStack(
 ) {
     // Every surface that places a stack (home, drawer, folders, Widget Screen) shows widget stacks here too.
     if (stack.isWidgetStack) {
-        WidgetStack(stack, uiState, onEdit, modifier, enabled = enabled, onWallpaper = onWallpaper, fillHeight = gridManaged)
+        WidgetStack(stack, uiState, onEdit, modifier, enabled = enabled, onWallpaper = onWallpaper, fillHeight = gridManaged,
+            onLaunch = onLaunch, onDetails = if (gridManaged) null else onDetails, iconSize = iconSize)
         return
     }
     val inputEnabled = enabled && LocalLauncherInputEnabled.current
@@ -76,14 +77,8 @@ internal fun AppStack(
                 }) {
                 if (count > 0) HorizontalPager(pager, Modifier.fillMaxSize(), userScrollEnabled = inputEnabled && count > 1,
                     key = { it }) { page ->
-                    Box(Modifier.fillMaxSize()) {
-                        pages[page % count].forEachIndexed { index, app -> key(app.key) {
-                            StackIcon(app, iconSize, displayedIconSize, inputEnabled,
-                                Modifier.offset(x = inset + step * index, y = inset),
-                                onClick = { bounds -> onLaunch(app, bounds) },
-                                onLongClick = if (gridManaged) null else ({ onDetails(app) }))
-                        } }
-                    }
+                    AppStackRow(pages[page % count], step, iconSize, displayedIconSize, inputEnabled, onLaunch,
+                        if (gridManaged) null else onDetails)
                 }
                 if (apps.isEmpty()) IconButton(onClick = onEdit, enabled = inputEnabled,
                     modifier = Modifier.align(Alignment.Center).semantics { contentDescription = editLabel }) {
@@ -92,6 +87,21 @@ internal fun AppStack(
             }
             if (count > 1) StackPageDots(count, pager.currentPage % count, position, symbolColor)
         }
+    }
+}
+
+/** One page of an app stack: icons left-anchored [step] apart, inset from the stack's edge. */
+@Composable
+internal fun AppStackRow(apps: List<LauncherApp>, step: Dp, iconSize: Dp, displayedIconSize: Dp, enabled: Boolean,
+    onLaunch: (LauncherApp, Rect) -> Unit, onDetails: ((LauncherApp) -> Unit)?) {
+    val inset = AppStackInset.dp
+    Box(Modifier.fillMaxSize()) {
+        apps.forEachIndexed { index, app -> key(app.key) {
+            StackIcon(app, iconSize, displayedIconSize, enabled,
+                Modifier.offset(x = inset + step * index, y = inset),
+                onClick = { bounds -> onLaunch(app, bounds) },
+                onLongClick = onDetails?.let { { it(app) } })
+        } }
     }
 }
 

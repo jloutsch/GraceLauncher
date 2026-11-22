@@ -74,7 +74,7 @@ class WidgetStackStorageTest {
         assertFalse(folder("ws").isWidgetStack)
     }
 
-    @Test fun widgetStacksKeepOnlyWidgetsAndAppStacksKeepOnlyApps() = runBlocking {
+    @Test fun widgetStacksKeepWidgetsAndAppsAndAppStacksKeepOnlyApps() = runBlocking {
         settings.saveFolder(widgetStack())
         settings.saveFolder(LauncherFolder("apps", "Apps", emptyList(), FolderPlacement.Favorites, isAppStack = true))
         val mixed = listOf(PopupItem("a/a.Main"), PopupItem("folder:f9"),
@@ -84,7 +84,7 @@ class WidgetStackStorageTest {
         items.updatePopup("folder:apps", emptyList()) { mixed }
 
         fun stored(key: String) = runBlocking { PopupItem.decode(database.itemsDao().popup(key)!!.itemsJson).map { it.key } }
-        assertEquals(listOf("widget:51"), stored("folder:ws"))
+        assertEquals(listOf("a/a.Main", "widget:51"), stored("folder:ws"))
         assertEquals(listOf("a/a.Main"), stored("folder:apps"))
     }
 
