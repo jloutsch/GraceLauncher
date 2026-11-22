@@ -419,7 +419,7 @@ internal fun FolderEditorSettings(folderId: String?, uiState: LauncherUiState, a
                 folder.placement.label(), 1, 3, "folder_placement",
                 leading = { LauncherIcon(LauncherSymbol.Folder) }) { placement = true }
             Spacer(Modifier.height(ListItemDefaults.SegmentedGap))
-            // Widget stacks hold no apps, so there is nothing for auto-hide to act on.
+            // Widget stacks use this slot for their height; auto-hide stays an app-stack setting.
             if (!widgets) SettingsToggleItem(stringResource(R.string.settings_folder_auto_hide), stringResource(R.string.settings_folder_auto_hide_summary),
                 folder.autoHideApps, 2, 3, "folder_auto_hide") { actions.setFolderAutoHide(folder.id, it) }
             else DesignerSegment(2, 3, "widget_stack_height_item") {

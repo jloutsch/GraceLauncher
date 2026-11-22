@@ -9,6 +9,8 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipeLeft
 import androidx.test.platform.app.InstrumentationRegistry
 import com.galaxyrio.gracelauncher.data.FolderPlacement
 import com.galaxyrio.gracelauncher.data.HomeLayout
@@ -62,13 +64,31 @@ class WidgetStackUiTest {
         compose.onNodeWithTag("widget_stack:as").assertDoesNotExist()
     }
 
-    @Test fun theWidgetStackEditorOffersWidgetsOnly() {
+    @Test fun theWidgetStackEditorOffersWidgetsAppsAndShortcuts() {
         showEditor(widgetStack)
         compose.onNodeWithText(context.getString(R.string.widget_stack_edit)).assertIsDisplayed()
         compose.onNodeWithText(context.getString(R.string.widget_stack_empty)).assertIsDisplayed()
         compose.onNodeWithTag("popup_add_widget").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText(app.label).assertDoesNotExist()
-        compose.onNodeWithTag("popup_editor_add_shortcut").assertDoesNotExist()
+        compose.onNodeWithTag("popup_editor_add_shortcut").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(app.label).performScrollTo().assertIsDisplayed()
+    }
+
+    // Fork: apps in a widget stack get a page of their own, in the editor's order.
+    @Test fun appsInAWidgetStackGetTheirOwnPageAfterTheWidgetsAndLaunch() {
+        val items = listOf(PopupItem("widget:7", HomeLayout(widgetId = 7, widgetProvider = "w/w.Provider")), PopupItem(app.key))
+        val launched = mutableListOf<String>()
+        compose.setContent {
+            GraceLauncherTheme(dynamicColor = false) {
+                AppStack(widgetStack, state.copy(popups = mapOf(widgetStack.key to items)),
+                    onLaunch = { item, _ -> launched += item.key }, onDetails = {}, onEdit = {})
+            }
+        }
+        compose.onNodeWithContentDescription(context.getString(R.string.app_stack_position, 1, 2)).assertExists()
+        compose.onNodeWithContentDescription(app.label).assertDoesNotExist()
+        compose.onNodeWithTag("widget_stack:ws").performTouchInput { swipeLeft() }
+        compose.onNodeWithContentDescription(context.getString(R.string.app_stack_position, 2, 2)).assertExists()
+        compose.onNodeWithContentDescription(app.label).assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(listOf(app.key), launched) }
     }
 
     @Test fun theAppStackEditorOffersAppsButNotWidgets() {
