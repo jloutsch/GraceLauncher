@@ -68,6 +68,8 @@ internal fun WidgetScreen(
     onLaunchApp: (LauncherApp) -> Unit, onAppDetails: (LauncherApp) -> Unit,
     onOpenFolder: (LauncherFolder, Rect) -> Unit,
     modifier: Modifier = Modifier,
+    /** Fork: opens a stack's own editor (its widgets and apps). */
+    onEditStack: (LauncherFolder) -> Unit = {},
 ) {
     val title = stringResource(R.string.widget_screen_title)
     val owner = remember(title) { widgetScreenOwner(title) }
@@ -273,7 +275,7 @@ internal fun WidgetScreen(
                             val stack = stacks[cell.key]
                             if (stack != null) AppStack(stack, uiState,
                                 onLaunch = { item, bounds -> actions.launchAppAt?.invoke(item, bounds) ?: onLaunchApp(item) },
-                                onDetails = onAppDetails, onEdit = { onAppDetails(uiState.folderItem(stack)) },
+                                onDetails = onAppDetails, onEdit = { onEditStack(stack) },
                                 enabled = enabled && !grid.busy, gridManaged = true,
                                 modifier = Modifier.fillMaxWidth())
                             else if (entry.widget != null && hosted != null) {
@@ -308,10 +310,15 @@ internal fun WidgetScreen(
             } }
         }
         val selectedWidget = byKey[grid.selectedKey]?.widget
-        if (editable && !grid.busy && selectedWidget != null) {
+        // Fork: a selected widget stack gets a shortcut to its editor, since a long-press here moves and resizes.
+        val selectedStack = grid.selectedKey?.let(stacks::get)
+        if (editable && !grid.busy && (selectedWidget != null || selectedStack != null)) {
             Row(Modifier.align(Alignment.TopCenter).padding(top = topInset + 8.dp).zIndex(5f)
                 .clip(MaterialTheme.shapes.large).background(MaterialTheme.colorScheme.surfaceContainerHigh)) {
-                WidgetConfigurationButton(selectedWidget, onBeforeOpen = grid::deselect)
+                if (selectedWidget != null) WidgetConfigurationButton(selectedWidget, onBeforeOpen = grid::deselect)
+                if (selectedStack != null) AssistChip(onClick = { grid.deselect(); onEditStack(selectedStack) },
+                    label = { Text(stringResource(R.string.widget_stack_edit), maxLines = 1) },
+                    modifier = Modifier.testTag("widget_stack_edit_button"))
             }
         }
         val deleteAlpha by animateFloatAsState(if (grid.draggingKey != null) 1f else 0f, label = "gridDelete")

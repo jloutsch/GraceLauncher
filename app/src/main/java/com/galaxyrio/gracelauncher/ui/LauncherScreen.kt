@@ -1243,7 +1243,7 @@ internal fun LauncherScreen(
                 onEditingChange = { editingWidgetScreen = it },
                 onEdit = { editingWidgetScreen = false; overlay = LauncherOverlay.SettingsDestination("WidgetScreenEditor") },
                 onLaunchApp = onLaunchApp, onAppDetails = { overlay = LauncherOverlay.AppDetails(it) },
-                onOpenFolder = openFolder)
+                onOpenFolder = openFolder, onEditStack = { editingWidgetScreen = false; editFolder(it) })
             }
            }
           }

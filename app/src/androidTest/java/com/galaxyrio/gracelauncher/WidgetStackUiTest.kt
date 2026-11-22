@@ -4,6 +4,7 @@ import android.content.ComponentName
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
@@ -11,6 +12,10 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipeLeft
+import androidx.compose.ui.test.longClick
+import androidx.compose.ui.unit.dp
+import com.galaxyrio.gracelauncher.data.WidgetScreenKey
+import com.galaxyrio.gracelauncher.ui.home.WidgetScreen
 import androidx.test.platform.app.InstrumentationRegistry
 import com.galaxyrio.gracelauncher.data.FolderPlacement
 import com.galaxyrio.gracelauncher.data.HomeLayout
@@ -87,7 +92,12 @@ class WidgetStackUiTest {
         compose.onNodeWithContentDescription(app.label).assertDoesNotExist()
         compose.onNodeWithTag("widget_stack:ws").performTouchInput { swipeLeft() }
         compose.onNodeWithContentDescription(context.getString(R.string.app_stack_position, 2, 2)).assertExists()
-        compose.onNodeWithContentDescription(app.label).assertIsDisplayed().performClick()
+        // The wrapping pager can keep extra copies of the app page composed while it settles; tap one inside the stack.
+        val stack = compose.onNodeWithTag("widget_stack:ws").fetchSemanticsNode().boundsInRoot
+        val icons = compose.onAllNodesWithContentDescription(app.label)
+        (0 until icons.fetchSemanticsNodes().size).map { icons[it] }
+            .first { node -> node.fetchSemanticsNode().boundsInRoot.let { it.left >= stack.left && it.right <= stack.right } }
+            .performClick()
         compose.runOnIdle { assertEquals(listOf(app.key), launched) }
     }
 
@@ -120,6 +130,25 @@ class WidgetStackUiTest {
         compose.onNodeWithTag("widget_stack_height_decrease").assertIsNotEnabled()
         compose.onNodeWithTag("widget_stack_height_increase").performClick()
         assertEquals(48, height())
+    }
+
+    // Fork: on the Widget Screen a long-press moves and resizes, so a selected stack offers its editor.
+    @Test fun selectingAWidgetStackOnTheWidgetScreenOffersItsEditor() {
+        val state = state.copy(popups = mapOf(WidgetScreenKey to listOf(PopupItem(widgetStack.key)),
+            widgetStack.key to listOf(PopupItem(app.key))))
+        val edited = mutableListOf<String>()
+        compose.setContent {
+            GraceLauncherTheme(dynamicColor = false) {
+                WidgetScreen(state, LauncherActions(), 0.dp, 0.dp, editing = false, enabled = true,
+                    onEditingChange = {}, onEdit = {}, onLaunchApp = {}, onAppDetails = {}, onOpenFolder = { _, _ -> },
+                    onEditStack = { edited += it.id })
+            }
+        }
+        compose.onNodeWithTag("widget_stack_edit_button").assertDoesNotExist()
+        compose.onNodeWithTag("widget_screen_item:${widgetStack.key}").performTouchInput { longClick(durationMillis = 1600L) }
+        compose.onNodeWithTag("widget_stack_edit_button").assertIsDisplayed().performClick()
+        compose.runOnIdle { assertEquals(listOf(widgetStack.id), edited) }
+        compose.onNodeWithTag("widget_stack_edit_button").assertDoesNotExist()
     }
 
     private fun showEditor(folder: LauncherFolder) = compose.setContent {
