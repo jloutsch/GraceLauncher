@@ -48,6 +48,9 @@ internal fun ListAppearanceSettings(uiState: LauncherUiState, actions: LauncherA
     // Keep the source row in place while its color picker occupies the controls pane.
     val controlsState = rememberLazyListState()
     val notificationControlsState = rememberLazyListState()
+    // Fork: settings search scrolls these to the row it opened (#36).
+    SettingsSearchScroll(controlsState)
+    SettingsSearchScroll(notificationControlsState)
     val enabled = LocalSettingsStorageState.current.canEdit
     val wallpaper = rememberLauncherAppearance(uiState.textMode, uiState.themedIcons, iconSize)
     val primary = MaterialTheme.colorScheme.primary

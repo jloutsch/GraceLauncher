@@ -13,6 +13,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
@@ -379,7 +380,10 @@ internal fun DesignerSlider(label: String, value: Float, default: Float, range: 
         onChange(latest)
         onFinished?.invoke(latest)
     }
-    Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    val highlight = rememberSearchHighlight(label)
+    Row(Modifier.fillMaxWidth().then(highlight.modifier)
+        .background(highlight.color(Color.Transparent, MaterialTheme.colorScheme.primaryContainer), RoundedCornerShape(12.dp))
+        .padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             val sign = if (centered && value > 0f) "+" else ""
             Row(verticalAlignment = Alignment.CenterVertically) {

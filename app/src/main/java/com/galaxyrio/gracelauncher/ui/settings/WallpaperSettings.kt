@@ -41,6 +41,8 @@ internal fun WallpaperSettings(
     var colorOpen by rememberSaveable { mutableStateOf(false) }
     var dimColor by remember(settings.listAppearance.wallpaperDimColor) { mutableStateOf(settings.listAppearance.wallpaperDimColor) }
     val controlsState = rememberLazyListState()
+    // Fork: settings search scrolls these to the row it opened (#36).
+    SettingsSearchScroll(controlsState)
     val enabled = LocalSettingsStorageState.current.canEdit
     val blurAvailable = rememberWallpaperBlurAvailable()
     val wallpaper = rememberLauncherAppearance(uiState.textMode, uiState.themedIcons)
@@ -123,9 +125,11 @@ internal fun WallpaperEffectItem(
 ) {
     val enabled = LocalSettingsStorageState.current.canEdit
     var draft by remember(amount) { mutableFloatStateOf(amount.coerceIn(range).toFloat()) }
+    val highlight = rememberSearchHighlight(title)
     SegmentedListItem(
         shapes = ListItemDefaults.segmentedShapes(index, count),
-        colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceBright),
+        colors = ListItemDefaults.segmentedColors(containerColor = highlight.containerColor(MaterialTheme.colorScheme.surfaceBright)),
+        modifier = highlight.modifier,
         content = {
             Column(Modifier.fillMaxWidth()) {
                 Row(

@@ -229,7 +229,10 @@ fun LauncherSettingsScreen(
                         else closeRoot()
                     }
                 }
+                // Fork: the row a search result named. Taken once, so coming back to the page doesn't flash it again.
+                val searchTarget = remember(entry) { SettingsSearchTarget(entry.savedStateHandle.remove<String>(SettingsSearchTargetKey)) }
                 CompositionLocalProvider(LocalSettingsSystemBarBackground provides { systemBarBackground = it },
+                    LocalSettingsSearchTarget provides searchTarget,
                     LocalOpenFontColors provides { navigate(SettingsPage.FontColors) },
                     LocalOpenDigitalWellbeing provides { navigate(SettingsPage.DigitalWellbeing) }) {
                 // Never initialize an editable draft before Room's first snapshot.
@@ -239,10 +242,13 @@ fun LauncherSettingsScreen(
                     SettingsPage.Root -> SettingsHome(uiState.isDefaultHome, actions.requestDefaultHome,
                         onOpenHome = { if (isCurrent()) actions.openHome() }, onBack = back, navigate = navigate,
                         // Fork: a search result opens its parent pages too, so back walks up the path it showed.
-                        navigateRoute = { route ->
+                        navigateRoute = { route, row ->
                             if (isCurrent()) {
                                 route.forEach { navController.navigate(it.name) }
-                                navController.currentBackStackEntry?.savedStateHandle?.set(OpenedFromSearchKey, true)
+                                navController.currentBackStackEntry?.savedStateHandle?.let { opened ->
+                                    opened[OpenedFromSearchKey] = true
+                                    if (row != null) opened[SettingsSearchTargetKey] = row
+                                }
                             }
                         })
                     SettingsPage.Productivity -> ProductivitySettings(uiState, actions, back, navigate)
@@ -439,7 +445,7 @@ private fun SettingsHome(
     onOpenHome: () -> Unit,
     onBack: () -> Unit,
     navigate: (SettingsPage) -> Unit,
-    navigateRoute: (List<SettingsPage>) -> Unit = { it.lastOrNull()?.let(navigate) },
+    navigateRoute: (List<SettingsPage>, String?) -> Unit = { route, _ -> route.lastOrNull()?.let(navigate) },
 ) {
     val showDefaultHomeBanner = isDefaultHome == false
     val languageTag by rememberAppLanguage()
@@ -483,7 +489,7 @@ private fun SettingsHome(
                         SettingsActionItem(result.title, result.path.joinToString(" › ").ifEmpty { null }, index, results.size,
                             tag = "settings_search_result:${result.page.name}") {
                             // The keyboard would otherwise stay up over the opened page.
-                            focus.clearFocus(); keyboard?.hide(); navigateRoute(result.pages)
+                            focus.clearFocus(); keyboard?.hide(); navigateRoute(result.pages, result.row)
                         }
                     }
                 }

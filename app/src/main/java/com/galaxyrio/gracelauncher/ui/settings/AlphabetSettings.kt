@@ -54,6 +54,8 @@ internal fun AlphabetSettings(uiState: LauncherUiState, actions: LauncherActions
     var draft by rememberSaveable(saved, stateSaver = AlphabetAppearanceDraftSaver) { mutableStateOf(saved.normalized()) }
     var dialog by rememberSaveable { mutableStateOf<String?>(null) }
     val controls = rememberLazyListState()
+    // Fork: settings search scrolls these to the row it opened (#36).
+    SettingsSearchScroll(controls)
     val enabled = LocalSettingsStorageState.current.canEdit
     val previewModel = rememberAlphabetPreviewModel(uiState)
     val letters = previewModel.letters

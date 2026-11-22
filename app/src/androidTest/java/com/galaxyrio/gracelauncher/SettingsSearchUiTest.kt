@@ -1,13 +1,12 @@
 package com.galaxyrio.gracelauncher
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.isNotDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.hasTestTag
-import androidx.compose.ui.test.performScrollToNode
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -19,6 +18,7 @@ import androidx.activity.OnBackPressedDispatcher
 import androidx.activity.compose.LocalOnBackPressedDispatcherOwner
 import androidx.compose.runtime.SideEffect
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -68,8 +68,25 @@ class SettingsSearchUiTest {
         show()
         compose.onNodeWithTag("settings_search_query").performTextReplacement(context.getString(R.string.clock_show_seconds))
         compose.onNodeWithTag("settings_search_result:ClockStyle").performClick()
-        compose.onNodeWithTag("clock_style_controls").performScrollToNode(hasTestTag("clock_show_seconds"))
+        // No manual scroll: the page scrolls itself to the row.
         compose.onNodeWithTag("clock_show_seconds").assertIsDisplayed()
+    }
+
+    // These two go together: the first shows "numbers first" starts off screen, so the second proves a scroll.
+    @Test fun openedAtARowNearTheTopTheNumbersFirstRowIsOffScreen() {
+        show()
+        compose.onNodeWithTag("settings_search_query").performTextReplacement(context.getString(R.string.alphabet_letter_color))
+        compose.onNodeWithTag("settings_search_result:Alphabet").performClick()
+        compose.onNodeWithTag("alphabet_color").assertIsDisplayed()
+        // A lazy list may not have composed it at all, which also counts as off screen.
+        assertTrue(compose.onNodeWithTag("alphabet_numbers_first").isNotDisplayed())
+    }
+
+    @Test fun aRowFurtherDownThePageIsScrolledIntoView() {
+        show()
+        compose.onNodeWithTag("settings_search_query").performTextReplacement(context.getString(R.string.alphabet_numbers_first))
+        compose.onNodeWithTag("settings_search_result:Alphabet").performClick()
+        compose.onNodeWithTag("alphabet_numbers_first").assertIsDisplayed()
     }
 
     @Test fun backClearsATypedSearchBeforeClosingSettings() {

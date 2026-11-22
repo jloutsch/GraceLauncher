@@ -112,6 +112,8 @@ internal fun FontSettings(uiState: LauncherUiState, actions: LauncherActions, on
     val ordered = library.ordered(available)
     val query = rememberTextFieldState()
     val list = rememberLazyListState()
+    // Fork: settings search scrolls this to the row it opened (#36).
+    SettingsSearchScroll(list)
     var deleting by rememberSaveable { mutableStateOf(false) }
     var deletion by rememberSaveable { mutableStateOf(emptyList<String>()) }
     var confirmDelete by rememberSaveable { mutableStateOf(false) }

@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilledIconButton
@@ -244,7 +245,10 @@ internal fun SettingsAppBarAction(
 
 @Composable
 internal fun SettingsList(padding: PaddingValues, content: LazyListScope.() -> Unit) {
+    val state = rememberLazyListState()
+    SettingsSearchScroll(state)
     LazyColumn(
+        state = state,
         modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding).imePadding().padding(horizontal = 16.dp).testTag("settings_list"),
         contentPadding = PaddingValues(bottom = 24.dp + LocalSettingsBottomInset.current),
         verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
@@ -265,12 +269,15 @@ internal fun SettingsHeading(text: String) {
 /** Shared feature master switch; ordinary settings below remain segmented rows. */
 @Composable
 internal fun SettingsFeatureBanner(title: String, checked: Boolean, tag: String, onCheckedChange: (Boolean) -> Unit) {
-    Column(Modifier.padding(vertical = 24.dp)) {
+    val highlight = rememberSearchHighlight(title)
+    Column(Modifier.padding(vertical = 24.dp).then(highlight.modifier)) {
         Surface(
             checked = checked, onCheckedChange = onCheckedChange,
             enabled = LocalSettingsStorageState.current.canEdit,
             modifier = Modifier.fillMaxWidth().testTag(tag), shape = CircleShape,
-            color = if (checked) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceBright,
+            // A switched-on banner is already primaryContainer, so it flashes towards tertiaryContainer instead.
+            color = if (checked) highlight.color(MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.tertiaryContainer)
+                else highlight.containerColor(MaterialTheme.colorScheme.surfaceBright),
             contentColor = if (checked) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurface,
         ) {
             Row(Modifier.heightIn(min = 72.dp).padding(horizontal = 24.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -295,12 +302,13 @@ internal fun SettingsActionItem(
     modifier: Modifier = Modifier,
     onClick: () -> Unit,
 ) {
+    val highlight = rememberSearchHighlight(title)
     SegmentedListItem(
         onClick = onClick,
         enabled = enabled && LocalSettingsStorageState.current.canEdit,
-        modifier = modifier.testTag(tag),
+        modifier = modifier.then(highlight.modifier).testTag(tag),
         shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-        colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceBright),
+        colors = ListItemDefaults.segmentedColors(containerColor = highlight.containerColor(MaterialTheme.colorScheme.surfaceBright)),
         leadingContent = leading,
         content = { Text(title) },
         supportingContent = if (summary == null) null else ({ Text(summary) }),
@@ -322,12 +330,13 @@ internal fun SettingsToggleItem(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     val shapes = ListItemDefaults.segmentedShapes(index = index, count = count)
-    val colors = ListItemDefaults.segmentedColors(containerColor = containerColor)
+    val highlight = rememberSearchHighlight(title)
+    val colors = ListItemDefaults.segmentedColors(containerColor = highlight.containerColor(containerColor))
     SegmentedListItem(
         checked = checked,
         onCheckedChange = onCheckedChange,
         enabled = enabled && LocalSettingsStorageState.current.canEdit,
-        modifier = Modifier.testTag(tag),
+        modifier = highlight.modifier.testTag(tag),
         // A preference toggle is not a selected list item. Keep the group's
         // outline and colors stable; only the switch reflects the saved value.
         shapes = shapes.copy(

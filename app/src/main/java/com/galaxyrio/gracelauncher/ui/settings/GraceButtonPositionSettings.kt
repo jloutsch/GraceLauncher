@@ -5,6 +5,7 @@ package com.galaxyrio.gracelauncher.ui.settings
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -69,9 +70,12 @@ internal fun GraceButtonPositionSettings(uiState: LauncherUiState, actions: Laun
         BoxWithConstraints(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
           // A roughly 2:1 window onto the desktop; only the mask changes, never the button scale.
           val previewHeight = ((maxWidth - 32.dp) / 2f).coerceIn(0.dp, maxHeight / 2f)
+          // Fork: settings search scrolls this to the row it opened (#36).
+          val controls = rememberLazyListState()
+          SettingsSearchScroll(controls)
           Column(Modifier.fillMaxSize()) {
             Box(Modifier.fillMaxWidth().weight(1f).settingsPreviewScrim(previewBelow = true).padding(horizontal = 16.dp)) {
-              LazyColumn(Modifier.fillMaxSize().clip(settingsPreviewControlsShape()).testTag("grace_button_position_controls"),
+              LazyColumn(Modifier.fillMaxSize().clip(settingsPreviewControlsShape()).testTag("grace_button_position_controls"), state = controls,
                 contentPadding = PaddingValues(vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
                 item {
