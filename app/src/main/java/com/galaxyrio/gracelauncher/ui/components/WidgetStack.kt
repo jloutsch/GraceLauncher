@@ -15,6 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
@@ -26,6 +28,7 @@ import com.galaxyrio.gracelauncher.data.*
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.widgets.HomeWidget
+import com.galaxyrio.gracelauncher.ui.widgets.LocalWidgetHost
 import com.galaxyrio.gracelauncher.ui.widgets.WidgetViewCache
 import com.galaxyrio.gracelauncher.ui.widgets.rememberHostedWidget
 
@@ -85,9 +88,15 @@ internal fun WidgetStack(
         val widget = hosted.getValue(layout.widgetId)
         (layout.widgetHeightDp.takeIf { it > 0 } ?: widget.defaultHeight).coerceIn(widget.minHeight, widget.maxHeight)
     } ?: 0, if (hasApps) appRowHeight else 0)
-    val viewCache = remember(stack.id) { WidgetViewCache() }
+    val widgetHost = LocalWidgetHost.current
+    val viewCache = remember(stack.id, widgetHost) { widgetHost?.stackViews(stack.id) ?: WidgetViewCache() }
+    // Fork: Home and the Widget Screen are both composed; only the copy that is mostly on screen holds the views.
+    var mostlyOnScreen by remember { mutableStateOf(true) }
     SideEffect { viewCache.retain(widgets.map { it.widgetId }) }
-    BoxWithConstraints(modifier.fillMaxWidth().then(semantics)) {
+    BoxWithConstraints(modifier.fillMaxWidth().then(semantics).onGloballyPositioned { coordinates ->
+        val width = coordinates.size.width
+        mostlyOnScreen = width == 0 || coordinates.boundsInWindow().width * 2 >= width
+    }) {
         val columns = appStackColumns(maxWidth.value, displayedIconSize.value)
         val step = (maxWidth - AppStackInset.dp * 2 - displayedIconSize) / (columns - 1)
         val pages = stackPages(items, { it is HomeLayout }, columns)
@@ -119,7 +128,7 @@ internal fun WidgetStack(
                             inputEnabled, onLaunch, onDetails)
                     }
                 }
-                else if (onScreen.isEmpty() || page in onScreen) HomeWidget(widget, hosted.getValue(widget.widgetId), height,
+                else if (mostlyOnScreen && (onScreen.isEmpty() || page in onScreen)) HomeWidget(widget, hosted.getValue(widget.widgetId), height,
                     editing = false, enabled = inputEnabled, hapticsEnabled = uiState.settings.allowHapticFeedback,
                     onLongPress = onEdit, viewCache = viewCache)
                 else Spacer(Modifier.fillMaxWidth().height(height.dp))

@@ -50,6 +50,19 @@ internal data class HostedWidget(
 @Stable
 internal class WidgetHostState(val host: HomeWidgetHost) {
     var revision by mutableIntStateOf(0)
+    // Fork: one view cache per widget stack for the whole Activity, so the same stack on Home and
+    // on the Widget Screen moves one view per widget between them instead of freezing one copy.
+    private val stackViews = mutableMapOf<String, WidgetViewCache>()
+    fun stackViews(stackId: String): WidgetViewCache = stackViews.getOrPut(stackId) { WidgetViewCache() }
+
+    // Fork: WidgetViewCache reuses a view only for the same info object, so every slot showing a widget
+    // gets the same lookup until providers change (revision), not a fresh copy per slot.
+    private class CachedInfo(val revision: Int, val provider: String?, val info: AppWidgetProviderInfo?)
+    private val infos = mutableMapOf<Int, CachedInfo>()
+    fun providerInfo(widgetId: Int, provider: String?, lookup: () -> AppWidgetProviderInfo?): AppWidgetProviderInfo? {
+        infos[widgetId]?.takeIf { it.revision == revision && it.provider == provider }?.let { return it.info }
+        return lookup().also { infos[widgetId] = CachedInfo(revision, provider, it) }
+    }
 }
 
 internal val LocalWidgetHost = staticCompositionLocalOf<WidgetHostState?> { null }
@@ -110,8 +123,10 @@ internal fun rememberHostedWidget(layout: HomeLayout): HostedWidget {
     val state = LocalWidgetHost.current ?: rememberWidgetHost()
     val host = state.host
     val info = remember(layout.widgetId, layout.widgetProvider, state.revision) {
-        runCatching { AppWidgetManager.getInstance(context).getAppWidgetInfo(layout.widgetId) }
-            .getOrNull()?.takeIf { it.provider.flattenToString() == layout.widgetProvider }
+        state.providerInfo(layout.widgetId, layout.widgetProvider) {
+            runCatching { AppWidgetManager.getInstance(context).getAppWidgetInfo(layout.widgetId) }
+                .getOrNull()?.takeIf { it.provider.flattenToString() == layout.widgetProvider }
+        }
     }
     return remember(host, info, density) {
         val padding = info?.let { AppWidgetHostView.getDefaultPaddingForWidget(context, it.provider, null) }

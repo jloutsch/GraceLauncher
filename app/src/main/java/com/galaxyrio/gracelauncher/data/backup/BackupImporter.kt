@@ -83,8 +83,14 @@ class BackupImporter(
         val dir = File(context.cacheDir, "backup-import-${UUID.randomUUID()}")
         try {
             BackupArchive.extract(input, dir)?.let { return ImportResult.Rejected(it) }
-            val contents = try { read(dir) } catch (e: Rejection) { return ImportResult.Rejected(e.problem) }
-            val backup = contents.remapped(if (restoring) emptyMap() else profileSerials(contents.manifest.profiles))
+            // Fork: deeply nested or huge JSON throws an Error rather than an Exception; nothing is written
+            // yet, so report the file as unreadable instead of letting the import end with no result.
+            val backup = try {
+                val contents = read(dir)
+                contents.remapped(if (restoring) emptyMap() else profileSerials(contents.manifest.profiles))
+            } catch (e: Rejection) { return ImportResult.Rejected(e.problem) }
+            catch (_: StackOverflowError) { return ImportResult.Rejected(BackupProblem.NotABackup) }
+            catch (_: OutOfMemoryError) { return ImportResult.Rejected(BackupProblem.NotABackup) }
             if (!restoring) {
                 try { writeSafetyExport() } catch (e: CancellationException) { throw e } catch (e: Exception) {
                     return ImportResult.Failed(e, restored = true)
