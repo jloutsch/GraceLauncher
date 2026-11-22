@@ -63,6 +63,15 @@ class WidgetPlaceholdersTest {
         assertEquals(result, result.toPlaceholders())
     }
 
+    @Test fun aRepeatSharingTheKeptKeyLeavesTheHomeOrderOnTheKeptWidget() {
+        val copy = PopupItem("widget:-2-copy", HomeLayout(widgetId = -2, widgetProvider = "p/copy"))
+        val home = WidgetLayout(mapOf(HomeContentKey to listOf(widget(-2), copy), "folder:a" to listOf(widget(-2))),
+            listOf("widget:-2", "widget:-2-copy"))
+        val result = home.toPlaceholders()
+        val homeKeys = result.popups.getValue(HomeContentKey).map { it.key }
+        assertEquals(homeKeys, result.homeOrder)
+    }
+
     @Test fun replaceKeepsPlacementAndUpdatesOrder() {
         val base = layout().toPlaceholders()
         val screenId = base.popups.getValue(WidgetScreenKey).single().widget!!.widgetId
