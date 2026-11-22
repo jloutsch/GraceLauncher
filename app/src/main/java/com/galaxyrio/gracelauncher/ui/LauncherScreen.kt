@@ -147,6 +147,7 @@ import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.theme.rememberLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.theme.rememberLauncherHaptics
 import com.galaxyrio.gracelauncher.ui.theme.WallpaperBlur
+import com.galaxyrio.gracelauncher.ui.widgets.LocalWidgetSurfaceShown
 import com.galaxyrio.gracelauncher.ui.widgets.LocalWidgetHost
 import com.galaxyrio.gracelauncher.ui.widgets.rememberWidgetHost
 import com.galaxyrio.gracelauncher.ui.theme.wallpaperTint
@@ -1179,7 +1180,11 @@ internal fun LauncherScreen(
         val alphabet = uiState.settings.listAppearance.alphabet.normalized()
         val railLayout = alphabet.layout(maxHeight.value, model.letters.size + 1)
 
-        CompositionLocalProvider(LocalHomeAnimationTarget provides true) {
+        // Fork: retained pages below are composed while hidden; widget stacks must not host views there (#39).
+        val pagesShown = !fullScreen || isSettings || backProgress.value > 0f || searchTransition != null
+        val homePagesShown = pagesShown && (!drawerOpen || homeVisibility > 0f || drawerTransition != null)
+        val drawerShown = pagesShown && (drawerOpen || drawerVisibility > 0f)
+        CompositionLocalProvider(LocalHomeAnimationTarget provides true, LocalWidgetSurfaceShown provides homePagesShown) {
           HorizontalPager(
             state = homePager, beyondViewportPageCount = 1,
             userScrollEnabled = uiState.settings.widgetScreen.enabled &&
@@ -1251,6 +1256,7 @@ internal fun LauncherScreen(
 
         // One complete list and one scroll state for both held and released
         // views. Content padding anchors headings without reserving a viewport.
+        CompositionLocalProvider(LocalWidgetSurfaceShown provides drawerShown) {
         AppDrawerScreen(
             model = model,
             folderApps = (uiState.folders + listOfNotNull(workFolder, privateFolder, recentFolder)).associate { it.id to uiState.folderItem(it) },
@@ -1287,6 +1293,7 @@ internal fun LauncherScreen(
                 }
                 .graceReveal(drawerTransition, reveal = true).statusBarContentFade(),
         )
+        }
 
         // Outgoing pages remain drawn until their exit finishes, but cannot launch
         // apps accidentally. The persistent alphabet rail stays above this shield,

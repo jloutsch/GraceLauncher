@@ -29,6 +29,7 @@ import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.widgets.HomeWidget
 import com.galaxyrio.gracelauncher.ui.widgets.LocalWidgetHost
+import com.galaxyrio.gracelauncher.ui.widgets.LocalWidgetSurfaceShown
 import com.galaxyrio.gracelauncher.ui.widgets.WidgetViewCache
 import com.galaxyrio.gracelauncher.ui.widgets.rememberHostedWidget
 
@@ -71,7 +72,10 @@ internal fun WidgetStack(
     val semantics = Modifier.testTag("widget_stack:${stack.id}").semantics {
         customActions = listOf(CustomAccessibilityAction(editLabel) { if (inputEnabled) onEdit(); inputEnabled })
     }
+    val widgetHost = LocalWidgetHost.current
     if (items.isEmpty()) {
+        // An emptied stack keeps no widget views alive.
+        SideEffect { widgetHost?.stackViews(stack.id)?.retain(emptyList()) }
         Box(modifier.fillMaxWidth().then(if (fillHeight) Modifier.fillMaxHeight() else Modifier.height(72.dp))
             .clip(RoundedCornerShape(24.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (onWallpaper) 0.25f else 1f))
@@ -88,22 +92,41 @@ internal fun WidgetStack(
         val widget = hosted.getValue(layout.widgetId)
         (layout.widgetHeightDp.takeIf { it > 0 } ?: widget.defaultHeight).coerceIn(widget.minHeight, widget.maxHeight)
     } ?: 0, if (hasApps) appRowHeight else 0)
-    val widgetHost = LocalWidgetHost.current
     val viewCache = remember(stack.id, widgetHost) { widgetHost?.stackViews(stack.id) ?: WidgetViewCache() }
-    // Fork: Home and the Widget Screen are both composed; only the copy that is mostly on screen holds the views.
-    var mostlyOnScreen by remember { mutableStateOf(true) }
-    SideEffect { viewCache.retain(widgets.map { it.widgetId }) }
+    // Fork: the same stack can be composed on Home, the Widget Screen, the drawer and pop-ups at once, but each
+    // widget has one live view. Only the copy chosen by StackViewOwners hosts it; a copy that becomes the owner
+    // composes its widget anew, which moves the view into its own slot.
+    val owners = remember(stack.id, widgetHost) { widgetHost?.stackOwners(stack.id) }
+    val slot = remember { Any() }
+    val shown = LocalWidgetSurfaceShown.current
+    DisposableEffect(owners, slot) { onDispose { owners?.remove(slot) } }
+    SideEffect {
+        viewCache.retain(widgets.map { it.widgetId })
+        if (!shown) owners?.report(slot, 0f)
+    }
+    val hosting = owners == null || owners.owner() === slot
     BoxWithConstraints(modifier.fillMaxWidth().then(semantics).onGloballyPositioned { coordinates ->
-        val width = coordinates.size.width
-        mostlyOnScreen = width == 0 || coordinates.boundsInWindow().width * 2 >= width
+        val area = coordinates.size.width.toFloat() * coordinates.size.height
+        val visible = coordinates.boundsInWindow().let { it.width * it.height }
+        owners?.report(slot, if (!shown || area <= 0f) 0f else visible / area)
     }) {
         val columns = appStackColumns(maxWidth.value, displayedIconSize.value)
         val step = (maxWidth - AppStackInset.dp * 2 - displayedIconSize) / (columns - 1)
         val pages = stackPages(items, { it is HomeLayout }, columns)
         val count = pages.size
-        // Restart on the first page when pages are added or removed, keeping page % count meaningful.
-        val pager = key(stack.id, count) {
-            rememberPagerState(initialPage = widgetStackStartPage(count)) { widgetStackPageCount(count) }
+        val currentCount by rememberUpdatedState(count)
+        val pager = key(stack.id) {
+            rememberPagerState(initialPage = widgetStackStartPage(count)) { widgetStackPageCount(currentCount) }
+        }
+        // Fork: when pages are added or removed (apps installed, the stack resized), stay on the same page
+        // number instead of jumping back to the first one, and keep page % count meaningful.
+        var laidOutCount by remember(stack.id) { mutableIntStateOf(count) }
+        LaunchedEffect(count) {
+            if (count != laidOutCount) {
+                val current = pager.currentPage % laidOutCount.coerceAtLeast(1)
+                laidOutCount = count
+                pager.scrollToPage(widgetStackStartPage(count) + current.coerceAtMost((count - 1).coerceAtLeast(0)))
+            }
         }
         // Pages the pager prepares off screen can show the same widget as a page on screen (two
         // widgets sit on both sides of each other), so only on-screen pages hold a widget view.
@@ -123,12 +146,13 @@ internal fun WidgetStack(
                         .clip(RoundedCornerShape(displayedIconSize / 2 + AppStackInset.dp))
                         .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (onWallpaper) 0.25f else 1f))
                         .then(if (fillHeight) Modifier else Modifier.combinedClickable(enabled = inputEnabled,
-                            onClick = {}, onLongClick = onEdit))) {
+                            onClick = {}, onLongClick = onEdit))
+                        .semantics { contentDescription = stack.name }) {
                         AppStackRow(content.filterIsInstance<LauncherApp>(), step, iconSize, displayedIconSize,
                             inputEnabled, onLaunch, onDetails)
                     }
                 }
-                else if (mostlyOnScreen && (onScreen.isEmpty() || page in onScreen)) HomeWidget(widget, hosted.getValue(widget.widgetId), height,
+                else if (hosting && (onScreen.isEmpty() || page in onScreen)) HomeWidget(widget, hosted.getValue(widget.widgetId), height,
                     editing = false, enabled = inputEnabled, hapticsEnabled = uiState.settings.allowHapticFeedback,
                     onLongPress = onEdit, viewCache = viewCache)
                 else Spacer(Modifier.fillMaxWidth().height(height.dp))

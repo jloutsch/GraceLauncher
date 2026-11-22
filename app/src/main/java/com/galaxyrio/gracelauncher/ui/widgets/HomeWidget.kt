@@ -54,6 +54,8 @@ internal class WidgetHostState(val host: HomeWidgetHost) {
     // on the Widget Screen moves one view per widget between them instead of freezing one copy.
     private val stackViews = mutableMapOf<String, WidgetViewCache>()
     fun stackViews(stackId: String): WidgetViewCache = stackViews.getOrPut(stackId) { WidgetViewCache() }
+    private val stackOwners = mutableMapOf<String, StackViewOwners>()
+    fun stackOwners(stackId: String): StackViewOwners = stackOwners.getOrPut(stackId) { StackViewOwners() }
 
     // Fork: WidgetViewCache reuses a view only for the same info object, so every slot showing a widget
     // gets the same lookup until providers change (revision), not a fresh copy per slot.
@@ -66,6 +68,36 @@ internal class WidgetHostState(val host: HomeWidgetHost) {
 }
 
 internal val LocalWidgetHost = staticCompositionLocalOf<WidgetHostState?> { null }
+
+/**
+ * Fork: false inside a page that is composed but hidden (the drawer while closed, Home while the drawer or a
+ * full-screen page covers it). Hidden pages are not placed, so they get no position callbacks to report with.
+ */
+internal val LocalWidgetSurfaceShown = compositionLocalOf { true }
+
+/**
+ * Fork: picks which copy of a widget stack hosts its widget views. The most visible copy wins; on a tie the copy
+ * that became visible last wins, so a stack in a pop-up takes over from the same stack on Home behind it.
+ */
+@Stable
+internal class StackViewOwners {
+    private class Report(val visible: Float, val since: Long)
+    private val reports = mutableStateMapOf<Any, Report>()
+    private var sequence = 0L
+
+    /** [visible] is the fraction of the copy inside the window; 0 removes it from the choice. */
+    fun report(slot: Any, visible: Float) {
+        val previous = reports[slot]
+        if (visible <= 0f) { if (previous != null) reports.remove(slot); return }
+        // Whole percents, so layout noise during a swipe does not trade the views back and forth.
+        val rounded = (visible.coerceAtMost(1f) * 100).roundToInt() / 100f
+        if (previous?.visible != rounded) reports[slot] = Report(rounded, previous?.since ?: ++sequence)
+    }
+
+    fun remove(slot: Any) { reports.remove(slot) }
+
+    fun owner(): Any? = reports.entries.maxWithOrNull(compareBy({ it.value.visible }, { it.value.since }))?.key
+}
 
 /**
  * AppWidgetHost sends a widget's updates only to the view created last for its ID, so a second
