@@ -19,10 +19,12 @@ fun WidgetLayout.toPlaceholders(): WidgetLayout {
     var free = FIRST_PLACEHOLDER_ID
     fun nextFree(): Int { while (free in used) free--; return free.also { used += it } }
     val renamed = mutableMapOf<String, String>()
+    // Fork: a placeholder ID seen twice would be restored into both entries and one dropped on save, so renumber repeats.
+    val kept = mutableSetOf<Int>()
     val remapped = popups.toSortedMap().mapValues { (_, items) ->
         items.map { item ->
             val widget = item.widget
-            if (widget == null || widget.widgetId < 0) item else {
+            if (widget == null || (widget.widgetId < 0 && (!isWidgetPlaceholder(widget.widgetId) || kept.add(widget.widgetId)))) item else {
                 val id = nextFree()
                 renamed.putIfAbsent(item.key, widgetKey(id))
                 item.copy(key = widgetKey(id), widget = widget.copy(widgetId = id))

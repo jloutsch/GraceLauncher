@@ -51,6 +51,18 @@ class WidgetPlaceholdersTest {
         assertEquals(4, result.pending().size)
     }
 
+    @Test fun repeatedPlaceholderIdsAreRenumberedSoEachWidgetRestoresSeparately() {
+        val copy = PopupItem("widget:-2-copy", HomeLayout(widgetId = -2, widgetProvider = "p/copy"))
+        val result = WidgetLayout(mapOf(HomeContentKey to listOf(widget(-2), copy), "folder:a" to listOf(widget(-2))), null)
+            .toPlaceholders()
+        val ids = result.pending().map { it.placeholderId }
+        assertEquals(3, ids.toSet().size)
+        result.popups.values.flatten().forEach { assertEquals("widget:${it.widget!!.widgetId}", it.key) }
+        val restored = ids.foldIndexed(result) { index, layout, id -> layout.replaceWidget(id, 100 + index) }
+        assertEquals(listOf(100, 101, 102), restored.popups.values.flatten().map { it.widget!!.widgetId }.sorted())
+        assertEquals(result, result.toPlaceholders())
+    }
+
     @Test fun replaceKeepsPlacementAndUpdatesOrder() {
         val base = layout().toPlaceholders()
         val screenId = base.popups.getValue(WidgetScreenKey).single().widget!!.widgetId
