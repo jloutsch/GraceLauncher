@@ -457,6 +457,18 @@ class BackupRoundTripTest {
     }
 
     @Test
+    fun deeplyNestedJsonIsRejectedInsteadOfEndingWithNoResult() = runBlocking {
+        seed()
+        val valid = export()
+        val before = state()
+        val depth = 200_000
+        val nested = """{"grace_launcher_preferences":""" + "[".repeat(depth) + "]".repeat(depth) + "}"
+        val result = importer().import(replace(valid, BackupArchive.PREFERENCES, nested.toByteArray()).inputStream(), allApps, emptySet())
+        assertEquals(ImportResult.Rejected(BackupProblem.NotABackup), result)
+        assertEquals(before, state())
+    }
+
+    @Test
     fun garbageStoredJsonDoesNotBreakTheLauncher() = runBlocking {
         seed()
         val hostile = mutateDatabase(export()) { db ->
