@@ -87,6 +87,9 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Fork: set on a page opened from settings search, so it can show the searched setting. */
+internal const val OpenedFromSearchKey = "opened_from_search"
+
 internal enum class SettingsPage {
     Root, Productivity, Clock, ClockStyle, Calendar, CalendarSources, CalendarApp, Weather, WeatherApp, Themes, Advanced, Language, About, HiddenApps, Folders, FolderEditor,
     Changelog, Licenses, AppLicense, IconPacks, IconDesigner, IconDesignerApp, PrivateSpace, PrivateSpaceEditor, Search,
@@ -236,7 +239,12 @@ fun LauncherSettingsScreen(
                     SettingsPage.Root -> SettingsHome(uiState.isDefaultHome, actions.requestDefaultHome,
                         onOpenHome = { if (isCurrent()) actions.openHome() }, onBack = back, navigate = navigate,
                         // Fork: a search result opens its parent pages too, so back walks up the path it showed.
-                        navigateRoute = { route -> if (isCurrent()) route.forEach { navController.navigate(it.name) } })
+                        navigateRoute = { route ->
+                            if (isCurrent()) {
+                                route.forEach { navController.navigate(it.name) }
+                                navController.currentBackStackEntry?.savedStateHandle?.set(OpenedFromSearchKey, true)
+                            }
+                        })
                     SettingsPage.Productivity -> ProductivitySettings(uiState, actions, back, navigate)
                     SettingsPage.AppCategories -> AppCategoriesSettings(uiState, actions, back, onEdit = { id ->
                         if (isCurrent()) navController.navigate("CategoryEditor/${Uri.encode(id)}") { launchSingleTop = true }
@@ -334,7 +342,8 @@ fun LauncherSettingsScreen(
                     SettingsPage.AgendaAppearance -> AgendaAppearanceSettings(uiState, actions, back)
                     SettingsPage.SearchAppearance -> SettingsPlaceholder(stringResource(R.string.settings_search), "search_appearance", back)
                     SettingsPage.MediaPlayerAppearance -> MediaPlayerAppearanceSettings(uiState, actions, back)
-                    SettingsPage.ClockStyle -> ClockStyleSettings(uiState, actions, back) { navigate(SettingsPage.Fonts) }
+                    SettingsPage.ClockStyle -> ClockStyleSettings(uiState, actions, back,
+                        expandAllGroups = entry.savedStateHandle.get<Boolean>(OpenedFromSearchKey) == true) { navigate(SettingsPage.Fonts) }
                     SettingsPage.Fonts -> FontSettings(uiState, actions, back) { navigate(SettingsPage.FontColors) }
                     SettingsPage.FontColors -> FontColorSettings(uiState, actions, back)
                     SettingsPage.Wallpaper -> WallpaperSettings(uiState, actions, back,
