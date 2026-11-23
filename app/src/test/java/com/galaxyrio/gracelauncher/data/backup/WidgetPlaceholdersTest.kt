@@ -127,4 +127,14 @@ class WidgetPlaceholdersTest {
         assertEquals("a tap after every widget failed retries the first", -2, pending.nextToRestore(setOf(-2, -3))?.placeholderId)
         assertEquals(null, emptyList<PendingWidget>().nextToRestore(emptySet()))
     }
+    @Test fun aSlotAcceptsOnlyTheWidgetItWasSavedWith() {
+        // Fork #7: a second import restarts placeholder numbers, so a setup screen left open from the first import
+        // could otherwise put its widget into the new import's slot with the same number.
+        val slot = WidgetLayout(mapOf(HomeContentKey to listOf(widget(-2))), null)
+        assertTrue(slot.accepts(-2, "p/-2"))
+        assertFalse(slot.accepts(-2, "p/other"))
+        assertFalse("the slot is gone", slot.accepts(-3, "p/-2"))
+        val unknown = WidgetLayout(mapOf(HomeContentKey to listOf(PopupItem("widget:-2", HomeLayout(widgetId = -2)))), null)
+        assertTrue("a slot saved without a provider takes any widget", unknown.accepts(-2, "p/other"))
+    }
 }

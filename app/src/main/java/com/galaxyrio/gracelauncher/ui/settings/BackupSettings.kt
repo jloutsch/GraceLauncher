@@ -61,7 +61,7 @@ private const val DayMillis = 86_400_000L
 private const val TreeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
 
 @Composable
-fun BackupSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit) {
+fun BackupSettings(uiState: LauncherUiState, onBack: () -> Unit) {
     val context = LocalContext.current
     val store = remember(context) { BackupStatusStore(context) }
     val task by BackupController.state.collectAsState()
@@ -158,7 +158,7 @@ fun BackupSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: (
             dismissButton = { TextButton(onClick = { pendingImport = null }) { Text(stringResource(R.string.settings_cancel)) } })
     }
     when (val current = task) {
-        is BackupTask.Imported -> ImportResultDialog(current.result, BackupController::dismiss, missingImportAccess(uiState), actions)
+        // An import result shows from LauncherRoute, on every screen.
         is BackupTask.ExportFailed -> AlertDialog(onDismissRequest = BackupController::dismiss,
             text = { Text(stringResource(R.string.backup_export_failed)) },
             confirmButton = { TextButton(onClick = BackupController::dismiss) { Text(stringResource(R.string.backup_ok)) } })

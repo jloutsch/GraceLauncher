@@ -40,7 +40,16 @@ class BackupExporter(
     suspend fun export(output: OutputStream, labels: Map<String, String>): BackupManifest =
         BackupLock.withLock { write(output, labels) }
 
-    suspend fun contentHash(): String = BackupLock.withLock {
+    /**
+     * Fork #7: a manual export records its hash as backed up. Taking the hash first, under the same lock, means an edit
+     * made during the export leaves an older hash behind, so the next automatic backup still saves that edit.
+     */
+    suspend fun exportWithHash(output: OutputStream, labels: Map<String, String>): String =
+        BackupLock.withLock { hashUnlocked().also { write(output, labels) } }
+
+    suspend fun contentHash(): String = BackupLock.withLock { hashUnlocked() }
+
+    private suspend fun hashUnlocked(): String =
         withContext(Dispatchers.IO) {
             checkpoint()
             val digest = MessageDigest.getInstance("SHA-256")
@@ -54,7 +63,6 @@ class BackupExporter(
             }
             digest.digest().joinToString("") { "%02x".format(it) }
         }
-    }
 
     /** Caller holds [BackupLock]; the importer uses this for its safety export. */
     internal suspend fun write(output: OutputStream, labels: Map<String, String>): BackupManifest = withContext(Dispatchers.IO) {

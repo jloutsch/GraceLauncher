@@ -21,6 +21,9 @@ import com.galaxyrio.gracelauncher.data.ClockFontStore
 import com.galaxyrio.gracelauncher.data.ClockPresetFont
 import com.galaxyrio.gracelauncher.data.FontLibrary
 import android.util.LruCache
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
+import com.galaxyrio.gracelauncher.data.FontFilesVersion
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import android.graphics.fonts.Font as PlatformFont
@@ -50,18 +53,21 @@ internal fun ClockPresetFont.family(): FontFamily = presetFamilies.getValue(this
 val LocalFontLibrary = staticCompositionLocalOf { FontLibrary() }
 
 @Composable
-internal fun rememberAppFontFamily(id: String?, library: FontLibrary = LocalFontLibrary.current): FontFamily =
-    remember(id, library.selected) {
+internal fun rememberAppFontFamily(id: String?, library: FontLibrary = LocalFontLibrary.current): FontFamily {
+    val filesVersion by FontFilesVersion.value.collectAsState()
+    return remember(id, library.selected, filesVersion) {
         val ids = (listOfNotNull(id) + library.selected).distinct()
         when {
             ids.isEmpty() || ids.first() == AppFont.System.id -> FontFamily.Default
             ids == listOf(FontLibrary.Josefin) -> LauncherFontFamily
-            else -> FontFamily((100..900 step 100).map { SelectedFont(ids, FontWeight(it)) })
+            else -> FontFamily((100..900 step 100).map { SelectedFont(ids, FontWeight(it), filesVersion) })
         }
     }
+}
 
 /** Async per-weight faces keep imported variable fonts responsive without losing bold roles. */
-private data class SelectedFont(val ids: List<String>, override val weight: FontWeight) : AndroidFont(
+/** [filesVersion] is part of the key, so faces cached before an import replaced the font files are not reused. */
+private data class SelectedFont(val ids: List<String>, override val weight: FontWeight, val filesVersion: Int) : AndroidFont(
     loadingStrategy = FontLoadingStrategy.Async,
     typefaceLoader = SelectedTypefaceLoader,
     variationSettings = FontVariation.Settings(FontVariation.weight(weight.weight)),
@@ -80,7 +86,7 @@ private object SelectedTypefaceLoader : AndroidFont.TypefaceLoader {
         synchronized(faces) {
             faces.get(choice) ?: run {
                 val result = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                    SelectedTypefaceApi29.build(context, choice.ids, weight)
+                    SelectedTypefaceApi29.build(context, choice.ids, weight, choice.filesVersion)
                 } else primaryTypeface(context, choice.ids, weight)
                 faces.put(choice, result)
                 result
@@ -128,8 +134,12 @@ private object SelectedTypefaceApi29 {
         override fun sizeOf(key: String, value: PlatformFont) = value.buffer.capacity().coerceAtLeast(1)
     }
 
+    private var buffersVersion = 0
+
     // Access is serialized by SelectedTypefaceLoader's face-cache lock.
-    fun build(context: Context, ids: List<String>, weight: Int): Typeface {
+    fun build(context: Context, ids: List<String>, weight: Int, filesVersion: Int): Typeface {
+        // An import can replace a file under the same font ID; drop buffers read from the old one.
+        if (filesVersion != buffersVersion) { buffers.evictAll(); buffersVersion = filesVersion }
         val families = ids.takeWhile { it != AppFont.System.id }.mapNotNull { id -> runCatching {
             val base = buffers.get(id) ?: when (id) {
                 FontLibrary.Josefin -> PlatformFont.Builder(context.assets, PRIMARY_FONT_ASSET).build()

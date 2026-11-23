@@ -48,6 +48,15 @@ fun WidgetLayout.pending(): List<PendingWidget> = popups.toSortedMap().flatMap {
         ?.let { PendingWidget(owner, it.widgetId, it.widgetProvider) } }
 }
 
+/**
+ * Fork #7: whether [placeholderId] still names a slot saved for [provider]. A second import restarts the numbers, so
+ * a setup screen left open from the first one must not fill the new slot with a different widget.
+ */
+fun WidgetLayout.accepts(placeholderId: Int, provider: String): Boolean {
+    val slot = popups.values.flatten().firstOrNull { it.widget?.widgetId == placeholderId }?.widget ?: return false
+    return slot.widgetProvider == null || slot.widgetProvider == provider
+}
+
 fun WidgetLayout.replaceWidget(placeholderId: Int, newId: Int): WidgetLayout {
     val oldKey = widgetKey(placeholderId)
     return WidgetLayout(

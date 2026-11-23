@@ -86,6 +86,7 @@ class MainActivity : ComponentActivity() {
                 runAutoBackup(state, loadingAtResume)
             }
         }
+        BackupController.recoverInterruptedImport(this)
         setContent {
             CompositionLocalProvider(LocalAppTransitions provides appTransitions) {
                 LauncherAppTheme(launcherViewModel) {

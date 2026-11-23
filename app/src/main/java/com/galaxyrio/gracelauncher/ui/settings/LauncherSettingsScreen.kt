@@ -67,9 +67,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.LauncherApp
-import com.galaxyrio.gracelauncher.data.backup.BackupController
-import com.galaxyrio.gracelauncher.data.backup.BackupTask
-import com.galaxyrio.gracelauncher.data.backup.ImportResult
 import com.galaxyrio.gracelauncher.data.icons.GraceButtonIcon
 import com.galaxyrio.gracelauncher.data.GraceButtonAction
 import com.galaxyrio.gracelauncher.data.GraceButtonGesture
@@ -136,11 +133,6 @@ fun LauncherSettingsScreen(
     LaunchedEffect(currentEntry?.id) {
         // NavHost's predictive back can pop the editor without invoking its app-bar callback.
         if (currentEntry?.destination?.route == SettingsPage.PrivateSpace.name) closePrivateSpace()
-    }
-    val backupTask by BackupController.state.collectAsState()
-    LaunchedEffect(backupTask) {
-        // This screen's view model keeps favorites in memory; reload them so a later edit cannot save the pre-import list.
-        if ((backupTask as? BackupTask.Imported)?.result is ImportResult.Success) actions.refreshApps()
     }
     val canPop = currentEntry != null && navController.previousBackStackEntry != null
     val scope = rememberCoroutineScope()
@@ -396,7 +388,7 @@ fun LauncherSettingsScreen(
                     SettingsPage.LabAccessibility -> LabAccessibilitySettings(uiState, actions, back)
                     SettingsPage.LabDismiss -> LabDismissSettings(uiState, actions, back)
                     SettingsPage.About -> AboutSettings(back, navigate)
-                    SettingsPage.Backup -> BackupSettings(uiState, actions, back)
+                    SettingsPage.Backup -> BackupSettings(uiState, back)
                     SettingsPage.HiddenApps -> HiddenAppsSettings(uiState, actions, back)
                     SettingsPage.PrivateSpace -> ProfileSettingsScreen(uiState, actions, back) { navigate(SettingsPage.PrivateSpaceEditor) }
                     SettingsPage.WorkProfile -> ProfileSettingsScreen(uiState, actions, back, work = true) { navigate(SettingsPage.WorkProfileEditor) }
