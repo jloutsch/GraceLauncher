@@ -38,9 +38,8 @@
         </intent>
     </queries>
 
-    <!-- Grace Launcher keeps launcher data local; system backup would upload it. -->
     <application
-        android:allowBackup="false"
+        android:allowBackup="true"
         android:enableOnBackInvokedCallback="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"

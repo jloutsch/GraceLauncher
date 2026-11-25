@@ -9,7 +9,7 @@ import org.json.JSONObject
 /** The fork's former weather app choice in clockStyleJson; now only read, to carry it into upstream's weatherConnection. */
 internal const val WeatherAppKeyField = "weatherAppKey"
 
-/** Ids of folders shown as widget stacks; stored in shortcutsFoldersJson. */
+/** Ids of the fork's old widget stacks in shortcutsFoldersJson; read once to convert them to upstream's column. */
 internal const val WidgetStackFoldersField = "widgetStackFolderIds"
 
 internal fun String.withField(name: String, value: Any?): String =

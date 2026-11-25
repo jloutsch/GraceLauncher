@@ -1,5 +1,37 @@
 # Changelog
 
+## 1.3.0
+
+### Appearance
+
+- Expanded text shadow customization, including harder-edged shadows.
+
+### Features
+
+- Added support for Widget Stacks.
+- Refined Private Space locking so private app processes keep running when the related option is disabled in Settings.
+- Added notification replies and other notification action buttons directly on the home screen.
+- Added more actions for app list swipe-left, swipe-right and double-tap gestures, such as clearing notifications.
+- Added support for notifications with progress indicators.
+- Added an option to remember the home screen position or always return to the first page after the screen turns off.
+- Added an option to hide archived apps.
+- Added backup support.
+- Added an option to lock home screen scrolling.
+
+### App list
+
+- Added an option to align the app list height with the home screen.
+- Added an option to hide symbols.
+
+### Grace Widgets
+
+- Fixed weather updates not refreshing promptly.
+- Added separate font size controls for clock hours, minutes and seconds.
+- Improved center alignment.
+- Agenda entries can now show relative times instead of absolute times.
+- Added an option to show overdue tasks.
+- Added more actions for tapping or long-pressing the date.
+
 ## 1.2.4
 
 - Added Tasks.org integration.

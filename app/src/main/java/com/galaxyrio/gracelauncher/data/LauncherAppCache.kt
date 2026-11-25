@@ -219,9 +219,9 @@ internal class LauncherAppCache(context: Context) {
         put("system", app.isSystemApp); put("adaptive", app.isAdaptiveIcon)
         put("installedAt", app.firstInstallTime); put("settings", app.isLauncherSettings)
         put("originalColor", app.originalIconColor); put("englishLabel", app.englishLabel)
-        put("folder", app.folderId); put("stack", app.isAppStack)
+        put("folder", app.folderId); put("stack", app.isAppStack); put("widgetStack", app.isWidgetStack)
         put("userSerial", app.userSerial); put("profileType", profileType(app).name)
-        put("showWorkIndicator", app.showWorkIndicator)
+        put("showWorkIndicator", app.showWorkIndicator); put("archived", app.isArchived)
         app.iconDisplay?.let { put("display", it.json()) }
         app.shortcut?.let { shortcut -> put("shortcut", JSONObject().apply {
             put("id", shortcut.id); put("package", shortcut.packageName); put("label", shortcut.label)
@@ -245,11 +245,13 @@ internal class LauncherAppCache(context: Context) {
             firstInstallTime = entry.getLong("installedAt"), isLauncherSettings = entry.getBoolean("settings"),
             originalIconColor = if (entry.has("originalColor")) entry.getInt("originalColor") else null,
             englishLabel = optional("englishLabel"), folderId = optional("folder"), isAppStack = entry.getBoolean("stack"),
+            isWidgetStack = entry.optBoolean("widgetStack"),
             iconDisplay = entry.optJSONObject("display")?.let { IconDisplaySettings.decode(it.toString()) },
             user = profile?.user, userSerial = profile?.serial,
             isWorkProfile = profile?.type == LauncherProfileType.Work,
             isCloneProfile = profile?.type == LauncherProfileType.Clone,
-            showWorkIndicator = entry.optBoolean("showWorkIndicator", true))
+            showWorkIndicator = entry.optBoolean("showWorkIndicator", true),
+            isArchived = entry.optBoolean("archived"))
     }
 
     private fun encodeIcon(icon: ImageBitmap?): String = icon?.let {

@@ -14,8 +14,8 @@ class SettingsSearchTest {
 
     @Test fun aSettingRowIsFoundWithThePageThatHoldsIt() {
         val result = search("allow screen rotation").single()
-        assertEquals(SettingsPage.Advanced, result.page)
-        assertEquals(listOf("settings advanced"), result.path)
+        assertEquals(SettingsPage.Screens, result.page)
+        assertEquals(listOf("settings advanced", "settings screens"), result.path)
     }
 
     @Test fun aRowResultNamesTheRowToHighlightAndAPageResultNamesNone() {

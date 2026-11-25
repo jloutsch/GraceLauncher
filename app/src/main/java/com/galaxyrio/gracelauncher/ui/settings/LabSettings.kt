@@ -27,40 +27,39 @@ import com.galaxyrio.gracelauncher.ui.components.LauncherSymbol
 import kotlin.math.roundToInt
 
 @Composable
-internal fun AdvancedSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit,
+internal fun AdvancedSettings(onBack: () -> Unit,
     navigate: (SettingsPage) -> Unit, onChooseDefaultHome: () -> Unit) {
     SettingsScaffold(stringResource(R.string.settings_advanced), "settings_advanced", onBack) { padding ->
         SettingsList(padding) {
             item { Spacer(Modifier.height(24.dp)) }
-            item {
-                SettingsToggleItem(stringResource(R.string.settings_allow_screen_rotation),
-                    stringResource(R.string.settings_allow_screen_rotation_summary), uiState.settings.allowScreenRotation,
-                    0, 1, "allow_screen_rotation") { enabled ->
-                    actions.updateSettings { it.copy(allowScreenRotation = enabled) }
-                }
-            }
             item { SettingsHeading(stringResource(R.string.settings_lab)) }
             item {
-                SettingsActionItem(stringResource(R.string.settings_grace_button), null, 0, 5, "lab_open_grace_button",
+                SettingsActionItem(stringResource(R.string.settings_screens), null, 0, 6, "lab_open_screens",
+                    leading = { LauncherIcon(LauncherSymbol.SplitscreenLandscape) }) {
+                    navigate(SettingsPage.Screens)
+                }
+            }
+            item {
+                SettingsActionItem(stringResource(R.string.settings_grace_button), null, 1, 6, "lab_open_grace_button",
                     leading = { Icon(painterResource(R.drawable.ic_grace_solid), null,
                         Modifier.size(24.dp).graphicsLayer { scaleX = 5f / 3f; scaleY = 5f / 3f }) }) {
                     navigate(SettingsPage.LabGraceButton)
                 }
             }
             item {
-                SettingsActionItem(stringResource(R.string.settings_gestures), null, 1, 5, "lab_open_gesture",
+                SettingsActionItem(stringResource(R.string.settings_gestures), null, 2, 6, "lab_open_gesture",
                     leading = { LauncherIcon(LauncherSymbol.Gesture) }) { navigate(SettingsPage.LabGesture) }
             }
             item {
-                SettingsActionItem(stringResource(R.string.lab_popup), null, 2, 5, "lab_open_popup",
+                SettingsActionItem(stringResource(R.string.lab_popup), null, 3, 6, "lab_open_popup",
                     leading = { LauncherIcon(LauncherSymbol.Outbound) }) { navigate(SettingsPage.LabPopup) }
             }
             item {
-                SettingsActionItem(stringResource(R.string.lab_swipe_dismiss), null, 3, 5, "lab_open_dismiss",
+                SettingsActionItem(stringResource(R.string.lab_swipe_dismiss), null, 4, 6, "lab_open_dismiss",
                     leading = { LauncherIcon(LauncherSymbol.Delete) }) { navigate(SettingsPage.LabDismiss) }
             }
             item {
-                SettingsActionItem(stringResource(R.string.lab_accessibility), null, 4, 5, "lab_open_accessibility",
+                SettingsActionItem(stringResource(R.string.lab_accessibility), null, 5, 6, "lab_open_accessibility",
                     leading = { LauncherIcon(LauncherSymbol.Settings) }) { navigate(SettingsPage.LabAccessibility) }
             }
             item { SettingsHeading(stringResource(R.string.settings_debug)) }

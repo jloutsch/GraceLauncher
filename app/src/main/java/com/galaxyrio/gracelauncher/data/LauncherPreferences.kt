@@ -7,7 +7,11 @@ enum class WallpaperTextMode { Auto, Light, Dark }
 
 /** Small, local-only preferences; app keys are flattened activity component names. */
 class LauncherPreferences(context: Context) {
-    private val preferences = context.getSharedPreferences("launcher_appearance", Context.MODE_PRIVATE)
+    companion object {
+        const val FILE_NAME = "launcher_appearance"
+    }
+
+    private val preferences = context.getSharedPreferences(FILE_NAME, Context.MODE_PRIVATE)
 
     val textMode: WallpaperTextMode
         get() = WallpaperTextMode.entries.firstOrNull { it.name == preferences.getString("text_mode", null) }

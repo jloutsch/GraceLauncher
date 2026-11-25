@@ -6,10 +6,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowText as Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +32,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.*
+import com.galaxyrio.gracelauncher.ui.widgets.WidgetStack
 import com.galaxyrio.gracelauncher.data.tasks.TaskItem
 import com.galaxyrio.gracelauncher.data.tasks.TasksStatus
 import com.galaxyrio.gracelauncher.data.tasks.visibleTaskItems
@@ -38,6 +41,7 @@ import com.galaxyrio.gracelauncher.data.weather.WeatherConnectionMode
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.ScheduleStatus
+import com.galaxyrio.gracelauncher.ui.components.LauncherLayout
 import com.galaxyrio.gracelauncher.ui.components.eventRemainingText
 import com.galaxyrio.gracelauncher.ui.components.taskRemainingText
 import com.galaxyrio.gracelauncher.ui.home.ClockAgendaContent
@@ -76,6 +80,7 @@ fun AgendaSheet(
     val today = now.atZone(zone).toLocalDate()
     val appearance = uiState.settings.agendaAppearance
     val widget = uiState.popups[AgendaWidgetKey].orEmpty().firstNotNullOfOrNull { it.widget }
+    val widgetStack = uiState.folders.firstOrNull { it.key == appearance.widgetStackKey && it.isWidgetStack }
     val weatherEnabled = uiState.settings.weatherEnabled && !uiState.isLoadingSettings && !uiState.settingsLoadFailed
     val weather = uiState.weather.snapshot.takeIf { weatherEnabled }
     val forecastDays = uiState.settings.weatherForecastDays
@@ -85,8 +90,8 @@ fun AgendaSheet(
     val events = uiState.events.takeIf { uiState.settings.calendarAgenda }.orEmpty()
     val taskPreferences = uiState.settings.calendar.tasksOrg
     val tasksEnabled = taskPreferences.enabled && !uiState.isLoadingSettings && !uiState.settingsLoadFailed
-    val tasks = remember(uiState.tasks.tasks, taskPreferences, tasksEnabled, zone, locale) {
-        if (tasksEnabled) visibleTaskItems(uiState.tasks.tasks, taskPreferences, zone, locale) else emptyList()
+    val tasks = remember(uiState.tasks.tasks, taskPreferences, tasksEnabled, zone, locale, now) {
+        if (tasksEnabled) visibleTaskItems(uiState.tasks.tasks, taskPreferences, zone, locale, now) else emptyList()
     }
     val undatedTasks = remember(tasks) { tasks.filter { it.dueAt == null } }
     val calendarDays = uiState.settings.calendar.daysAhead
@@ -103,75 +108,79 @@ fun AgendaSheet(
             mapOf(today to emptyList<AgendaEntry>())
         }
     }
-    Column(Modifier.fillMaxWidth().heightIn(max = panelWindowHeight()).padding(horizontal = 30.dp).testTag("agenda_sheet")) {
+    Column(Modifier.fillMaxWidth().heightIn(max = panelWindowHeight()).testTag("agenda_sheet")) {
         val title = when (appearance.title) {
             AgendaTitle.Time -> DateFormat.getTimeFormat(LocalContext.current).format(java.util.Date.from(now))
             AgendaTitle.Quote -> stringResource(R.string.settings_coming_soon)
             AgendaTitle.Text -> appearance.titleText
         }
-        Text(title, Modifier.fillMaxWidth().padding(top = 26.dp, bottom = 24.dp),
+        Text(title, Modifier.fillMaxWidth().padding(horizontal = LauncherLayout.AgendaContentInset).padding(top = 26.dp, bottom = 24.dp),
             fontSize = 26.sp, lineHeight = 32.sp, fontWeight = FontWeight.Medium, maxLines = 3, overflow = TextOverflow.Ellipsis)
         if ((appearance.showDailyContent && uiState.settings.calendarAgenda && uiState.scheduleStatus == ScheduleStatus.Loading && events.isEmpty()) ||
             ((appearance.showDailyContent || appearance.showUndatedTasks) && tasksEnabled &&
                 uiState.tasks.status == TasksStatus.Loading && tasks.isEmpty()) ||
             ((appearance.showDailyContent || appearance.showHourlyWeather) && weatherEnabled &&
                 uiState.weather.status == WeatherStatus.Loading && weather == null)) {
-            LinearProgressIndicator(Modifier.fillMaxWidth())
+            LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = LauncherLayout.AgendaContentInset))
         }
         LazyColumn(Modifier.fillMaxWidth().weight(1f, fill = false).testTag("agenda_list"), state = listState,
             contentPadding = PaddingValues(bottom = 20.dp + bottomInset)) {
-            if (widget != null) item(key = "agenda_widget") {
+            if (widgetStack != null) agendaItem(key = "agenda_widget_stack") {
+                WidgetStack(widgetStack, uiState, onWallpaper = false,
+                    onLaunch = { app, bounds -> actions.launchAppAt?.invoke(app, bounds) })
+                Spacer(Modifier.height(12.dp))
+            } else if (widget != null) item(key = "agenda_widget") {
                 PopupWidgetItem(widget, selected = false, enabled = true, haptics = false,
                     maxHeight = panelWindowHeight().value.toInt(), onChange = { _, _ -> },
                     onDragStart = {}, onDrag = {}, onDragEnd = {}, onResizing = {},
-                    horizontalInset = 0.dp, editable = false)
+                    horizontalInset = LauncherLayout.AgendaContentInset, editable = false)
                 Spacer(Modifier.height(12.dp))
             }
             groups.forEach { (date, dayEntries) ->
-                if (appearance.showDailyContent) item(key = "day:$date") {
+                if (appearance.showDailyContent) agendaItem(key = "day:$date") {
                     AgendaDayHeader(date, today, forecasts[date], weather?.current.takeIf { date == today },
                         appearance, weatherEnabled, weather)
                 }
                 if (date == today) {
-                    if (appearance.showHourlyWeather && weather != null) item(key = "today_weather") {
+                    if (appearance.showHourlyWeather && weather != null) agendaItem(key = "today_weather") {
                         HourlyWeather(weather, now, appearance = appearance, onOpenWeatherApp = actions.openWeatherApp)
                     }
-                    else if (appearance.showHourlyWeather && weatherEnabled && uiState.weather.status != WeatherStatus.Loading) item(key = "weather_unavailable") {
+                    else if (appearance.showHourlyWeather && weatherEnabled && uiState.weather.status != WeatherStatus.Loading) agendaItem(key = "weather_unavailable") {
                         WeatherConnectionNotice(uiState.weather.status, actions,
                             gadgetbridge = uiState.settings.weatherConnection.mode == WeatherConnectionMode.Gadgetbridge)
                     }
                     if (appearance.showUndatedTasks && undatedTasks.isNotEmpty()) {
-                        items(undatedTasks, key = { "undated_task:${it.id}" }) { task ->
+                        agendaItems(undatedTasks, key = { "undated_task:${it.id}" }) { task ->
                             AgendaTask(task, now, appearance.taskContent, appearance.taskPrimaryFields,
                                 completing = task.id in uiState.completingTaskIds,
                                 onComplete = { actions.completeTask(task) }, onClick = { actions.openTask(task) })
                         }
-                        item(key = "space:undated_tasks") { Spacer(Modifier.height(12.dp)) }
+                        agendaItem(key = "space:undated_tasks") { Spacer(Modifier.height(12.dp)) }
                     }
-                    if ((appearance.showDailyContent || appearance.showUndatedTasks) && tasksEnabled) item(key = "tasks_connection") {
+                    if ((appearance.showDailyContent || appearance.showUndatedTasks) && tasksEnabled) agendaItem(key = "tasks_connection") {
                         TasksConnectionNotice(uiState.tasks.status, actions)
                     }
                     // Calendar access is independent of weather access: keep the forecast visible
                     // when the user has not connected a calendar, or its provider fails.
                     if (appearance.showDailyContent && uiState.settings.calendarAgenda) {
                         when (uiState.scheduleStatus) {
-                            ScheduleStatus.PermissionRequired -> item(key = "calendar_permission") {
+                            ScheduleStatus.PermissionRequired -> agendaItem(key = "calendar_permission") {
                                 Text(stringResource(R.string.calendar_permission_description), color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Spacer(Modifier.height(8.dp))
                                 Button(onClick = onRequestCalendar) { Text(stringResource(R.string.connect_calendar)) }
                             }
-                            ScheduleStatus.Error -> item(key = "calendar_error") {
+                            ScheduleStatus.Error -> agendaItem(key = "calendar_error") {
                                 Text(stringResource(R.string.calendar_error))
                                 TextButton(onClick = actions.refreshAgenda) { Text(stringResource(R.string.retry)) }
                             }
                             else -> Unit
                         }
                     }
-                    if (uiState.settings.calendarAgenda || tasksEnabled) item(key = "agenda_create") {
+                    if (uiState.settings.calendarAgenda || tasksEnabled) agendaItem(key = "agenda_create") {
                         AgendaCreateButton(uiState, actions, Modifier.padding(horizontal = AgendaItemInset, vertical = 8.dp))
                     }
                 }
-                items(dayEntries, key = { "$date:${it.key}" }) { entry ->
+                agendaItems(dayEntries, key = { "$date:${it.key}" }) { entry ->
                     when (entry) {
                         is AgendaEntry.Calendar -> AgendaEvent(entry.event, now, appearance.calendarContent,
                             appearance.calendarPrimaryFields) { actions.openEvent(entry.event) }
@@ -180,19 +189,33 @@ fun AgendaSheet(
                             onComplete = { actions.completeTask(entry.task) }, onClick = { actions.openTask(entry.task) })
                     }
                 }
-                if (appearance.showDailyContent) item(key = "space:$date") { Spacer(Modifier.height(20.dp)) }
+                if (appearance.showDailyContent) agendaItem(key = "space:$date") { Spacer(Modifier.height(20.dp)) }
             }
             val tasksReady = !tasksEnabled || uiState.tasks.status == TasksStatus.Ready
             if (appearance.showDailyContent && uiState.settings.calendarAgenda && events.isEmpty() && tasks.isEmpty() && tasksReady &&
-                uiState.scheduleStatus == ScheduleStatus.Ready) item {
-                Text(pluralStringResource(R.plurals.calendar_no_upcoming_events, calendarDays, calendarDays),
+                uiState.scheduleStatus == ScheduleStatus.Ready) agendaItem {
+                Text(if (calendarDays == 0) stringResource(R.string.calendar_no_events_today)
+                    else pluralStringResource(R.plurals.calendar_no_upcoming_events, calendarDays, calendarDays),
                     color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if ((appearance.showDailyContent || appearance.showUndatedTasks) && tasksEnabled &&
-                !uiState.settings.calendarAgenda && tasks.isEmpty() && tasksReady) item {
+                !uiState.settings.calendarAgenda && tasks.isEmpty() && tasksReady) agendaItem {
                 Text(stringResource(R.string.tasks_no_unfinished), color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+    }
+}
+
+/** Ordinary agenda content shares one gutter; the scroll viewport itself spans the sheet. */
+private fun LazyListScope.agendaItem(key: Any? = null, content: @Composable ColumnScope.() -> Unit) {
+    item(key = key) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = LauncherLayout.AgendaContentInset), content = content)
+    }
+}
+
+private fun <T> LazyListScope.agendaItems(values: List<T>, key: (T) -> Any, content: @Composable ColumnScope.(T) -> Unit) {
+    items(values, key = key) { value ->
+        Column(Modifier.fillMaxWidth().padding(horizontal = LauncherLayout.AgendaContentInset)) { content(value) }
     }
 }
 

@@ -25,6 +25,31 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ClockGlyphColorTest {
+    @Test fun verticalSecondsKeepTheirSlotsAndUseIndependentSizes() {
+        val result = measureClockGlyphs("09:15:37", Typeface.DEFAULT, 80f, 0f, 8f,
+            stacked = true, showColon = true, centerLines = false, maxWidth = 1000f, maxHeight = 1000f,
+            minuteScale = .5f, secondScale = 1.5f)
+        assertEquals((0..5).toList(), result.glyphs.map { it.digitSlot })
+        assertEquals(listOf(1f, 1f, .5f, .5f, 1.5f, 1.5f), result.glyphs.map { it.fontScale })
+        val rows = result.glyphs.chunked(2)
+        rows.zipWithNext().forEach { (above, below) ->
+            assertEquals(8f, below.minOf { it.y + it.bounds.top } - above.maxOf { it.y + it.bounds.bottom }, .01f)
+        }
+    }
+
+    @Test fun equalCellsKeepHorizontalWidthStableAndCenterDifferentVerticalSizes() {
+        fun equal(text: String, stacked: Boolean, center: Boolean) = measureClockGlyphs(text, Typeface.SERIF, 80f, 0f, 8f,
+            stacked = stacked, showColon = false, centerLines = false, maxWidth = 1000f, maxHeight = 1000f,
+            equalWidthDigits = true, centerDigits = center, minuteScale = .5f, secondScale = 1.5f)
+        assertEquals(equal("11:11:11", false, false).bounds.width(), equal("88:88:88", false, false).bounds.width(), .01f)
+        val rows = equal("19:51:37", true, true).glyphs.chunked(2)
+        for (column in 0..1) {
+            val centers = rows.map { row -> row[column].let { it.x + it.bounds.centerX() } }
+            assertEquals(centers.first(), centers[1], .01f)
+            assertEquals(centers.first(), centers[2], .01f)
+        }
+    }
+
     @Test fun digitSlotsRemainStableWithoutLeadingZeroAndWithLocalizedDigits() {
         assertEquals(listOf(0, 1, null, 2, 3), drawing("09:05").glyphs.map { it.digitSlot })
         assertEquals(listOf(1, null, 2, 3), drawing("٩:٠٥").glyphs.map { it.digitSlot })

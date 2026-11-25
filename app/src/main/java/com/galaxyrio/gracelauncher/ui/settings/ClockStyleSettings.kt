@@ -2,16 +2,20 @@
 
 package com.galaxyrio.gracelauncher.ui.settings
 
+import com.galaxyrio.gracelauncher.ui.theme.LocalFontShadowEnabled
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.animateBounds
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.updateTransition
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -24,6 +28,7 @@ import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -66,14 +71,15 @@ import com.galaxyrio.gracelauncher.data.ClockFontFile
 import com.galaxyrio.gracelauncher.data.ClockFontStore
 import com.galaxyrio.gracelauncher.data.ClockLayout
 import com.galaxyrio.gracelauncher.data.ClockStyle
+import com.galaxyrio.gracelauncher.data.FontColors
+import com.galaxyrio.gracelauncher.data.IconColor
 import com.galaxyrio.gracelauncher.data.ScheduleEvent
 import com.galaxyrio.gracelauncher.data.visibleAgendaEvents
 import com.galaxyrio.gracelauncher.data.tasks.TaskItem
 import com.galaxyrio.gracelauncher.data.tasks.TaskPriority
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
-import com.galaxyrio.gracelauncher.ui.components.endPadding
-import com.galaxyrio.gracelauncher.ui.components.startPadding
+import com.galaxyrio.gracelauncher.ui.components.horizontalPadding
 import com.galaxyrio.gracelauncher.ui.home.HomeClockHeader
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherTypography
@@ -140,6 +146,7 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
     var editingContent by rememberSaveable { mutableStateOf<ClockContentPage?>(null) }
     var editingFont by rememberSaveable { mutableStateOf<ClockElement?>(null) }
     var editingRegionFont by rememberSaveable { mutableStateOf<ClockRegion?>(null) }
+    var editingShadow by rememberSaveable { mutableStateOf<ClockRegion?>(null) }
     var weatherIcons by rememberSaveable { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
     val enabled = !saving && LocalSettingsStorageState.current.canEdit
@@ -254,6 +261,34 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
     val styleListState = rememberLazyListState()
     val presetsListState = rememberLazyListState()
     val colorsListState = rememberLazyListState()
+    editingShadow?.let { target ->
+        val primary = regions.primary ?: ClockElement.Clock
+        val shadow = when (target) {
+            ClockRegion.Primary -> regions.face(primary).shadow
+            ClockRegion.Secondary -> regions.secondary.typography.shadow
+            ClockRegion.Tertiary -> regions.tertiary.typography.shadow
+            ClockRegion.Agenda -> regions.agenda.typography.shadow
+            ClockRegion.Task -> regions.tasks.typography.shadow
+        }
+        key(target, primary) {
+            FontShadowSettings(uiState, shadow.shadow, onBack = { editingShadow = null }) { value ->
+                updateRegions { current -> when (target) {
+                    ClockRegion.Primary -> current.copy(primaryFaces = current.primaryFaces +
+                        (primary to current.face(primary).copy(shadow = shadow.copy(shadow = value))))
+                    ClockRegion.Secondary -> current.copy(secondary = current.secondary.copy(
+                        typography = current.secondary.typography.copy(shadow = shadow.copy(shadow = value))))
+                    ClockRegion.Tertiary -> current.copy(tertiary = current.tertiary.copy(
+                        typography = current.tertiary.typography.copy(shadow = shadow.copy(shadow = value))))
+                    ClockRegion.Agenda -> current.copy(agenda = current.agenda.copy(
+                        typography = current.agenda.typography.copy(shadow = shadow.copy(shadow = value))))
+                    ClockRegion.Task -> current.copy(tasks = current.tasks.copy(
+                        typography = current.tasks.typography.copy(shadow = shadow.copy(shadow = value))))
+                } }
+                true
+            }
+        }
+        return
+    }
     // Fork: settings search scrolls these to the row it opened (#36).
     SettingsSearchScroll(styleListState)
     SettingsSearchScroll(colorsListState)
@@ -306,108 +341,104 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
                     } else LookaheadScope {
                         Column(contentModifier) {
                             ClockStylePreview(draft, uiState, this@LookaheadScope, heroBounds, Modifier.padding(top = 8.dp))
-                            val activeColor = editingColor
                             val activeContent = editingContent
                             val controlsModifier = Modifier.weight(1f).fillMaxWidth()
                                 .animateBounds(this@LookaheadScope, boundsTransform = heroBounds)
                                 .settingsPreviewScrim()
                                 .padding(start = 16.dp, top = 16.dp, end = 16.dp)
                                 .clip(settingsPreviewControlsShape())
-                            if (activeColor != null) key(activeColor) {
-                                IconDesignerColorPicker(activeColor.label(), draft.colors[activeColor],
-                                    MaterialTheme.colorScheme.primary.toArgb(), null,
-                                    onChange = { color -> if (pageEnabled) draft = draft.copy(colors =
-                                        if (color == null) draft.colors - activeColor else draft.colors + (activeColor to color)) },
-                                    onClose = { editingColor = null }, modifier = controlsModifier.padding(bottom = 16.dp),
-                                    fallback = resolvedFontColor(onWallpaper = true).toArgb(), fontColors = uiState.settings.fontColors)
-                            } else if (activeContent != null) key(activeContent) {
-                                when (activeContent) {
-                                    ClockContentPage.Agenda -> ClockContentPicker(
-                                        stringResource(R.string.clock_agenda_contents), regions.agenda.order, regions.agenda.selected,
-                                        pageEnabled, uiState.settings.allowHapticFeedback, "clock_agenda_field", label = { it.label() },
-                                        onSelect = { field, checked -> if (pageEnabled) updateRegions { current ->
-                                            current.copy(agenda = current.agenda.copy(selected = if (checked)
-                                                current.agenda.selected + field else current.agenda.selected - field))
-                                        } },
-                                        onReorder = { order -> if (pageEnabled) updateRegions { current ->
-                                            current.copy(agenda = current.agenda.copy(order = order))
-                                        } },
-                                        onClose = { editingContent = null }, modifier = controlsModifier.padding(bottom = 16.dp),
-                                        rightAligned = regions.agenda.rightAligned,
-                                        onAlignedReorder = { order, rightAligned -> if (pageEnabled) updateRegions { current ->
-                                            current.copy(agenda = current.agenda.copy(order = order, rightAligned = rightAligned))
-                                        } },
-                                        onReset = { if (pageEnabled) updateRegions { current ->
-                                            val defaults = ClockAgenda()
-                                            current.copy(agenda = current.agenda.copy(order = defaults.order,
-                                                selected = defaults.selected, rightAligned = defaults.rightAligned))
-                                        } },
-                                    )
-                                    ClockContentPage.Weather -> ClockContentPicker(
-                                        stringResource(R.string.clock_weather_contents), regions.weather.order, regions.weather.selected,
-                                        pageEnabled, uiState.settings.allowHapticFeedback, "clock_weather_field", label = { it.label() },
-                                        onSelect = { field, checked -> if (pageEnabled) updateRegions { current ->
-                                            current.copy(weather = current.weather.copy(selected = if (checked)
-                                                current.weather.selected + field else current.weather.selected - field))
-                                        } },
-                                        onReorder = { order -> if (pageEnabled) updateRegions { current ->
-                                            current.copy(weather = current.weather.copy(order = order))
-                                        } },
-                                        onClose = { editingContent = null }, modifier = controlsModifier.padding(bottom = 16.dp),
-                                        labelShown = { field ->
-                                            if (field.supportsLabel) field in regions.weather.labeledFields else null
-                                        },
-                                        onLabelChange = { field, shown -> if (pageEnabled) updateRegions { current ->
-                                            current.copy(weather = current.weather.copy(labeledFields = if (shown)
-                                                current.weather.labeledFields + field else current.weather.labeledFields - field))
-                                        } },
-                                        onReset = { if (pageEnabled) updateRegions { current ->
-                                            current.copy(weather = ClockWeather())
-                                        } },
-                                    )
-                                    ClockContentPage.Task -> ClockContentPicker(
-                                        stringResource(R.string.clock_task_contents), regions.tasks.order, regions.tasks.selected,
-                                        pageEnabled, uiState.settings.allowHapticFeedback, "clock_task_field", label = { it.label() },
-                                        onSelect = { field, checked -> if (pageEnabled) updateRegions { current ->
-                                            current.copy(tasks = current.tasks.copy(selected = if (checked)
-                                                current.tasks.selected + field else current.tasks.selected - field))
-                                        } },
-                                        onReorder = { order -> if (pageEnabled) updateRegions { current ->
-                                            current.copy(tasks = current.tasks.copy(order = order))
-                                        } },
-                                        onClose = { editingContent = null }, modifier = controlsModifier.padding(bottom = 16.dp),
-                                        rightAligned = regions.tasks.rightAligned,
-                                        onAlignedReorder = { order, rightAligned -> if (pageEnabled) updateRegions { current ->
-                                            current.copy(tasks = current.tasks.copy(order = order, rightAligned = rightAligned))
-                                        } },
-                                        onReset = { if (pageEnabled) updateRegions { current ->
-                                            val defaults = ClockTasks()
-                                            current.copy(tasks = current.tasks.copy(order = defaults.order,
-                                                selected = defaults.selected, rightAligned = defaults.rightAligned))
-                                        } },
-                                    )
-                                }
-                            } else LazyColumn(
-                                controlsModifier.testTag("clock_style_controls"),
-                                state = if (displayed == ClockEditorPage.Style) styleListState else colorsListState,
-                                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
-                                contentPadding = PaddingValues(bottom = 96.dp + LocalSettingsBottomInset.current),
-                                userScrollEnabled = !saving && displayed == page,
-                            ) {
-                                when (displayed) {
-                                    ClockEditorPage.Color -> ClockColorGroups.forEach { (title, parts) ->
-                                        item("clock_color_heading:${parts.first().name}") { SettingsHeading(stringResource(title)) }
-                                        itemsIndexed(parts, key = { _, part -> part.name }) { index, part ->
-                                            SettingsActionItem(part.label(), fontColorSummary(draft.colors[part], onWallpaper = true),
-                                                index, parts.size, "clock_color:${part.name}", enabled = pageEnabled,
-                                                trailing = {
-                                                    Surface(Modifier.size(28.dp), shape = CircleShape,
-                                                        color = resolvedFontColor(draft.colors[part], onWallpaper = true)) {}
-                                                }) { editingColor = part }
-                                        }
+                            // Style and Color share the live preview, but their controls slide independently.
+                            AnimatedContent(displayed, modifier = controlsModifier,
+                                transitionSpec = {
+                                    val direction = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                                    (slideInHorizontally(tween(300, easing = FastOutSlowInEasing)) { it * direction } togetherWith
+                                        slideOutHorizontally(tween(300, easing = FastOutSlowInEasing)) { -it * direction })
+                                        .using(null)
+                                }, label = "clockEditorControls",
+                            ) { controlsPage ->
+                                val controlsEnabled = pageEnabled && controlsPage == page
+                                val paneModifier = Modifier.fillMaxSize()
+                                if (controlsPage == ClockEditorPage.Color) {
+                                    ClockColorsPane(draft, uiState.settings.fontColors, editingColor, colorsListState,
+                                        controlsEnabled, onOpenColor = { editingColor = it },
+                                        onChange = { part, color -> draft = draft.copy(colors =
+                                            if (color == null) draft.colors - part else draft.colors + (part to color)) },
+                                        onCloseColor = { editingColor = null }, modifier = paneModifier)
+                                } else if (activeContent != null) key(activeContent) {
+                                    when (activeContent) {
+                                        ClockContentPage.Agenda -> ClockContentPicker(
+                                            stringResource(R.string.clock_agenda_contents), regions.agenda.order, regions.agenda.selected,
+                                            controlsEnabled, uiState.settings.allowHapticFeedback, "clock_agenda_field", label = { it.label() },
+                                            onSelect = { field, checked -> if (controlsEnabled) updateRegions { current ->
+                                                current.copy(agenda = current.agenda.copy(selected = if (checked)
+                                                    current.agenda.selected + field else current.agenda.selected - field))
+                                            } },
+                                            onReorder = { order -> if (controlsEnabled) updateRegions { current ->
+                                                current.copy(agenda = current.agenda.copy(order = order))
+                                            } },
+                                            onClose = { editingContent = null }, modifier = paneModifier.padding(bottom = 16.dp),
+                                            rightAligned = regions.agenda.rightAligned,
+                                            onAlignedReorder = { order, rightAligned -> if (controlsEnabled) updateRegions { current ->
+                                                current.copy(agenda = current.agenda.copy(order = order, rightAligned = rightAligned))
+                                            } },
+                                            onReset = { if (controlsEnabled) updateRegions { current ->
+                                                val defaults = ClockAgenda()
+                                                current.copy(agenda = current.agenda.copy(order = defaults.order,
+                                                    selected = defaults.selected, rightAligned = defaults.rightAligned))
+                                            } },
+                                        )
+                                        ClockContentPage.Weather -> ClockContentPicker(
+                                            stringResource(R.string.clock_weather_contents), regions.weather.order, regions.weather.selected,
+                                            controlsEnabled, uiState.settings.allowHapticFeedback, "clock_weather_field", label = { it.label() },
+                                            onSelect = { field, checked -> if (controlsEnabled) updateRegions { current ->
+                                                current.copy(weather = current.weather.copy(selected = if (checked)
+                                                    current.weather.selected + field else current.weather.selected - field))
+                                            } },
+                                            onReorder = { order -> if (controlsEnabled) updateRegions { current ->
+                                                current.copy(weather = current.weather.copy(order = order))
+                                            } },
+                                            onClose = { editingContent = null }, modifier = paneModifier.padding(bottom = 16.dp),
+                                            labelShown = { field ->
+                                                if (field.supportsLabel) field in regions.weather.labeledFields else null
+                                            },
+                                            onLabelChange = { field, shown -> if (controlsEnabled) updateRegions { current ->
+                                                current.copy(weather = current.weather.copy(labeledFields = if (shown)
+                                                    current.weather.labeledFields + field else current.weather.labeledFields - field))
+                                            } },
+                                            onReset = { if (controlsEnabled) updateRegions { current ->
+                                                current.copy(weather = ClockWeather())
+                                            } },
+                                        )
+                                        ClockContentPage.Task -> ClockContentPicker(
+                                            stringResource(R.string.clock_task_contents), regions.tasks.order, regions.tasks.selected,
+                                            controlsEnabled, uiState.settings.allowHapticFeedback, "clock_task_field", label = { it.label() },
+                                            onSelect = { field, checked -> if (controlsEnabled) updateRegions { current ->
+                                                current.copy(tasks = current.tasks.copy(selected = if (checked)
+                                                    current.tasks.selected + field else current.tasks.selected - field))
+                                            } },
+                                            onReorder = { order -> if (controlsEnabled) updateRegions { current ->
+                                                current.copy(tasks = current.tasks.copy(order = order))
+                                            } },
+                                            onClose = { editingContent = null }, modifier = paneModifier.padding(bottom = 16.dp),
+                                            rightAligned = regions.tasks.rightAligned,
+                                            onAlignedReorder = { order, rightAligned -> if (controlsEnabled) updateRegions { current ->
+                                                current.copy(tasks = current.tasks.copy(order = order, rightAligned = rightAligned))
+                                            } },
+                                            onReset = { if (controlsEnabled) updateRegions { current ->
+                                                val defaults = ClockTasks()
+                                                current.copy(tasks = current.tasks.copy(order = defaults.order,
+                                                    selected = defaults.selected, rightAligned = defaults.rightAligned))
+                                            } },
+                                        )
                                     }
-                                    ClockEditorPage.Presets -> Unit
-                                    ClockEditorPage.Style -> clockRegionSettings(regions, pageEnabled, uiState.settings.allowHapticFeedback,
+                                } else LazyColumn(
+                                    paneModifier.testTag("clock_style_controls"),
+                                    state = styleListState,
+                                    verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+                                    contentPadding = PaddingValues(bottom = 96.dp + LocalSettingsBottomInset.current),
+                                    userScrollEnabled = !saving && controlsPage == page,
+                                ) {
+                                    clockRegionSettings(regions, controlsEnabled, uiState.settings.allowHapticFeedback,
                                         expandedGroups = expandedGroups,
                                         onToggleGroup = { group ->
                                             expandedGroups = if (group in expandedGroups) expandedGroups - group else expandedGroups + group
@@ -416,7 +447,7 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
                                         onWeatherContent = { editingContent = ClockContentPage.Weather },
                                         onAgendaContent = { editingContent = ClockContentPage.Agenda },
                                         onTaskContent = { editingContent = ClockContentPage.Task },
-                                        onRegionFont = { editingRegionFont = it })
+                                        onRegionFont = { editingRegionFont = it }, onShadow = { editingShadow = it })
                                 }
                             }
                         }
@@ -430,6 +461,63 @@ internal fun ClockStyleSettings(uiState: LauncherUiState, actions: LauncherActio
                         Modifier.align(Alignment.BottomCenter)
                             .padding(bottom = FloatingToolbarDefaults.ScreenOffset + LocalSettingsBottomInset.current),
                     ) { page = ClockEditorPage.entries[it] }
+                }
+            }
+        }
+    }
+}
+
+/** Each color row expands into the picker within the controls pane, retaining the list position. */
+@Composable
+private fun ClockColorsPane(
+    style: ClockStyle,
+    fontColors: FontColors,
+    editingColor: ClockColorPart?,
+    listState: LazyListState,
+    enabled: Boolean,
+    onOpenColor: (ClockColorPart) -> Unit,
+    onChange: (ClockColorPart, IconColor?) -> Unit,
+    onCloseColor: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val heroSpec = MaterialTheme.motionScheme.slowSpatialSpec<Rect>()
+    val heroBounds = remember(heroSpec) { BoundsTransform { _, _ -> heroSpec } }
+    val shape = ListItemDefaults.segmentedShapes(0, 1).shape
+    SharedTransitionLayout(modifier) {
+        AnimatedContent(editingColor, modifier = Modifier.fillMaxSize(),
+            transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) },
+            label = "clockColorHero",
+        ) { activeColor ->
+            val visibility = this
+            val contentEnabled = enabled && activeColor == editingColor
+            val colorModifier: @Composable (ClockColorPart) -> Modifier = { part ->
+                Modifier.sharedBounds(rememberSharedContentState("clock_color:${part.name}"), visibility,
+                    boundsTransform = heroBounds, clipInOverlayDuringTransition = OverlayClip(shape))
+            }
+            if (activeColor != null) {
+                IconDesignerColorPicker(activeColor.label(), style.colors[activeColor],
+                    MaterialTheme.colorScheme.primary.toArgb(), null,
+                    onChange = { color -> if (contentEnabled) onChange(activeColor, color) },
+                    onClose = { if (activeColor == editingColor) onCloseColor() },
+                    modifier = Modifier.padding(bottom = 16.dp).then(colorModifier(activeColor)),
+                    fallback = resolvedFontColor(onWallpaper = true).toArgb(), fontColors = fontColors)
+            } else LazyColumn(
+                Modifier.fillMaxSize().testTag("clock_style_controls"), state = listState,
+                verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap),
+                contentPadding = PaddingValues(bottom = 96.dp + LocalSettingsBottomInset.current),
+                userScrollEnabled = contentEnabled,
+            ) {
+                ClockColorGroups.forEach { (title, parts) ->
+                    item("clock_color_heading:${parts.first().name}") { SettingsHeading(stringResource(title)) }
+                    itemsIndexed(parts, key = { _, part -> part.name }) { index, part ->
+                        SettingsActionItem(part.label(), fontColorSummary(style.colors[part], onWallpaper = true),
+                            index, parts.size, "clock_color:${part.name}", enabled = contentEnabled,
+                            modifier = colorModifier(part),
+                            trailing = {
+                                Surface(Modifier.size(28.dp), shape = CircleShape,
+                                    color = resolvedFontColor(style.colors[part], onWallpaper = true)) {}
+                            }) { onOpenColor(part) }
+                    }
                 }
             }
         }
@@ -570,7 +658,7 @@ private fun ClockStylePreview(
             modifier = Modifier.heightIn(min = minimumPreviewHeight, max = maximumPreviewHeight),
             boundsTransform = boundsTransform,
         ).clipToBounds(), contentAlignment = Alignment.CenterStart) {
-        CompositionLocalProvider(LocalLauncherAppearance provides appearance) {
+        CompositionLocalProvider(LocalFontShadowEnabled provides true, LocalLauncherAppearance provides appearance) {
             MaterialTheme(typography = LocalLauncherTypography.current) {
                 Box(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
                     HomeClockHeader(
@@ -584,8 +672,7 @@ private fun ClockStylePreview(
                         weather = weatherSnapshot.current,
                         weatherSnapshot = weatherSnapshot,
                         modifier = Modifier.fillMaxWidth().padding(
-                            start = uiState.settings.listAppearance.startPadding,
-                            end = uiState.settings.listAppearance.endPadding, top = 12.dp, bottom = 12.dp),
+                            horizontal = uiState.settings.listAppearance.horizontalPadding, vertical = 12.dp),
                         interactive = false, clockTag = "clock_style_preview_text", dateTag = "clock_style_preview_date",
                     )
                 }

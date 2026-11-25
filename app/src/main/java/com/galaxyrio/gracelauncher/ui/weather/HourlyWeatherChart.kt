@@ -17,7 +17,6 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Matrix
 import androidx.compose.ui.graphics.Paint
@@ -45,10 +44,6 @@ import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-private val HumidityColor = Color(0xFF2196F3)
-// Fixed Celsius anchors: 0 blue, 10 green, 20 yellow, 30 red.
-private val TemperatureColors = listOf(0xFF2196F3, 0xFF4CAF50, 0xFFFDD835, 0xFFF44336).map { Color(it) }
-
 // Cubic quarter-waves stay smooth while their centerline follows each series.
 private fun Path.waveTo(start: Offset, end: Offset, amplitude: Float, wavelength: Float, originX: Float) {
     val distance = end.x - start.x
@@ -65,23 +60,6 @@ private fun Path.waveTo(start: Offset, end: Offset, amplitude: Float, wavelength
         cubicTo(x0 + step / 3, y(x0) + tangent(x0) * step / 3,
             x1 - step / 3, y(x1) - tangent(x1) * step / 3, x1, y(x1))
     }
-}
-
-// Exact colors sampled from the supplied six-level reference image.
-private val AirQualityColors = listOf(0xFF00FF00, 0xFFFFC107, 0xFFCE8500, 0xFFFF0000, 0xFFC41061, 0xFF800080).map { Color(it) }
-private val PlumeAqiThresholds = listOf(0, 20, 50, 100, 150, 250)
-
-private fun airQualityColor(value: Double): Color {
-    // Both supported sharing contracts use Plume AQI, not US AQI.
-    // Breezy: app/src/main/kotlin/org/breezyweather/domain/weather/index/PollutantIndex.kt
-    val level = PlumeAqiThresholds.indexOfLast { value >= it }.coerceIn(0, 5)
-    return AirQualityColors[level]
-}
-
-private fun temperatureColor(value: Double): Color {
-    val position = (value / 10).coerceIn(0.0, 3.0)
-    val index = position.toInt().coerceAtMost(2)
-    return lerp(TemperatureColors[index], TemperatureColors[index + 1], (position - index).toFloat())
 }
 
 @Composable
@@ -103,17 +81,15 @@ internal fun HourlyWeatherChart(hours: List<WeatherHour>, fields: Set<AgendaHour
     } }
     val colors = MaterialTheme.colorScheme
     val seriesColors = remember(colors) { AgendaHourWeatherField.entries.associateWith { field -> when (field) {
-        AgendaHourWeatherField.Humidity -> HumidityColor
-        AgendaHourWeatherField.Wind, AgendaHourWeatherField.Gusts -> colors.tertiary
+        AgendaHourWeatherField.Humidity -> colors.secondary
+        AgendaHourWeatherField.FeelsLike, AgendaHourWeatherField.Wind, AgendaHourWeatherField.Gusts -> colors.tertiary
         AgendaHourWeatherField.Precipitation, AgendaHourWeatherField.Rain, AgendaHourWeatherField.Snow,
         AgendaHourWeatherField.Ice, AgendaHourWeatherField.Thunderstorm -> colors.secondary
         else -> colors.primary
     } } }
-    fun valueColor(field: AgendaHourWeatherField, value: Double) = when (field) {
-        AgendaHourWeatherField.Temperature, AgendaHourWeatherField.FeelsLike, AgendaHourWeatherField.DewPoint -> temperatureColor(value)
-        AgendaHourWeatherField.AirQuality -> airQualityColor(value)
-        else -> seriesColors.getValue(field)
-    }
+    fun valueColor(field: AgendaHourWeatherField, value: Double): Color =
+        field.valueColors?.takeIf { appearance.hourWeatherStyle(field).useValueColorChart }
+            ?.color(value, HourWeatherChartType.Bar) ?: seriesColors.getValue(field)
     // State is keyed by hour position, not series. Each column interpolates its own new height.
     val barHeights = hours.indices.map { index -> key(index) {
         val value = barField?.let { values[it]?.get(index) }
@@ -163,14 +139,9 @@ internal fun HourlyWeatherChart(hours: List<WeatherHour>, fields: Set<AgendaHour
             val range = ranges.getValue(field)
             return bottom - ((value - range.lower) / (range.upper - range.lower)).toFloat() * plotHeight
         }
-        fun brush(field: AgendaHourWeatherField): Brush = when (field) {
-            AgendaHourWeatherField.Temperature, AgendaHourWeatherField.FeelsLike, AgendaHourWeatherField.DewPoint ->
-                Brush.verticalGradient(TemperatureColors.reversed(), startY = rawY(30.0, field), endY = rawY(0.0, field))
-            AgendaHourWeatherField.AirQuality -> Brush.verticalGradient(
-                *AirQualityColors.indices.reversed().map { index -> (1f - PlumeAqiThresholds[index] / 250f) to AirQualityColors[index] }.toTypedArray(),
-                startY = top, endY = bottom)
-            else -> SolidColor(seriesColors.getValue(field))
-        }
+        fun brush(field: AgendaHourWeatherField): Brush =
+            field.valueColors?.takeIf { appearance.hourWeatherStyle(field).useValueColorChart }
+                ?.brush { value -> rawY(value, field) } ?: SolidColor(seriesColors.getValue(field))
         val waveAmplitude = minOf(2.dp.toPx(), plotHeight * .1f)
         val waveLength = column / 4
         val singlePointHalfWidth = waveLength / 2

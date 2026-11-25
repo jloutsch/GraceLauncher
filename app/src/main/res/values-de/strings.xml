@@ -537,8 +537,6 @@
     <string name="settings_wallpaper_dim_color_auto">Automatischer primärer Farbton</string>
     <string name="shortcuts_folders_title">Verknüpfungen und Ordner</string>
     <string name="shortcuts_folders_enable">App-Pop-Ups aktivieren</string>
-    <string name="popup_swipe_left_first">Links wischen, um das erste Objekt zu öffnen</string>
-    <string name="popup_swipe_left_first_summary">Die erste Verknüpfung, App oder App des Widgets im Pop-Up öffnen</string>
     <string name="popup_silent_notifications">Stille Benachrichtigungen</string>
     <string name="popup_normal_notifications">Standard Benachrichtigungen</string>
     <string name="popup_notification_normal">Normal anzeigen</string>

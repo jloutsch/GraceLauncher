@@ -136,7 +136,7 @@ class ItemIconStore(context: Context, private val packs: IconPackRepository) {
                     PrivateSpaceFolderId -> R.drawable.ms_lock
                     com.galaxyrio.gracelauncher.data.WorkProfileFolderId -> R.drawable.ms_work
                     com.galaxyrio.gracelauncher.data.RecentlyInstalledFolderId -> R.drawable.ms_history_2
-                    else -> if (app.isAppStack) R.drawable.ms_steppers else R.drawable.ms_folder
+                    else -> if (app.isWidgetStack) R.drawable.ms_widgets else if (app.isAppStack) R.drawable.ms_steppers else R.drawable.ms_folder
                 })
                     ?.mutate() ?: return@withContext null
                 glyph.setTint(colors.second)
@@ -245,7 +245,7 @@ class ItemIconStore(context: Context, private val packs: IconPackRepository) {
                 "pack" -> listOf(choice.source)
                 else -> emptyList()
             }
-            val source = if (app.folderId != null) app.folderId to app.isAppStack
+            val source = if (app.folderId != null) Triple(app.folderId, app.isAppStack, app.isWidgetStack)
                 else app.iconSourceRevision ?: app.profileIconSource?.cacheKey ?: app.icon
             val loadedPacks = selectedPacks.map { packs.load(it) }
             val usesCalendar = (choice.kind == "theme" && app.shortcut == null ||

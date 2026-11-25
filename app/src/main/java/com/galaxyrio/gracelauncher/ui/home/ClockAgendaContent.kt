@@ -9,7 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowText as Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -34,6 +34,8 @@ import androidx.compose.ui.unit.constrainWidth
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.galaxyrio.gracelauncher.ui.theme.ProvideFontShadow
+import com.galaxyrio.gracelauncher.ui.theme.resolvedFontShadow
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.ClockAgendaField
 import com.galaxyrio.gracelauncher.data.ClockAlignment
@@ -75,14 +77,15 @@ internal fun ClockAgendaContent(
     color: Color = LocalLauncherAppearance.current.text,
     centered: Boolean = false,
     rightAligned: Set<ClockAgendaField> = emptySet(),
-) {
+    useRelativeDates: Boolean = false,
+) = ProvideFontShadow(typography.shadow) {
     val locale = LocalConfiguration.current.locales[0]
     val dateLocale = remember(locale, useLatinLetters) { clockCalendarLocale(locale, useLatinLetters) }
     val use24Hour = DateFormat.is24HourFormat(LocalContext.current)
     val style = MaterialTheme.typography.bodyLarge.copy(
         fontFamily = rememberAppFontFamily(typography.fontId),
         fontSize = typography.size.sp, lineHeight = (typography.size * 1.5f).sp,
-        fontWeight = FontWeight(typography.weight), shadow = clockFontShadow(typography.fontShadow),
+        fontWeight = FontWeight(typography.weight), shadow = resolvedFontShadow().shadow,
     )
     val timeText = if (ClockAgendaField.Time in fields) {
         if (event.isAllDay) stringResource(R.string.all_day) else {
@@ -94,9 +97,13 @@ internal fun ClockAgendaContent(
     } else ""
     val dateText = if (ClockAgendaField.Date in fields) {
         // All-day timestamps encode UTC calendar dates, not a local time to shift.
-        DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(dateLocale, "MMMEd"), dateLocale)
+        val zone = ZoneId.systemDefault()
+        val dateZone = if (event.isAllDay) ZoneOffset.UTC else zone
+        val date = event.startsAt.atZone(dateZone).toLocalDate()
+        val relative = if (useRelativeDates) clockRelativeDate(date, now.atZone(zone).toLocalDate(), dateLocale) else null
+        relative ?: DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(dateLocale, "MMMEd"), dateLocale)
             .withDecimalStyle(DecimalStyle.of(dateLocale))
-            .withZone(if (event.isAllDay) ZoneOffset.UTC else ZoneId.systemDefault()).format(event.startsAt)
+            .withZone(dateZone).format(event.startsAt)
     } else ""
     val durationText = if (ClockAgendaField.Duration in fields) agendaDuration(event) else ""
     val countdown = if (ClockAgendaField.Countdown in fields) eventRemainingText(event, now) else ""

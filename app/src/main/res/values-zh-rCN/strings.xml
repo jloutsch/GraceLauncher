@@ -6,6 +6,7 @@
     <string name="tasks_enable">启用 Tasks.org</string>
     <string name="tasks_connection">连接</string>
     <string name="tasks_data">任务数据</string>
+    <string name="tasks_show_overdue">显示过期任务</string>
     <string name="tasks_sorting">任务排序</string>
     <string name="tasks_sort_by">排序方式</string>
     <string name="tasks_undated_first">无截止日期的任务优先</string>
@@ -39,6 +40,7 @@
     <string name="weather_chart">可视化图表</string>
     <string name="weather_chart_always_expanded">始终展开</string>
     <string name="weather_hour_show_text">显示文字</string>
+    <string name="weather_hour_use_value_color">使用数值颜色</string>
     <string name="weather_hour_show_chart">显示到图表</string>
     <string name="weather_chart_bar">柱状图</string>
     <string name="weather_chart_line">折线图</string>
@@ -121,6 +123,7 @@
     <string name="calendar_system_default_app">跟随系统默认</string>
     <string name="calendar_choose_app_description">选择用于打开日程的应用。</string>
     <string name="calendar_read_days">要读取的天数</string>
+    <string name="calendar_no_events_today">今天没有日程</string>
     <string name="calendar_deprioritize_all_day">降低全天事件的优先级</string>
     <string name="calendar_deprioritize_all_day_summary">同一天内优先显示有时间段的事件</string>
     <string name="calendar_display">显示</string>
@@ -234,7 +237,7 @@
     <string name="private_space_indicator_summary">在私密应用图标上显示标志</string>
     <string name="private_space_lock_immediately">立即锁定</string>
     <string name="private_space_lock_on_exit">离开列表时自动关闭</string>
-    <string name="private_space_lock_on_screen">保持解锁直到屏幕锁定</string>
+    <string name="private_space_lock_on_screen">遵循系统的自动锁定设置</string>
     <string name="private_space_display_folder">文件夹</string>
     <string name="private_space_edit">编辑</string>
     <string name="private_space_edit_summary">修改名称、图标和应用排序</string>
@@ -302,7 +305,7 @@
     <string name="icon_edit_failed">无法保存此图标，请尝试其他图片或图标。</string>
     <string name="edit_app_popup">编辑 %1$s 弹窗</string>
     <string name="popup_app_shortcuts">%1$s 快捷方式</string>
-    <string name="popup_custom_widget">自定义小组件</string>
+    <string name="popup_custom_widget">小组件</string>
     <string name="popup_add_new">添加新的小组件</string>
     <string name="popup_show_in_app_list">显示在应用列表</string>
     <string name="popup_empty">从下方选择快捷方式、应用或小组件。</string>
@@ -372,7 +375,8 @@
     <string name="app_category_condition">显示条件</string>
     <string name="app_category_always">始终显示</string>
     <string name="app_category_headphones">连接耳机时</string>
-    <string name="app_category_time">每日时间段</string>
+    <string name="app_category_time">时间段</string>
+    <string name="app_category_all_day">全天</string>
     <string name="app_category_start">开始时间</string>
     <string name="app_category_end">结束时间</string>
     <string name="app_category_delete">删除类别</string>
@@ -387,6 +391,19 @@
     <string name="edit_folder">编辑文件夹</string>
     <string name="empty_folder">文件夹中暂无应用</string>
     <!-- 通知 -->
+    <string name="popup_notification_actions">操作按钮</string>
+    <string name="popup_notification_direct_reply">直接回复</string>
+    <string name="popup_notification_suggested_replies">候选回复</string>
+    <string name="popup_notification_progress">进度通知</string>
+    <string name="notification_wider_details">更宽的通知详情</string>
+    <string name="notification_wider_details_summary">在弹出窗口中使用头像下方的完整宽度</string>
+    <string name="notification_reply_hint">输入回复…</string>
+    <string name="notification_reply_send">发送回复</string>
+    <string name="notification_reply_close">关闭回复</string>
+    <string name="notification_reply_sent">已回复</string>
+    <string name="notification_action_failed">此操作已失效，请打开应用继续</string>
+    <string name="notification_unlock_required">请先解锁设备</string>
+    <string name="notification_progress_label">进度</string>
     <string name="notification_dismiss">清除</string>
     <string name="notification_now">刚刚</string>
     <string name="notification_minutes">%1$d分钟前</string>
@@ -445,6 +462,8 @@
     <string name="settings_language">语言</string>
     <string name="settings_allow_screen_rotation">允许屏幕旋转</string>
     <string name="settings_allow_screen_rotation_summary">遵循系统旋转设置，关闭后桌面固定为竖屏。</string>
+    <string name="settings_remember_screen_position">记住屏幕位置</string>
+    <string name="settings_remember_screen_position_summary">解锁或从应用返回时保留上次的页面，关闭后回到首页。</string>
     <string name="settings_tablets_foldables">平板与折叠屏</string>
     <string name="settings_lab">实验室</string>
     <string name="lab_accessibility">无障碍</string>
@@ -755,8 +774,10 @@
     <!-- Clock style -->
     <string name="clock_style_apply">应用</string>
     <string name="clock_layout">时钟样式</string>
-    <string name="clock_single_line">单行排列</string>
-    <string name="clock_two_lines">双行排列</string>
+    <string name="clock_single_line">水平排列</string>
+    <string name="clock_two_lines">竖直排列</string>
+    <string name="clock_minute_scale">分字体缩放</string>
+    <string name="clock_second_scale">秒字体缩放</string>
     <string name="clock_font_default">默认字体 · Josefin Sans</string>
     <string name="clock_font_import">导入字体</string>
     <string name="clock_font_importing">正在导入字体…</string>
@@ -808,7 +829,7 @@
     <string name="app_selection_fast_scroll">快速滚动应用列表</string>
     <!-- Home widgets -->
     <string name="widget_home_menu">Grace 小组件</string>
-    <string name="widget_add">添加自定义小组件</string>
+    <string name="widget_add">添加小组件</string>
     <string name="widget_choose">选择小组件</string>
     <string name="widget_search">搜索小组件</string>
     <string name="widget_none">未找到小组件</string>
@@ -822,10 +843,13 @@
     <string name="widget_move_home">移动时钟和应用列表</string>
     <string name="widget_resize">调整小组件大小</string>
     <string name="grace_widgets_title">Grace 小组件</string>
+    <string name="grace_widgets_add">添加 Grace 小组件</string>
     <string name="grace_widget_baseline">基准线（不可见）</string>
     <string name="popup_widget_full_width">全宽</string>
     <string name="popup_widget_background">底色</string>
-    <string name="popup_widget_content_scale">内容缩放 · %1$d%%</string>
+    <string name="popup_widget_background_color">背景颜色</string>
+    <string name="popup_widget_background_opacity">背景不透明度</string>
+    <string name="popup_widget_content_scale">内容 · %1$d%%</string>
     <string name="widget_adjust_up">向上移动／减小高度</string>
     <string name="widget_adjust_down">向下移动／增加高度</string>
     <string name="widget_calendar">日历</string>
@@ -867,8 +891,6 @@
     <string name="shortcuts_folders_title">快捷方式与文件夹</string>
     <string name="popups_title">弹出窗口</string>
     <string name="shortcuts_folders_enable">启用应用弹出窗口</string>
-    <string name="popup_swipe_left_first">左滑打开第一项</string>
-    <string name="popup_swipe_left_first_summary">打开弹出窗口中的第一个快捷方式、应用或小组件所属应用</string>
     <string name="popup_silent_notifications">静默通知</string>
     <string name="popup_normal_notifications">普通通知</string>
     <string name="popup_single_line_previews">单行显示通知</string>
@@ -909,6 +931,7 @@
     <string name="widget_screen_swipe_disabled">可以在手势或 Grace 按钮动作中设置进入</string>
     <string name="widget_screen_columns">每行格子数</string>
     <string name="widget_screen_edit">编辑小组件页面</string>
+    <string name="widget_screen_add_items">添加应用、快捷方式和小组件</string>
     <string name="widget_screen_open">打开小组件页面</string>
     <string name="app_stacks_title">应用堆</string>
     <string name="app_stack_create">创建应用堆</string>
@@ -1001,6 +1024,8 @@
     <string name="clock_equal_width_characters">字符等宽排列</string>
     <string name="clock_center_characters">居中等宽字符</string>
     <string name="clock_use_latin_letters">始终使用拉丁字母</string>
+    <string name="clock_use_relative_dates">使用相对日期</string>
+    <string name="clock_use_relative_dates_summary">用今天和明天代替对应日期</string>
     <string name="clock_layout_section">布局</string>
     <string name="clock_show_clock">显示时钟</string>
     <string name="clock_show_weekday">显示星期</string>
@@ -1059,9 +1084,11 @@
     <string name="category_open_dw">前往数字健康</string>
     <string name="app_list_bottom_folders">底部文件夹</string>
     <string name="app_list_edit">编辑应用列表</string>
+    <string name="app_list_align_with_home">与主页对齐</string>
     <string name="app_list_grace_settings">Grace 设置</string>
     <string name="app_list_add_grace">Grace 启动器</string>
     <string name="alphabet_show_in">显示在</string>
+    <string name="list_hide_symbol">隐藏符号</string>
     <string name="list_symbol_horizontal_offset">符号水平偏移</string>
     <string name="alphabet_touch_area">显示触控区域</string>
     <string name="alphabet_touch_width">右侧触控宽度</string>
@@ -1137,7 +1164,7 @@
     <string name="agenda_title_time">当前时间</string>
     <string name="agenda_title_quote">名言</string>
     <string name="agenda_title_text">自定义文本</string>
-    <string name="agenda_widget_region">小组件区域</string>
+    <string name="agenda_widget_region">小组件</string>
     <string name="agenda_daily">每日</string>
     <string name="agenda_daily_content">每日内容</string>
     <string name="agenda_calendar_content">日程内容</string>
@@ -1150,4 +1177,52 @@
     <string name="agenda_choose_create_action">选择添加内容</string>
     <string name="agenda_new_task">新建任务</string>
     <string name="agenda_unsaved_message">日程页面的更改尚未保存。</string>
+    <string name="widget_stacks_title">小组件堆</string>
+    <string name="widget_stack_create">添加小组件堆</string>
+    <string name="widget_stacks_empty">创建小组件堆，将多个小组件放在同一区域。</string>
+    <string name="widget_stack_edit">编辑小组件堆</string>
+    <string name="widget_stack_name">小组件堆名称</string>
+    <string name="widget_stack_placement">显示小组件堆的位置</string>
+    <string name="widget_stack_delete">删除小组件堆</string>
+    <string name="widget_stack_delete_confirmation">删除“%1$s”及其中的小组件？</string>
+    <string name="widget_stack_empty">向此堆中添加小组件</string>
+    <string name="widget_stack_add">添加小组件堆</string>
+    <string name="widget_stack_remove">移除小组件堆</string>
+    <string name="widget_stack_height">小组件堆高度</string>
+    <string name="widget_stack_background_color">背景颜色</string>
+    <string name="widget_stack_opacity">背景不透明度</string>
+    <string name="widget_stack_apply_background_all">应用背景颜色到所有</string>
+    <string name="widget_stack_remove_widget_title">移除小组件</string>
+    <string name="widget_stack_remove_widget_confirmation">从此小组件堆中移除“%1$s”？</string>
+    <string name="font_shadow_soft">柔和</string>
+    <string name="font_shadow_sharp">锐利</string>
+    <string name="font_shadow_custom">自定义</string>
+    <string name="font_shadow_opacity">阴影不透明度</string>
+    <string name="font_shadow_blur">模糊</string>
+    <string name="font_shadow_offset_x">X 轴偏移</string>
+    <string name="font_shadow_offset_y">Y 轴偏移</string>
+    <string name="font_shadow_spread">扩展范围</string>
+    <string name="font_shadow_override">覆盖默认阴影</string>
+    <string name="font_shadow_unsaved_message">是否在退出前保存字体阴影的更改？</string>
+    <string name="popup_notifications_heading">通知</string>
+    <string name="popup_gestures_heading">手势</string>
+    <string name="popup_action_open">打开弹出窗口</string>
+    <string name="popup_action_first_item">打开内部第一项</string>
+    <string name="popup_action_first_notification">打开内部第一条通知</string>
+    <string name="popup_action_dismiss_first">删除内部第一条通知</string>
+    <string name="popup_action_dismiss_all">删除应用的所有通知</string>
+    <string name="popup_double_tap_delay">开启双击手势会增加单击延迟。</string>
+    <string name="home_screen_enable">启用主页</string>
+    <string name="home_disable_scrolling">禁用滚动</string>
+    <string name="home_disable_scrolling_summary">锁定桌面，可能会遮挡主页信息</string>
+    <string name="home_disable_stretch">禁用拉伸效果</string>
+    <string name="calendar_date_long_press">长按日期</string>
+    <string name="calendar_action_open_calendar">打开日历</string>
+    <string name="calendar_action_open_agenda">打开日程页面</string>
+    <string name="calendar_action_new_event">新建日程</string>
+    <string name="calendar_action_new_task">新建任务</string>
+    <string name="notification_reduce_repeated_senders">减少重复发送者信息</string>
+    <string name="popup_confirm_multiple_apps">清除多个应用的通知前确认</string>
+    <string name="backup_in_progress">请稍候…</string>
+    <string name="settings_backup_summary">保存和恢复设置</string>
 </resources>

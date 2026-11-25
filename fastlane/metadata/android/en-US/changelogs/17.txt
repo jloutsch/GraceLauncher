@@ -1,0 +1,23 @@
+Grace Launcher 1.3.0
+Appearance:
+• Harder text shadows
+Features:
+• Widget stacks
+• Private apps stay running with lock option off
+• Notification replies/actions
+• More list gesture actions
+• Progress notifications
+• Screen-off: keep page or home
+• Hide archived apps
+• Backups
+• Lock home scrolling
+App list:
+• Align height with home
+• Hide symbols
+Grace Widgets:
+• Weather refresh fix
+• Clock H/M/S sizes
+• Better centering
+• Relative agenda times
+• Overdue tasks
+• Date tap/hold actions

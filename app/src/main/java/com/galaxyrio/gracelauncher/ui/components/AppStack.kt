@@ -1,5 +1,10 @@
 package com.galaxyrio.gracelauncher.ui.components
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateIntOffsetAsState
+import androidx.compose.animation.core.snap
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.indication
@@ -21,6 +26,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.*
@@ -40,6 +46,7 @@ internal fun AppStack(
     onLaunch: (LauncherApp, Rect) -> Unit, onDetails: (LauncherApp) -> Unit, onEdit: () -> Unit,
     modifier: Modifier = Modifier, enabled: Boolean = true, gridManaged: Boolean = false,
     iconSize: Dp = 40.dp, onWallpaper: Boolean = true,
+    gestures: AppRowGestures? = null,
 ) {
     // Every surface that places a stack (home, drawer, folders, Widget Screen) shows widget stacks here too.
     if (stack.isWidgetStack) {
@@ -55,7 +62,21 @@ internal fun AppStack(
         if (entry.widget != null) null else uiState.findItem(entry.key)?.takeIf { it.folderId == null }
     }
     val editLabel = stringResource(R.string.app_stack_edit)
-    BoxWithConstraints(modifier.fillMaxWidth().testTag("app_stack:${stack.id}")) {
+    val popupSettings = LocalPopupGestureSettings.current
+    val owner = uiState.folderItem(stack)
+    var anchor by remember(stack.id) { mutableStateOf(Rect.Zero) }
+    val anchorInset = with(LocalDensity.current) { AppStackInset.dp.toPx() }
+    val anchorSize = with(LocalDensity.current) { displayedIconSize.toPx() }
+    // Fork: horizontal swipes turn the stack's pages, so of upstream's stack gestures only double-tap applies.
+    val gestureEnabled = inputEnabled && onWallpaper && !gridManaged && gestures?.onGesture != null
+    val doubleTap: (() -> Unit)? = if (gestureEnabled && popupSettings.doubleTap.selected.isNotEmpty())
+        ({ gestures.onGesture(owner, PopupGesture.DoubleTap, anchor, null) }) else null
+    BoxWithConstraints(modifier.fillMaxWidth().testTag("app_stack:${stack.id}")
+        .onGloballyPositioned {
+            val bounds = it.boundsInWindow()
+            anchor = Rect(bounds.left + anchorInset, bounds.top + anchorInset,
+                bounds.left + anchorInset + anchorSize, bounds.top + anchorInset + anchorSize)
+        }) {
         val columns = appStackColumns(maxWidth.value, displayedIconSize.value)
         val inset = AppStackInset.dp
         // Anchor the first icon's LEFT edge, rather than centering it in a wide cell.
@@ -70,7 +91,7 @@ internal fun AppStack(
                 .clip(RoundedCornerShape(displayedIconSize / 2 + inset))
                 .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = if (onWallpaper) 0.25f else 1f))
                 .then(if (gridManaged) Modifier else Modifier.combinedClickable(enabled = inputEnabled,
-                    onClick = {}, onLongClick = onEdit))
+                    onClick = {}, onLongClick = onEdit, onDoubleClick = doubleTap))
                 .semantics {
                     contentDescription = stack.name
                     customActions = listOf(CustomAccessibilityAction(editLabel) { if (inputEnabled) onEdit(); inputEnabled })

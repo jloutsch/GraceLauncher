@@ -67,6 +67,7 @@ class CategoryMembershipTest {
     @Test fun protectedPrivateAppsNeverEnterManualOrNotificationCategories() {
         val privateApp = app("private").copy(user = workUser, userSerial = 10, isPrivateSpace = true)
         val state = LauncherUiState(isLoadingApps = false, privateApps = listOf(privateApp),
+            settings = LauncherSettings(privateSpace = ProfileSettings(passwordProtected = true)),
             privateSpace = PrivateSpaceState(supported = true, user = workUser, serial = 10, locked = false, accessible = true),
             categoryNotifications = mapOf(notificationId(privateApp) to setOf(CategoryNotificationLevel.High)))
         val manual = AppCategory("manual", itemKeys = listOf(privateApp.key))

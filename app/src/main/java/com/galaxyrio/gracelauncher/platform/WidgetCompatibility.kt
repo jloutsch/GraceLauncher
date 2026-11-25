@@ -5,6 +5,7 @@ import android.appwidget.AppWidgetHostView
 import android.appwidget.AppWidgetManager
 import android.appwidget.AppWidgetProviderInfo
 import android.content.Context
+import android.graphics.Rect
 import android.os.Build
 import android.os.Bundle
 import android.util.SizeF
@@ -27,6 +28,13 @@ internal fun AppWidgetProviderInfo.hasOptionalConfiguration(): Boolean =
     Build.VERSION.SDK_INT >= 31 &&
         widgetFeatures and AppWidgetProviderInfo.WIDGET_FEATURE_CONFIGURATION_OPTIONAL != 0 &&
         widgetFeatures and AppWidgetProviderInfo.WIDGET_FEATURE_RECONFIGURABLE != 0
+
+/** Only normal grid cells retain the old horizontal inset, now outside the host. */
+internal fun widgetGridOuterPadding(context: Context, info: AppWidgetProviderInfo, fullWidth: Boolean = false): Rect =
+    if (fullWidth) Rect() else AppWidgetHostView.getDefaultPaddingForWidget(context, info.provider, null).apply {
+        top = 0
+        bottom = 0
+    }
 
 internal fun AppWidgetProviderInfo.widthBounds(padding: Float, unit: Float, capacity: Int, minimum: Int = 1) =
     widgetAxisBounds(minWidth, minResizeWidth, if (Build.VERSION.SDK_INT >= 31) maxResizeWidth else 0,
@@ -56,24 +64,22 @@ internal fun initialWidgetOptions(context: Context, info: AppWidgetProviderInfo,
     owner: String? = null, columns: Int = 4, homeSidePadding: Int = 44): Bundle {
     val density = context.resources.displayMetrics.density
     val screenWidth = context.resources.configuration.screenWidthDp.toFloat().coerceAtLeast(1f)
-    val padding = AppWidgetHostView.getDefaultPaddingForWidget(context, info.provider, null)
-    val horizontal = (padding.left + padding.right) / density
-    val vertical = (padding.top + padding.bottom) / density
     if (owner == WidgetScreenKey) {
+        val outer = widgetGridOuterPadding(context, info)
+        val gridHorizontal = (outer.left + outer.right) / density
         val count = columns.coerceIn(2, 8)
         val cellWidth = ((screenWidth - 32f) / count).coerceAtLeast(1f)
         val cellHeight = cellWidth.coerceIn(88f, 112f)
-        val width = info.widthBounds((horizontal + 8f) * density, cellWidth * density, count)
-        val height = info.heightBounds((vertical + 8f) * density, cellHeight * density, 20)
+        val width = info.widthBounds((gridHorizontal + 8f) * density, cellWidth * density, count)
+        val height = info.heightBounds(8f * density, cellHeight * density, 20)
         val target = if (Build.VERSION.SDK_INT >= 31)
             widgetTargetSize(width, height, info.targetCellWidth, info.targetCellHeight)
         else width.initial to height.initial
-        return widgetSizeOptions(target.first * cellWidth - 8f - horizontal,
-            target.second * cellHeight - 8f - vertical)
+        return widgetSizeOptions(target.first * cellWidth - 8f - gridHorizontal,
+            target.second * cellHeight - 8f)
     }
     val available = (screenWidth - if (owner == null || owner == HomeContentKey)
-        (homeSidePadding.coerceIn(8, 80) * 2 + 20f) else 64f).coerceAtLeast(1f)
-    val width = info.widthBounds(horizontal * density, density, available.toInt().coerceAtLeast(1))
-    val height = info.heightBounds(vertical * density, density, 1600, 48)
-    return widgetSizeOptions(width.max - horizontal, height.initial - vertical)
+        (homeSidePadding.coerceIn(8, 80) * 2f) else 64f).coerceAtLeast(1f)
+    val height = info.heightBounds(0f, density, 1600, 48)
+    return widgetSizeOptions(available, height.initial.toFloat())
 }

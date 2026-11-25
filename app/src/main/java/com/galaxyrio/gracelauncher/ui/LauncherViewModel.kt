@@ -1,5 +1,6 @@
 package com.galaxyrio.gracelauncher.ui
 
+import com.galaxyrio.gracelauncher.data.FontShadow
 import android.Manifest
 import android.app.Application
 import android.content.BroadcastReceiver
@@ -17,9 +18,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.galaxyrio.gracelauncher.data.AppRepository
-import com.galaxyrio.gracelauncher.data.backup.widgetIdsToDelete
-import com.galaxyrio.gracelauncher.data.backup.pendingWidgetCount
-import com.galaxyrio.gracelauncher.data.backup.withoutWidgetPlaceholders
 import com.galaxyrio.gracelauncher.data.AppCategory
 import com.galaxyrio.gracelauncher.data.FavoritesCategoryId
 import com.galaxyrio.gracelauncher.data.migrateHomeCategories
@@ -40,8 +38,10 @@ import com.galaxyrio.gracelauncher.data.CatalogRefreshState
 import com.galaxyrio.gracelauncher.data.FavoritesStore
 import com.galaxyrio.gracelauncher.data.LauncherApp
 import com.galaxyrio.gracelauncher.data.LauncherAppOrder
+import com.galaxyrio.gracelauncher.data.LauncherBackup
 import com.galaxyrio.gracelauncher.data.LauncherDatabase
 import com.galaxyrio.gracelauncher.data.LauncherFolder
+import com.galaxyrio.gracelauncher.data.WidgetStackStyle
 import com.galaxyrio.gracelauncher.data.FolderPlacement
 import com.galaxyrio.gracelauncher.data.LauncherPreferences
 import com.galaxyrio.gracelauncher.data.LauncherSettings
@@ -94,6 +94,7 @@ import com.galaxyrio.gracelauncher.data.notifications.appNotifications
 import com.galaxyrio.gracelauncher.data.weather.BreezyWeatherRepository
 import com.galaxyrio.gracelauncher.data.weather.GadgetbridgeWeatherRepository
 import com.galaxyrio.gracelauncher.data.weather.WeatherConnectionMode
+import com.galaxyrio.gracelauncher.data.weather.WeatherRefreshPolicy
 import com.galaxyrio.gracelauncher.data.weather.WeatherState
 import com.galaxyrio.gracelauncher.data.weather.WeatherStatus
 import kotlinx.coroutines.CancellationException
@@ -111,10 +112,14 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.NonCancellable
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
+import java.time.DayOfWeek
 
 enum class ScheduleStatus {
     PermissionRequired,
@@ -124,7 +129,7 @@ enum class ScheduleStatus {
 }
 
 private fun recentInstallations(apps: List<LauncherApp>): List<LauncherApp> = apps.asSequence()
-        .filter { it.shortcut == null && it.folderId == null && !it.isPrivateSpace && !it.isLauncherSettings }
+        .filter { it.shortcut == null && it.folderId == null && !it.isPrivateSpace && !it.isLauncherSettings && !it.isArchived }
         .sortedWith(compareByDescending<LauncherApp> { it.firstInstallTime }.then(LauncherAppOrder))
         .distinctBy { it.userSerial to it.packageName }.take(8).toList()
 
@@ -150,6 +155,7 @@ data class LauncherUiState(
     val isLoadingSettings: Boolean = false,
     val settingsLoadFailed: Boolean = false,
     val settingsSaveFailed: Boolean = false,
+    val backupInProgress: Boolean = false,
     val iconPacks: List<IconPackInfo> = emptyList(),
     val isLoadingIconPacks: Boolean = false,
     val iconPacksLoadFailed: Boolean = false,
@@ -166,8 +172,6 @@ data class LauncherUiState(
     val folderApps: List<LauncherApp> = emptyList(),
     val graceButtonApp: LauncherApp? = null,
     val popups: Map<String, List<PopupItem>> = emptyMap(),
-    /** Imported widgets not set up yet (fork); home offers to set them up one tap at a time. */
-    val pendingWidgetRestores: Int = 0,
     val itemIcons: Map<String, ItemIcon> = emptyMap(),
     val itemRevision: Int = 0,
     val privateSpace: PrivateSpaceState = PrivateSpaceState(),
@@ -194,7 +198,7 @@ data class LauncherUiState(
         ?: graceButtonApp?.takeIf { it.key == key }
 
     val privateFolder: LauncherFolder get() = settings.privateSpace.folder(privateSpaceApps)
-    val workProfileApps: List<LauncherApp> get() = settings.workProfile.orderedApps(apps.filter { it.isWorkProfile && it.shortcut == null })
+    val workProfileApps: List<LauncherApp> get() = settings.workProfile.orderedApps(apps.filter { it.isWorkProfile && it.shortcut == null && !it.isArchived })
     val workFolder: LauncherFolder get() = settings.workProfile.folder(workProfileApps, WorkProfileFolderId)
     // Locking/pausing a profile does not remove its pinned folder; only its contents are protected.
     val canFavoritePrivateSpace: Boolean get() = !isLoadingSettings && !settingsLoadFailed &&
@@ -223,7 +227,8 @@ data class LauncherUiState(
     fun folderItem(folder: LauncherFolder): LauncherApp = ((if (folder.id == PrivateSpaceFolderId) privateFolderApp
         else if (folder.id == WorkProfileFolderId) workFolderApp
         else folderApps.firstOrNull { it.folderId == folder.id })
-        ?: folder.asApp()).copy(label = folder.name, originalLabel = folder.name)
+        ?: folder.asApp()).copy(label = folder.name, originalLabel = folder.name,
+            isAppStack = folder.isAppStack, isWidgetStack = folder.isWidgetStack)
 
     fun popupItems(owner: LauncherApp, defaults: List<LauncherApp>): List<PopupItem> {
         if (owner.folderId == RecentlyInstalledFolderId) return recentlyInstalledApps.map { PopupItem(it.key) }
@@ -232,23 +237,27 @@ data class LauncherUiState(
             ?: (if (owner.folderId == PrivateSpaceFolderId) privateSpaceApps.map { it.key }
                 else if (owner.folderId == null) defaults.map { it.key }
                 else folders.firstOrNull { it.id == owner.folderId }?.appKeys.orEmpty()).distinct().map { PopupItem(it) }
-        return if (owner.folderId != PrivateSpaceFolderId && !settings.privateSpace.exposesApps)
+        val permitted = if (owner.folderId != PrivateSpaceFolderId && !settings.privateSpace.exposesApps)
             items.filterNot { it.key.startsWith("profile:") && findItem(it.key)?.isPrivateSpace != false } else items
+        // Folder contents follow the same archive rule as the drawer; search is unaffected.
+        return permitted.filterNot { findItem(it.key)?.isArchived == true }
     }
 
-    fun ownNotificationsFor(app: LauncherApp, expanded: Boolean): List<AppNotification> =
+    fun ownNotificationsFor(app: LauncherApp, expanded: Boolean, includeHidden: Boolean = false): List<AppNotification> =
         if (app.shortcut != null || app.user != null || app.folderId != null) emptyList()
-        else notifications[app.packageName].orEmpty().filter { settings.shortcutsFolders.showsNotification(it.silent, expanded) }
+        else notifications[app.packageName].orEmpty().filter {
+            includeHidden || settings.shortcutsFolders.showsNotification(it.silent, expanded)
+        }
 
     /** An outer row previews its own notifications and those of the apps shown inside it. */
-    fun notificationsFor(app: LauncherApp, expanded: Boolean): List<AppNotification> {
+    fun notificationsFor(app: LauncherApp, expanded: Boolean, includeHidden: Boolean = false): List<AppNotification> {
         if (app.shortcut != null || app.user != null || notifications.isEmpty()) return emptyList()
         return buildList {
-            addAll(ownNotificationsFor(app, expanded))
+            addAll(ownNotificationsFor(app, expanded, includeHidden))
             // Use the same contents/privacy filtering as the panel. Shortcuts and widget
             // providers do not stand for app rows; nested pop-ups are not expanded here.
             popupItems(app, emptyList()).filter { it.widget == null }.forEach { entry ->
-                findItem(entry.key)?.let { addAll(ownNotificationsFor(it, expanded)) }
+                findItem(entry.key)?.let { addAll(ownNotificationsFor(it, expanded, includeHidden)) }
             }
         }.distinctBy { it.key }.sortedByDescending { it.postedAt }
     }
@@ -277,7 +286,7 @@ data class LauncherUiState(
     val appListApps: List<LauncherApp>
         get() = if (isLoadingSettings || settingsLoadFailed) emptyList()
         else (if (settings.privateSpace.display == PrivateSpaceDisplay.NormalApp) allApps else apps + publicPrivateShortcuts)
-            .filterNot { it.key in effectiveHiddenAppKeys }
+            .filterNot { it.key in effectiveHiddenAppKeys || it.isArchived }
             .filterNot { it.isWorkProfile && it.shortcut == null && settings.workProfile.enabled &&
                 settings.workProfile.display != PrivateSpaceDisplay.NormalApp }
 
@@ -285,7 +294,7 @@ data class LauncherUiState(
         get() {
             if (isLoadingSettings || settingsLoadFailed) return emptyList()
             val favorites = (allApps + shortcutApps.filter { !it.isPrivateSpace || (settings.privateSpace.exposesApps && privateContentVisible) })
-                .filter { it.key in favoriteKeys }.associateBy(LauncherApp::key)
+                .filter { it.key in favoriteKeys && !it.isArchived }.associateBy(LauncherApp::key)
             return (favoriteOrder + favorites.keys).distinct().mapNotNull(favorites::get)
         }
 
@@ -330,9 +339,9 @@ data class LauncherUiState(
         if (isLoadingSettings || settingsLoadFailed) return emptyList()
         fun available(app: LauncherApp) = !app.isPrivateSpace || (settings.privateSpace.exposesApps && privateContentVisible)
         if (category.inclusion == CategoryInclusion.Manual) return category.itemKeys.filter { key ->
-            findItem(key)?.let(::available) == true
+            findItem(key)?.let { available(it) && !it.isArchived } == true
         }
-        val candidates = allApps.filter { app -> available(app) && app.key !in effectiveHiddenAppKeys &&
+        val candidates = allApps.filter { app -> available(app) && app.key !in effectiveHiddenAppKeys && !app.isArchived &&
             app.shortcut == null && app.folderId == null && !app.isLauncherSettings }
         return when (category.dynamicRule) {
             CategoryDynamicRule.Notifications -> candidates.filter { app ->
@@ -347,8 +356,8 @@ data class LauncherUiState(
         }.map(LauncherApp::key)
     }
 
-    internal fun visibleHomeContent(headphones: Boolean, minuteOfDay: Int) =
-        com.galaxyrio.gracelauncher.data.expandHomeCategories(homeItems, appCategories, headphones, minuteOfDay,
+    internal fun visibleHomeContent(headphones: Boolean, minuteOfDay: Int, dayOfWeek: DayOfWeek) =
+        com.galaxyrio.gracelauncher.data.expandHomeCategories(homeItems, appCategories, headphones, minuteOfDay, dayOfWeek,
             categoryItems = ::categoryItems) { key ->
             findItem(key)?.let { !it.isPrivateSpace || (settings.privateSpace.exposesApps && privateContentVisible) } == true
         }
@@ -463,8 +472,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
                 val reload = !itemsReady || snapshot.icons != itemsSnapshot.icons || snapshot.shortcuts != itemsSnapshot.shortcuts
                 itemsReady = true
                 itemsSnapshot = snapshot
-                _uiState.update { it.copy(popups = snapshot.popups.withoutWidgetPlaceholders(), itemIcons = snapshot.icons,
-                    pendingWidgetRestores = snapshot.popups.pendingWidgetCount(),
+                _uiState.update { it.copy(popups = snapshot.popups, itemIcons = snapshot.icons,
                     shownShortcutKeys = snapshot.shortcuts.filter { saved -> saved.showInAppList }.map { saved -> saved.itemKey }.toSet(),
                     itemRevision = it.itemRevision + 1) }
                 if (reload) refreshApps()
@@ -689,7 +697,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         (_uiState.value.folders + _uiState.value.workFolder + _uiState.value.privateFolder).forEach {
             // Profile-folder membership changes as each preview batch arrives.
             // Only the folder's own appearance belongs in its icon cache stamp.
-            put(it.key, "${get(it.key).orEmpty()}:${it.name}:${it.isAppStack}")
+            put(it.key, "${get(it.key).orEmpty()}:${it.name}:${it.isAppStack}:${it.isWidgetStack}")
         }
     }
 
@@ -1006,18 +1014,24 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val locationId = if (gadgetbridge) connection.gadgetbridgeLocationId else state.settings.weatherLocationId
         val request = Triple(connection.mode, locationId, if (gadgetbridge) connection.temperatureUnit.resolvedUnit() else null)
         val sameRequest = request == lastWeatherRequest
-        if (!force && sameRequest && (weatherLoadJob?.isActive == true ||
-                (state.weather.status == WeatherStatus.Ready &&
-                    SystemClock.elapsedRealtime() - lastWeatherRefresh < 15 * 60_000L))) return
+        if (!WeatherRefreshPolicy.shouldRead(
+                force = force,
+                sameRequest = sameRequest,
+                readInProgress = weatherLoadJob?.isActive == true,
+                weather = state.weather,
+                elapsedSinceLastRead = SystemClock.elapsedRealtime() - lastWeatherRefresh,
+            )) return
         weatherLoadJob?.cancel()
         lastWeatherRequest = request
+        val cached = state.weather.takeIf { sameRequest && it.snapshot != null }
         weatherLoadJob = viewModelScope.launch {
-            val previous = _uiState.value.weather
-            _uiState.update { it.copy(weather = previous.copy(status = WeatherStatus.Loading,
-                snapshot = previous.snapshot.takeIf { sameRequest && (previous.selectedLocationId == locationId || locationId == null) })) }
+            // A background read leaves the currently displayed weather intact.
+            if (cached == null) {
+                _uiState.update { it.copy(weather = it.weather.copy(status = WeatherStatus.Loading, snapshot = null)) }
+            }
             val weather = if (gadgetbridge) gadgetbridgeWeatherRepository.load(connection) else weatherRepository.load(locationId)
             lastWeatherRefresh = SystemClock.elapsedRealtime()
-            _uiState.update { it.copy(weather = weather) }
+            _uiState.update { it.copy(weather = WeatherRefreshPolicy.retainLastSnapshot(weather, cached)) }
         }
     }
 
@@ -1347,7 +1361,12 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         return mediaRepository.dismiss(sessionId, revision)
     }
     fun dismissNotification(key: String, revision: Long): Boolean = appNotifications.dismiss(key, revision)
+
+    fun dismissAllNotifications(packageName: String): Boolean = appNotifications.dismissAll(packageName)
     fun openNotification(key: String, revision: Long): Boolean = appNotifications.open(getApplication(), key, revision)
+
+    fun performNotificationAction(key: String, revision: Long, actionId: String, reply: String?, fromChoice: Boolean) =
+        appNotifications.performAction(getApplication(), key, revision, actionId, reply, fromChoice)
 
     fun renameApp(app: LauncherApp, label: String) {
         if (app.folderId == RecentlyInstalledFolderId) {
@@ -1386,6 +1405,44 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
 
     fun reorderWorkApps(keys: List<String>) = updateSettings {
         it.copy(workProfile = it.workProfile.copy(appOrder = keys.distinct()))
+    }
+
+    private val launcherBackup by lazy { LauncherBackup(application, LauncherDatabase.getInstance(application)) }
+
+    suspend fun exportBackup(uri: Uri): Result<Unit> = runBackup(uri, restoring = false)
+
+    suspend fun restoreBackup(uri: Uri): Result<Unit> = runBackup(uri, restoring = true)
+
+    private suspend fun runBackup(uri: Uri, restoring: Boolean): Result<Unit> {
+        if (_uiState.value.backupInProgress) return Result.failure(IllegalStateException("A backup operation is already running."))
+        // Awaiting from a page does not give that page ownership of this job. Navigating away
+        // cannot cancel a restore, its rollback, or the required cache-reset restart afterwards.
+        return viewModelScope.async(start = CoroutineStart.UNDISPATCHED) {
+            _uiState.update { it.copy(backupInProgress = true) }
+            try {
+                withContext(if (restoring) NonCancellable else EmptyCoroutineContext) {
+                  settingsWriteMutex.withLock {
+                    withContext(Dispatchers.IO) {
+                        val resolver = getApplication<Application>().contentResolver
+                        if (restoring) {
+                            val input = resolver.openInputStream(uri) ?: throw java.io.IOException("The backup file could not be opened.")
+                            input.use { launcherBackup.restore(it) }
+                        } else {
+                            val output = resolver.openOutputStream(uri, "wt") ?: throw java.io.IOException("The backup file could not be opened.")
+                            output.use { launcherBackup.export(it) }
+                        }
+                    }
+                  }
+                  if (restoring) com.galaxyrio.gracelauncher.platform.restartAfterRestore(getApplication())
+                }
+                Result.success(Unit)
+            } catch (error: Exception) {
+                if (error is CancellationException) throw error
+                Result.failure(error)
+            } finally {
+                _uiState.update { it.copy(backupInProgress = false) }
+            }
+        }.await()
     }
 
     suspend fun resetWorkProfileAppearance(): Boolean {
@@ -1454,7 +1511,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         rememberPopupItems(defaults + listOf(owner))
         val removed = itemsRepository.updatePopup(owner.key, defaults.map { PopupItem(it.key) }, transform)
         val host = com.galaxyrio.gracelauncher.platform.HomeWidgetHost(getApplication())
-        widgetIdsToDelete(removed).forEach { runCatching { host.deleteAppWidgetId(it) } }
+        removed.forEach { runCatching { host.deleteAppWidgetId(it) } }
     }
 
     suspend fun ensurePopup(owner: LauncherApp, defaults: List<LauncherApp>): Boolean = settingsWriteMutex.withLock {
@@ -1543,6 +1600,19 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         } catch (error: Exception) {
             if (error is CancellationException) throw error
             Log.e("LauncherViewModel", "Unable to save media style", error)
+            _uiState.update { it.copy(settingsSaveFailed = true) }
+            false
+        }
+    }
+
+    suspend fun applyFontShadow(shadow: FontShadow): Boolean = settingsWriteMutex.withLock {
+        try {
+            settingsRepository.mutateSettings { it.copy(fontShadow = shadow.normalized()) }
+            _uiState.update { it.copy(settingsSaveFailed = false) }
+            true
+        } catch (error: Exception) {
+            if (error is CancellationException) throw error
+            Log.e("LauncherViewModel", "Unable to save font shadow", error)
             _uiState.update { it.copy(settingsSaveFailed = true) }
             false
         }
@@ -1660,6 +1730,10 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun updateWidgetStackStyle(id: String, style: WidgetStackStyle) = persistSettings {
+        settingsRepository.updateWidgetStackStyle(id, style)
+    }
+
     fun updateFolder(id: String, name: String?, placement: FolderPlacement?, appListAtBottom: Boolean? = null) = persistSettings {
         settingsRepository.updateFolder(id, name, placement, appListAtBottom)
     }
@@ -1681,7 +1755,7 @@ class LauncherViewModel(application: Application) : AndroidViewModel(application
         val previous = itemsSnapshot.icons["folder:$id"]
         val removed = settingsRepository.deleteFolder(id)
         val host = com.galaxyrio.gracelauncher.platform.HomeWidgetHost(getApplication())
-        widgetIdsToDelete(removed).forEach { runCatching { host.deleteAppWidgetId(it) } }
+        removed.forEach { runCatching { host.deleteAppWidgetId(it) } }
         if (previous?.kind == "image" && !itemsRepository.isImageReferenced(previous.source)) itemIcons.deleteImage(previous)
     }
 

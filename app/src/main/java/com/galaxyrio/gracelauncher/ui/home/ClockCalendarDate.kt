@@ -1,6 +1,7 @@
 package com.galaxyrio.gracelauncher.ui.home
 
 import android.text.format.DateFormat
+import android.icu.text.RelativeDateTimeFormatter
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -9,8 +10,19 @@ import java.text.AttributedCharacterIterator
 import java.text.DateFormatSymbols
 import java.text.SimpleDateFormat
 import java.time.Instant
+import java.time.LocalDate
 import java.util.Date
 import java.util.Locale
+
+/** Match local calendar dates, and follow the region's Latin-letter locale choice. */
+internal fun clockRelativeDate(date: LocalDate, today: LocalDate, locale: Locale): String? {
+    val direction = when (date) {
+        today -> RelativeDateTimeFormatter.Direction.THIS
+        today.plusDays(1) -> RelativeDateTimeFormatter.Direction.NEXT
+        else -> return null
+    }
+    return RelativeDateTimeFormatter.getInstance(locale).format(direction, RelativeDateTimeFormatter.AbsoluteUnit.DAY)
+}
 
 /** Inspect the actual names, so script variants such as sr-Latn keep their own language. */
 internal fun clockCalendarLocale(locale: Locale, useLatinLetters: Boolean): Locale {
@@ -49,6 +61,7 @@ internal fun clockCalendarDate(now: Instant, locale: Locale, showWeekday: Boolea
     return buildAnnotatedString {
         append(text)
         var start = fields.beginIndex
+        var previousColor: Color? = null
         while (start < fields.endIndex) {
             fields.setIndex(start)
             val end = fields.runLimit
@@ -57,9 +70,12 @@ internal fun clockCalendarDate(now: Instant, locale: Locale, showWeekday: Boolea
                 java.text.DateFormat.Field.DAY_OF_WEEK in attributes -> weekdayColor
                 java.text.DateFormat.Field.MONTH in attributes -> monthColor
                 java.text.DateFormat.Field.DAY_OF_MONTH in attributes -> dayColor
-                else -> null
+                // Literal suffixes such as 月 / 日 belong to the preceding date field.
+                // Leave any prefix before the first field in the base text color.
+                else -> previousColor
             }
             if (color != null) addStyle(SpanStyle(color = color), start - fields.beginIndex, end - fields.beginIndex)
+            previousColor = color
             start = end
         }
     }

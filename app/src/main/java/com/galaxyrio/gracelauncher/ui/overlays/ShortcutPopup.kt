@@ -4,6 +4,18 @@ import androidx.compose.animation.core.Animatable
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import com.galaxyrio.gracelauncher.ui.components.LocalLauncherInputEnabled
+import com.galaxyrio.gracelauncher.ui.components.LocalPopupGestureSettings
+import com.galaxyrio.gracelauncher.ui.components.PopupSwipeIntent
+import com.galaxyrio.gracelauncher.ui.components.detectPopupDragGestures
+import com.galaxyrio.gracelauncher.data.PopupGestureAction
+import com.galaxyrio.gracelauncher.ui.firstGestureNotification
+import com.galaxyrio.gracelauncher.ui.PopupGestureTarget
+import com.galaxyrio.gracelauncher.ui.notificationDismissNeedsConfirmation
+import com.galaxyrio.gracelauncher.ui.allGestureNotifications
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -11,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowText as Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +36,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalWindowInfo
@@ -34,7 +48,6 @@ import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -59,6 +72,7 @@ import com.galaxyrio.gracelauncher.ui.components.AppIcon
 import com.galaxyrio.gracelauncher.ui.components.AppNotificationLabel
 import com.galaxyrio.gracelauncher.ui.components.AppStack
 import com.galaxyrio.gracelauncher.ui.components.LauncherIcon
+import com.galaxyrio.gracelauncher.ui.components.LauncherLayout
 import com.galaxyrio.gracelauncher.ui.components.LauncherSymbol
 import com.galaxyrio.gracelauncher.ui.components.LocalListAppearance
 import com.galaxyrio.gracelauncher.ui.components.LocalPopupGestureSettings
@@ -180,6 +194,7 @@ fun ShortcutPopup(
     }
     BackHandler(enabled = editingWidget != null) { finishEditing() }
     val selectedLayout = editingWidget?.let { key -> drafts[key] ?: entries.firstOrNull { it.key == key }?.widget }
+    var editingControlsHeight by remember { mutableStateOf(0.dp) }
     val entriesByKey = entries.associateBy { it.key }
     SwipeRevealPanel(
         anchor = anchor,
@@ -189,9 +204,17 @@ fun ShortcutPopup(
         onDismiss = onDismiss,
         edgeToEdgeContent = true,
     ) { maxListHeight ->
-        if (selectedLayout != null) PopupWidgetControls(selectedLayout,
+        if (selectedLayout != null) Box(Modifier.onSizeChanged { editingControlsHeight = with(density) { it.height.toDp() } }) {
+            PopupWidgetControls(selectedLayout,
             onChange = { layout, save -> editingWidget?.let { updateWidget(it, layout, save) } },
-            onDone = finishEditing)
+            onDone = finishEditing, onDelete = {
+                editingWidget?.let { key ->
+                    drafts.remove(key)
+                    editingWidget = null
+                    actions.updatePopup(app, shortcuts) { current -> current.filterNot { it.key == key } }
+                }
+            })
+        }
         else {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 6.dp)
@@ -208,7 +231,8 @@ fun ShortcutPopup(
             Text(app.label, Modifier.weight(1f), fontWeight = FontWeight.SemiBold, fontSize = 17.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         }
-        LazyColumn(Modifier.heightIn(max = maxListHeight).testTag(if (isFolder) "folder_members" else "shortcut_list"),
+        LazyColumn(Modifier.heightIn(max = (maxListHeight - if (selectedLayout != null) editingControlsHeight else 0.dp)
+            .coerceAtLeast(48.dp)).testTag(if (isFolder) "folder_members" else "shortcut_list"),
             state = list, userScrollEnabled = reorder.draggingKey == null && !resizingWidget) {
             items(notifications, key = { "notification:${it.key}" }) { notification ->
                 NotificationPopupItem(
@@ -219,6 +243,11 @@ fun ShortcutPopup(
                     gesturesEnabled = !reveal.dragging && reveal.expanded,
                     dismissResistance = uiState.settings.dismissResistance,
                     dismissThresholdDp = uiState.settings.dismissThresholdDp,
+                    onAction = { action, text, choice ->
+                        actions.performNotificationAction(notification.key, notification.revision, action.id, text, choice).also {
+                            if (it == com.galaxyrio.gracelauncher.data.notifications.NotificationActionResult.Sent && action.opensActivity) onDismiss()
+                        }
+                    },
                 )
             }
         if (isFolder && entries.isEmpty()) item {
@@ -265,11 +294,18 @@ fun ShortcutPopup(
             val offset by rememberReorderTranslation(reorder, entry.key)
             val itemApp = uiState.findItem(entry.key) ?: shortcuts.firstOrNull { it.key == entry.key }
             val stack = uiState.folders.firstOrNull { it.id == itemApp?.folderId && it.isAppStack }
+            val widgetStack = uiState.folders.firstOrNull { it.id == itemApp?.folderId && it.isWidgetStack }
             Box(Modifier.fillMaxWidth().then(if (dragging) Modifier else Modifier.animateItem())
-                .zIndex(if (dragging || reorder.drop?.key == entry.key) 1f else 0f)
+                .zIndex(if (dragging || reorder.drop?.key == entry.key) 3f else if (editingWidget == entry.key) 2f else 0f)
                 .graphicsLayer { translationY = offset }
-                .padding(horizontal = if (widget == null) 6.dp else 0.dp)) {
+                .padding(horizontal = if (widget == null) LauncherLayout.PopupOuterInset else 0.dp)) {
             when {
+                widgetStack != null -> com.galaxyrio.gracelauncher.ui.widgets.WidgetStack(widgetStack, uiState,
+                    enabled = !reveal.dragging && reveal.expanded,
+                    onLongPress = { onDetails(uiState.folderItem(widgetStack)) },
+                    onLaunch = { item, bounds -> onLaunchItem(item, bounds); if (!isPrivateFolder) onDismiss() },
+                    onDetails = onDetails, onWallpaper = false,
+                    modifier = Modifier.padding(horizontal = LauncherLayout.PopupContentInset, vertical = 4.dp))
                 stack != null -> AppStack(stack, uiState, onLaunch = { item, bounds ->
                     onLaunchItem(item, bounds); if (!isPrivateFolder) onDismiss()
                 }, onDetails = onDetails, onEdit = { onDetails(uiState.folderItem(stack)) },
@@ -295,38 +331,80 @@ fun ShortcutPopup(
                         val itemDisplay = itemApp.effectiveDisplay(LocalLauncherAppearance.current)
                         val hiddenIcon = itemDisplay.style == IconDisplayStyle.Hidden
                         val notification = uiState.ownNotificationsFor(itemApp, expanded = true).firstOrNull()
-                        // Swipe right opens an app's own shortcuts, as it does on home and in the app list.
+                        // Fork: swipe right opens an app's own shortcuts, as it does on home and in the app list.
                         // Shortcuts and folders have no pop-up of their own to open.
                         val openOwnPopup = onOpenAppPopup?.takeIf {
                             uiState.settings.shortcutsFolders.enabled && itemApp.shortcut == null && itemApp.folderId == null
                         }
-                        val popupGestures = LocalPopupGestureSettings.current
                         val shortcutsLabel = stringResource(R.string.app_shortcuts)
-                        val swipeEnabled = openOwnPopup != null && !reveal.dragging && reveal.expanded
+                        // Apply the same optional multi-app confirmation as desktop rows.
+                        val popupSettings = LocalPopupGestureSettings.current
+                        val inputEnabled = LocalLauncherInputEnabled.current
+                        // Popup rows only honor the dismiss actions; opening is meaningless inside the popup.
+                        val dismissAction = popupSettings.swipeLeft.enabledActions.firstOrNull {
+                            it == PopupGestureAction.DismissAllNotifications || it == PopupGestureAction.DismissFirstNotification }
+                        val swipeDismiss = dismissAction != null
+                        val dismissLabel = stringResource(if (dismissAction == PopupGestureAction.DismissFirstNotification)
+                            R.string.popup_action_dismiss_first else R.string.popup_action_dismiss_all)
+                        var pendingDismiss by remember { mutableStateOf<List<AppNotification>?>(null) }
+                        val clearNotifications by rememberUpdatedState { found: List<AppNotification> ->
+                            if (dismissAction == PopupGestureAction.DismissFirstNotification)
+                                found.forEach { actions.dismissNotification(it.key, it.revision) }
+                            else found.groupBy { it.packageName }.forEach { (pkg, list) ->
+                                // App-wide clear also takes group summaries the list hides.
+                                if (!actions.dismissAllNotifications(pkg))
+                                    list.forEach { actions.dismissNotification(it.key, it.revision) }
+                            }
+                        }
+                        val dismissItem by rememberUpdatedState { app: LauncherApp ->
+                            val target = PopupGestureTarget(app)
+                            val found = (if (dismissAction == PopupGestureAction.DismissFirstNotification)
+                                listOfNotNull(uiState.firstGestureNotification(target)) else uiState.allGestureNotifications(target))
+                                .filter { it.canDismiss }
+                            if (popupSettings.swipeLeft.confirmDismissAll && notificationDismissNeedsConfirmation(found))
+                                pendingDismiss = found else clearNotifications(found)
+                        }
+                        pendingDismiss?.let { found ->
+                            DismissNotificationsDialog(found.size, onConfirm = { pendingDismiss = null; clearNotifications(found) },
+                                onDismiss = { pendingDismiss = null })
+                        }
                         Row(
                             Modifier.fillMaxWidth().heightIn(min = 48.dp).testTag(if (isFolder) "folder_app:${itemApp.key}" else "shortcut:${itemApp.shortcut?.id ?: itemApp.key}")
                                 .semantics {
                                     if (!showNames && !hiddenIcon) contentDescription = itemApp.label
-                                    if (openOwnPopup != null) customActions = listOf(CustomAccessibilityAction(shortcutsLabel) {
-                                        openOwnPopup(itemApp, iconBounds); true
-                                    })
+                                    customActions = buildList {
+                                        if (swipeDismiss) add(CustomAccessibilityAction(dismissLabel) { dismissItem(itemApp); true })
+                                        if (openOwnPopup != null) add(CustomAccessibilityAction(shortcutsLabel) {
+                                            openOwnPopup(itemApp, iconBounds); true
+                                        })
+                                    }
                                 }
-                                .pointerInput(itemApp.key, swipeEnabled, popupGestures.popupSwipeDistanceDp, popupGestures.popupSwipeAngleDegrees) {
-                                    if (swipeEnabled) detectPopupDragGestures(
-                                        extraDistance = popupGestures.popupSwipeDistanceDp.coerceIn(0, 48).dp.toPx(),
-                                        maxAngleDegrees = popupGestures.popupSwipeAngleDegrees.coerceIn(10, 90),
-                                        leftEnabled = false,
+                                .pointerInput(itemApp.key, swipeDismiss, openOwnPopup != null, inputEnabled, reveal.expanded, reveal.dragging,
+                                    popupSettings.popupSwipeDistanceDp, popupSettings.popupSwipeAngleDegrees) {
+                                    if ((!swipeDismiss && openOwnPopup == null) || !inputEnabled || !reveal.expanded || reveal.dragging)
+                                        return@pointerInput
+                                    val swipe = PopupSwipeIntent(reversalSlop = 8.dp.toPx(),
+                                        firstItemSlop = if (swipeDismiss) 40.dp.toPx() else Float.POSITIVE_INFINITY)
+                                    // Left (upstream) clears the app's notifications; right (fork) opens its shortcuts.
+                                    detectPopupDragGestures(
+                                        extraDistance = popupSettings.popupSwipeDistanceDp.coerceIn(0, 48).dp.toPx(),
+                                        maxAngleDegrees = popupSettings.popupSwipeAngleDegrees.coerceIn(10, 90),
+                                        leftEnabled = swipeDismiss,
+                                        rightEnabled = openOwnPopup != null,
+                                        onDragStart = { swipe.reset() },
+                                        onDragCancel = { swipe.reset() },
+                                        onDragEnd = { if (swipe.opensFirst) dismissItem(itemApp); swipe.reset() },
+                                    ) { _, amount ->
                                         // Opening replaces this folder panel, which ends the gesture.
-                                        onDragStart = { openOwnPopup?.invoke(itemApp, iconBounds) },
-                                        onDragEnd = {}, onDragCancel = {},
-                                    ) { change, _ -> change.consume() }
+                                        if (swipe.drag(amount) == true) openOwnPopup?.invoke(itemApp, iconBounds)
+                                    }
                                 }
                                 .clip(RoundedCornerShape(16.dp))
                                 .combinedClickable(enabled = !reveal.dragging && reveal.expanded, onLongClick = { onDetails(itemApp) }, onClick = {
                                     onLaunchItem(itemApp, iconBounds)
                                     // A folder replaces this panel with its own hero transition.
                                     if (!isPrivateFolder && itemApp.folderId == null) onDismiss()
-                                }).padding(horizontal = 12.dp, vertical = (listAppearance.appSpacing / 2f).dp),
+                                }).padding(horizontal = LauncherLayout.PopupContentInset, vertical = (listAppearance.appSpacing / 2f).dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             if (!hiddenIcon) {
@@ -412,7 +490,7 @@ internal fun SwipeRevealPanel(
         if (finishedClosing) currentOnDismiss()
     }
     var origin by remember { mutableStateOf(Offset.Zero) }
-    Box(Modifier.fillMaxSize().onGloballyPositioned { origin = it.boundsInWindow().topLeft }) {
+    Box(Modifier.fillMaxSize().imePadding().onGloballyPositioned { origin = it.boundsInWindow().topLeft }) {
         Box(Modifier.matchParentSize().clickable(
             interactionSource = remember { MutableInteractionSource() }, indication = null,
             onClick = { reveal.expanded = false },

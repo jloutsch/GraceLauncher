@@ -29,9 +29,11 @@ import com.galaxyrio.gracelauncher.ui.theme.resolvedFontColor
 
 internal val LocalListAppearance = staticCompositionLocalOf { ListAppearance() }
 
-// Keep the original 20dp rail clearance on the right; the control moves both edges together.
-internal val ListAppearance.startPadding: Dp get() = (sidePadding - 8).coerceAtLeast(0).dp
-internal val ListAppearance.endPadding: Dp get() = (sidePadding + 12).dp
+// Rows add their own content inset. Keep the shared/home column centered on the screen.
+internal val ListAppearance.horizontalPadding: Dp
+    get() = (sidePadding.dp - LauncherLayout.ContentInset).coerceAtLeast(0.dp)
+// Only the app list reserves extra space for the alphabet rail, at logical End in RTL too.
+internal val ListAppearance.appListEndPadding: Dp get() = horizontalPadding + 20.dp
 
 @Composable
 internal fun listLabelStyle(onWallpaper: Boolean = true): TextStyle {
@@ -47,9 +49,12 @@ internal fun listLabelStyle(onWallpaper: Boolean = true): TextStyle {
 
 /** Shared desktop columns, including the otherwise invisible touch surfaces. */
 internal object LauncherLayout {
-    val Start = 36.dp
-    val End = 56.dp
     val ContentInset = 8.dp
+    // Pop-up rows and hosted widgets share the same icon-leading edge.
+    val PopupOuterInset = 6.dp
+    val PopupContentInset = 12.dp
+    val PopupIconInset = PopupOuterInset + PopupContentInset
+    val AgendaContentInset = 30.dp
     val IconLabelGap = 20.dp
     val RowMinHeight = 56.dp
     val RowShape = RoundedCornerShape(18.dp)

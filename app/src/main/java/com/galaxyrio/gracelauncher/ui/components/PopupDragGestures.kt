@@ -14,15 +14,18 @@ internal suspend fun PointerInputScope.detectPopupDragGestures(
     extraDistance: Float,
     maxAngleDegrees: Int,
     leftEnabled: Boolean,
+    rightEnabled: Boolean = true,
     onDragStart: (Offset) -> Unit,
     onDragEnd: () -> Unit,
     onDragCancel: () -> Unit,
+    canStart: (Offset) -> Boolean = { true },
     onHorizontalDrag: (PointerInputChange, Float) -> Unit,
 ) {
     awaitEachGesture {
         val down = awaitFirstDown(requireUnconsumed = false)
+        if (!canStart(down.position)) return@awaitEachGesture
         val slop = viewConfiguration.touchSlop
-        val start = PopupSwipeStart(slop, extraDistance, maxAngleDegrees, leftEnabled)
+        val start = PopupSwipeStart(slop, extraDistance, maxAngleDegrees, leftEnabled, rightEnabled)
         var pointerId = down.id
         var travel = Offset.Zero
         while (true) {

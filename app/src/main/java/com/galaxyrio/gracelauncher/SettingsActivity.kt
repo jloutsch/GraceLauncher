@@ -1,6 +1,5 @@
 package com.galaxyrio.gracelauncher
 
-import com.galaxyrio.gracelauncher.data.backup.BackupController
 import android.graphics.Color
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -19,8 +18,6 @@ class SettingsActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge(navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT))
-        // Fork #7: the app icon opens settings without starting home, so roll back a cut-off import here too.
-        BackupController.recoverInterruptedImport(this)
         setContent {
             LauncherAppTheme(launcherViewModel) {
                 LauncherRoute(launcherViewModel, settingsOnly = true, onCloseSettings = ::finish)

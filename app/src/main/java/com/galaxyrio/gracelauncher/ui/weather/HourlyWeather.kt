@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowText as Text
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.animation.*
@@ -177,10 +178,16 @@ fun HourlyWeather(snapshot: WeatherSnapshot, now: Instant, modifier: Modifier = 
                                             else {
                                                 val value = hourFieldText(column.hour, field, locale)
                                                 val spoken = "${stringResource(field.labelResource())}: $value"
+                                                val style = config.hourWeatherStyle(field)
+                                                val valueColor = if (style.useValueColorText) {
+                                                    hourlyChartValue(column.hour, field)?.let { number ->
+                                                        field.valueColors?.color(number, style.chartType)
+                                                    }
+                                                } else null
                                                 Text(value, Modifier.semantics { contentDescription = spoken },
                                                     fontSize = if (field == AgendaHourWeatherField.Temperature) 16.sp else 13.sp,
                                                     fontWeight = if (field == AgendaHourWeatherField.Temperature) FontWeight.Medium else FontWeight.Normal,
-                                                    color = if (field in chartFields) hourlyChartTextColor(field)
+                                                    color = valueColor ?: if (field in chartFields) hourlyChartTextColor(field)
                                                         else MaterialTheme.colorScheme.onSurface,
                                                     maxLines = if (field == AgendaHourWeatherField.Description) 2 else 1,
                                                     textAlign = TextAlign.Center, overflow = TextOverflow.Ellipsis)

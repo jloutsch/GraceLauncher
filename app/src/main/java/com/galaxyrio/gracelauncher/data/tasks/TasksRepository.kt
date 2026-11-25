@@ -41,9 +41,12 @@ class TasksRepository(private val context: Context) {
         val observer = object : ContentObserver(Handler(Looper.getMainLooper())) {
             override fun onChange(selfChange: Boolean) { trySend(Unit) }
         }
-        val registered = if (hasReadPermission()) runCatching {
-            resolver.registerContentObserver(BaseUri, true, observer)
-        }.isSuccess else false
+        val registered = runCatching {
+            if (providerStatus() == TasksStatus.Ready && hasReadPermission()) {
+                resolver.registerContentObserver(BaseUri, true, observer)
+                true
+            } else false
+        }.getOrDefault(false)
         trySend(Unit)
         awaitClose { if (registered) runCatching { resolver.unregisterContentObserver(observer) } }
     }.flowOn(Dispatchers.IO)
@@ -65,10 +68,11 @@ class TasksRepository(private val context: Context) {
 
     suspend fun completeTask(id: Long): TaskCompletionResult = providerMutex.withLock {
         withContext(Dispatchers.IO) {
-            if (ContextCompat.checkSelfPermission(context, WritePermission) != PackageManager.PERMISSION_GRANTED) {
-                return@withContext TaskCompletionResult.PermissionRequired
-            }
             try {
+                if (providerStatus() != TasksStatus.Ready) return@withContext TaskCompletionResult.NotFound
+                if (ContextCompat.checkSelfPermission(context, WritePermission) != PackageManager.PERMISSION_GRANTED) {
+                    return@withContext TaskCompletionResult.PermissionRequired
+                }
                 // This is the provider's completion operation, including recurrence and subtasks.
                 val values = ContentValues().apply { put("completed_at", System.currentTimeMillis()) }
                 val changed = context.contentResolver.update(taskUri(id), values, null, null)
@@ -85,14 +89,10 @@ class TasksRepository(private val context: Context) {
         }
     }
 
-    @Suppress("DEPRECATION")
     private suspend fun read(listIds: Set<Long>?): TasksState = withContext(Dispatchers.IO) {
         try {
-            val provider = context.packageManager.resolveContentProvider(Authority, 0)
-            if (provider == null) {
-                val installed = runCatching { context.packageManager.getApplicationInfo(Package, 0) }.isSuccess
-                return@withContext TasksState(if (installed) TasksStatus.UpdateRequired else TasksStatus.NotInstalled)
-            }
+            val status = providerStatus()
+            if (status != TasksStatus.Ready) return@withContext TasksState(status)
             if (!hasReadPermission()) return@withContext TasksState(TasksStatus.PermissionRequired)
             val accounts = queryPages("accounts", arrayOf("_id", "name")) { cursor ->
                 cursor.long("_id") to cursor.text("name")
@@ -135,6 +135,18 @@ class TasksRepository(private val context: Context) {
         } catch (error: Exception) {
             TasksState(TasksStatus.Error)
         }
+    }
+
+    @Suppress("DEPRECATION")
+    private fun providerStatus(): TasksStatus {
+        val provider = context.packageManager.resolveContentProvider(Authority, 0)
+        if (provider == null) {
+            val installed = runCatching { context.packageManager.getApplicationInfo(Package, 0) }.isSuccess
+            return if (installed) TasksStatus.UpdateRequired else TasksStatus.NotInstalled
+        }
+        // An authority can be claimed by another app when Tasks.org is absent.
+        // Recheck before each read, write and observer registration instead of caching trust.
+        return if (provider.packageName == Package) TasksStatus.Ready else TasksStatus.NotInstalled
     }
 
     private suspend fun <T> queryPages(

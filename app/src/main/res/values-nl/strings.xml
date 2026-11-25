@@ -1,3 +1,61 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    </resources>
+    <string name="settings_tasks">Taken</string>
+    <string name="tasks_org">Tasks.org</string>
+    <string name="tasks_enable">Activeer Tasks.org</string>
+    <string name="tasks_connection">Verbinding</string>
+    <string name="tasks_data">Taak gegevens</string>
+    <string name="tasks_sorting">Taak volgorde</string>
+    <string name="tasks_sort_by">Sorteer volgens</string>
+    <string name="tasks_undated_first">Niet gedateerde taken eerst</string>
+    <string name="tasks_connect">Verbind Tasks.org</string>
+    <string name="tasks_access_summary">Laat toe om Tasks.org taken te lezen op dit toestel</string>
+    <string name="tasks_get_app">Verbind met Tasks.org</string>
+    <string name="tasks_update_app">Update Tasks.org</string>
+    <string name="tasks_open_app">Open Tasks.org</string>
+    <string name="tasks_app_permissions">App permissies</string>
+    <string name="tasks_choose_lists">Kies taak lijsten</string>
+    <string name="tasks_all_lists">Alle lijsten</string>
+    <string name="tasks_no_lists">Geen taaklijsten gevonden</string>
+    <string name="tasks_unnamed_list">Lijst zonder naam</string>
+    <string name="tasks_disabled">Uit</string>
+    <string name="tasks_loading">Laden van taken…</string>
+    <string name="tasks_connected">Verbonden</string>
+    <string name="tasks_error">Kon taken niet laden</string>
+    <plurals name="tasks_lists_selected">
+        <item quantity="one">%1$d lijst geselecteerd</item>
+        <item quantity="other">%1$d lijsten geselecteerd</item>
+    </plurals>
+    <string name="clock_task_region">Taak regio</string>
+    <string name="clock_task_contents">Taak inhoud</string>
+    <string name="clock_content_alignment_divider">Links/Rechts uitgelijnd</string>
+    <string name="clock_content_unselected">Niet geselecteerd</string>
+    <string name="clock_task_count">Nummer om te tonen</string>
+    <string name="clock_color_task">Taak tekst</string>
+    <string name="clock_task_field_title">Taak titel</string>
+    <string name="clock_task_field_countdown">Aftellen</string>
+    <string name="clock_task_field_due_date">Einddatum</string>
+    <string name="clock_task_field_due_time">Eind tijd</string>
+    <string name="clock_task_field_start_date">Start datum</string>
+    <string name="clock_task_field_priority">Prioriteit</string>
+    <string name="clock_task_field_list">Taak lijst</string>
+    <string name="clock_task_field_notes">Notities</string>
+    <string name="clock_task_field_color">Lijst kleur</string>
+    <string name="clock_task_preview_title">Lees een hoofdstuk</string>
+    <string name="clock_task_preview_list">Persoonlijk</string>
+    <string name="clock_task_preview_notes">Neem enkele notas</string>
+    <string name="clock_task_preview_task">Taak %1$d</string>
+    <string name="tasks_priority_high">Hoge prioriteit</string>
+    <string name="tasks_priority_medium">Gemiddelde prioriteit</string>
+    <string name="tasks_priority_low">Lage prioriteit</string>
+    <string name="tasks_priority_none">Geen prioriteit</string>
+    <string name="tasks_overdue_now">Te laat</string>
+    <string name="tasks_overdue_minutes">%1$dm te laat</string>
+    <string name="tasks_overdue_hours">%1$dh te laat</string>
+    <string name="tasks_overdue_days">%1$dd te laat</string>
+    <string name="clock_enable">Activeer klok</string>
+    <string name="calendar_enable">Activeer kalender en agenda</string>
+    <string name="calendar_reading">Kalender gegevens</string>
+    <string name="calendar_sources">Kies kalenders</string>
+    <string name="calendar_sources_visible">Systeem kalenders</string>
+</resources>

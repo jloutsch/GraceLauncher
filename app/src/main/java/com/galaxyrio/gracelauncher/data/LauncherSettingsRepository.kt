@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Launcher settings and app categories live in Room. Legacy favorites migrate
@@ -36,7 +37,7 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
                     appListAtBottom = entry.appListAtBottom,
                     autoHideApps = entry.autoHideApps,
                     isAppStack = entry.isAppStack,
-                    isWidgetStack = entry.id in loaded.widgetStackFolderIds,
+                    widgetStack = WidgetStackStyle.decode(entry.widgetStackJson),
                 )
             },
         )
@@ -59,6 +60,7 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
             showBatteryPercentage = settings.showBatteryPercentage,
             allowHapticFeedback = settings.allowHapticFeedback,
             allowScreenRotation = settings.allowScreenRotation,
+            rememberScreenPosition = settings.rememberScreenPosition,
             useDynamicColors = settings.useDynamicColors,
             themeColor = settings.themeColor,
             paletteStyle = settings.paletteStyle.name,
@@ -87,14 +89,14 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
             appFontId = settings.appFontId,
             fontLibraryJson = settings.fontLibrary.encode(),
             fontColorsJson = settings.fontColors.encode(),
+            fontShadowJson = settings.fontShadow.encode(),
             listAppearanceJson = settings.listAppearance.encode(),
             applyFontToSettings = settings.applyFontToSettings,
             privateSpaceJson = settings.privateSpace.encode(),
             workProfileJson = settings.workProfile.encode(),
             homeGesturesJson = settings.homeGestures.encode(),
             searchJson = settings.search.encode(),
-            shortcutsFoldersJson = settings.shortcutsFolders.encode()
-                .withField(WidgetStackFoldersField, settings.widgetStackFolderIds.toJsonArrayOrNull()),
+            shortcutsFoldersJson = settings.shortcutsFolders.encode(),
             digitalWellbeingJson = settings.digitalWellbeing.encode(),
             widgetScreenJson = settings.widgetScreen.encode(),
             appCategoriesJson = settings.appCategories?.let(AppCategory::encode),
@@ -109,11 +111,15 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
         val previous = listOf(AgendaWidgetKey, AgendaWidgetDraftKey).flatMap { key ->
             items.popup(key)?.let { PopupItem.decode(it.itemsJson) }.orEmpty()
         }.mapNotNull { it.widget?.widgetId }.toSet()
-        val selected = widget?.takeIf { it.hasWidget }
+        val appearance = style.normalized()
+        appearance.widgetStackKey?.let { key ->
+            require(dao.folder(key.removePrefix("folder:"))?.widgetStackJson != null) { "Widget stack no longer exists" }
+        }
+        val selected = if (appearance.widgetStackKey != null) null else widget?.takeIf { it.hasWidget }
         require(selected == null || selected.widgetId in previous)
         val current = dao.readSettings()?.toSettings() ?: LauncherSettings()
         // An appearance draft must not reset the last action chosen on the agenda itself.
-        updateSettings(current.copy(agendaAppearance = style.normalized().copy(
+        updateSettings(current.copy(agendaAppearance = appearance.copy(
             lastCreateAction = current.agendaAppearance.lastCreateAction)))
         if (selected == null) items.deletePopup(AgendaWidgetKey)
         else items.savePopup(AppPopupEntity(AgendaWidgetKey,
@@ -177,16 +183,53 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
         if (key.isNotBlank()) dao.hideApp(HiddenAppEntity(key))
     }
 
+    /** Move the retired stack-wide background onto unchanged members before the first edit/read. */
+    suspend fun migrateWidgetStackBackgrounds() = database.withTransaction {
+        migrateForkWidgetStacks()
+        val items = database.itemsDao()
+        dao.readFolders().forEach { folder ->
+            val encoded = folder.widgetStackJson ?: return@forEach
+            val legacy = runCatching { JSONObject(encoded) }.getOrNull() ?: return@forEach
+            if (!legacy.has("backgroundColor") && !legacy.has("backgroundAlpha")) return@forEach
+            val popup = items.popup("folder:${folder.id}")
+            // Work on the stored JSON so unrelated fields, identities and order survive untouched.
+            val members = if (popup == null) JSONArray() else
+                runCatching { JSONArray(popup.itemsJson) }.getOrNull() ?: return@forEach
+            val changed = migrateWidgetStackMemberBackgrounds(members, legacy)
+            if (changed && popup != null) items.savePopup(popup.copy(itemsJson = members.toString()))
+            // This same transaction marks the conversion complete, including empty stacks.
+            dao.upsertFolder(folder.copy(widgetStackJson = requireNotNull(WidgetStackStyle.decode(encoded)).encode()))
+        }
+    }
+
+    /**
+     * Fork stacks predate upstream's column: they were app stacks whose ids were listed in shortcutsFoldersJson.
+     * Convert them once, keeping their members (widgets and apps) and the height their widgets were given.
+     */
+    private suspend fun migrateForkWidgetStacks() {
+        val row = dao.readSettings() ?: return
+        val ids = stringSetField(row.shortcutsFoldersJson, WidgetStackFoldersField)
+        if (ids.isEmpty()) return
+        val items = database.itemsDao()
+        dao.readFolders().filter { it.id in ids && it.widgetStackJson == null }.forEach { folder ->
+            val height = items.popup("folder:${folder.id}")?.let { PopupItem.decode(it.itemsJson) }.orEmpty()
+                .maxOfOrNull { it.widget?.widgetHeightDp ?: 0 }?.takeIf { it > 0 }
+            dao.upsertFolder(folder.copy(isAppStack = false, autoHideApps = false,
+                widgetStackJson = (height?.let { WidgetStackStyle(it) } ?: WidgetStackStyle()).encode()))
+        }
+        dao.saveSettings(row.copy(shortcutsFoldersJson = row.shortcutsFoldersJson?.withField(WidgetStackFoldersField, null)))
+    }
+
     suspend fun saveFolder(folder: LauncherFolder) {
         require(folder.id.isNotBlank()) { "A folder must have a stable id" }
+        require(!folder.isAppStack || !folder.isWidgetStack) { "A group cannot be both an app and widget stack" }
         val name = folder.name.trim()
         require(name.isNotEmpty()) { "A folder name must not be blank" }
-        val keys = folder.appKeys.filter(String::isNotBlank).distinct()
+        val keys = if (folder.isWidgetStack) emptyList() else folder.appKeys.filter(String::isNotBlank).distinct()
         database.withTransaction {
-            dao.upsertFolder(LauncherFolderEntity(folder.id, name, folder.placement.name, folder.appListAtBottom, folder.autoHideApps, folder.isAppStack))
-            val current = dao.readSettings()?.toSettings() ?: LauncherSettings()
-            val stacks = if (folder.isWidgetStack) current.widgetStackFolderIds + folder.id else current.widgetStackFolderIds - folder.id
-            if (stacks != current.widgetStackFolderIds) updateSettings(current.copy(widgetStackFolderIds = stacks))
+            migrateWidgetStackBackgrounds()
+            dao.upsertFolder(LauncherFolderEntity(folder.id, name, folder.placement.name, folder.appListAtBottom,
+                folder.autoHideApps && !folder.isWidgetStack, folder.isAppStack, folder.widgetStack?.encode()))
             val itemsDao = database.itemsDao()
             val previous = itemsDao.popup(folder.key)?.let { PopupItem.decode(it.itemsJson) }.orEmpty()
             // Membership callers must not discard widgets or move them to the end.
@@ -196,6 +239,13 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
             } + remaining.map { PopupItem(it) }
             itemsDao.savePopup(AppPopupEntity(folder.key, PopupItem.encode(next)))
         }
+    }
+
+    /** Style edits must neither restore a deleted stack nor overwrite newer placement/name edits. */
+    suspend fun updateWidgetStackStyle(id: String, style: WidgetStackStyle) = database.withTransaction {
+        migrateWidgetStackBackgrounds()
+        val folder = checkNotNull(dao.folder(id)?.takeIf { it.widgetStackJson != null }) { "Widget stack no longer exists" }
+        dao.upsertFolder(folder.copy(widgetStackJson = style.encode()))
     }
 
     suspend fun updateFolder(id: String, name: String? = null, placement: FolderPlacement? = null,
@@ -228,13 +278,15 @@ class LauncherSettingsRepository(private val database: LauncherDatabase) {
         }
         itemsDao.resetIcon(key)
         dao.deleteFolder(id)
-        dao.readSettings()?.toSettings()?.takeIf { id in it.widgetStackFolderIds }
-            ?.let { updateSettings(it.copy(widgetStackFolderIds = it.widgetStackFolderIds - id)) }
         val settings = dao.readSettings()?.toSettings()
-        if (settings?.appCategories != null) updateSettings(settings.copy(appCategories = settings.appCategories.map {
-            it.copy(itemKeys = it.itemKeys - key)
-        }))
-        widgets
+        if (settings != null) updateSettings(settings.copy(
+            appCategories = settings.appCategories?.map { it.copy(itemKeys = it.itemKeys - key) },
+            agendaAppearance = if (settings.agendaAppearance.widgetStackKey == key)
+                settings.agendaAppearance.copy(widgetStackKey = null) else settings.agendaAppearance,
+        ))
+        val retained = itemsDao.readPopups().flatMap { PopupItem.decode(it.itemsJson) }
+            .mapNotNull { it.widget?.widgetId }.toSet() + (settings?.homeLayout?.widgetId ?: -1)
+        widgets.filterNot { it in retained }
     }
 
     /** Moves saved references to apps whose launcher activity an update renamed ([renamedAppKeys]). */
@@ -282,6 +334,7 @@ private fun LauncherSettingsEntity.toSettings() = LauncherSettings(
     showBatteryPercentage = showBatteryPercentage,
     allowHapticFeedback = allowHapticFeedback,
     allowScreenRotation = allowScreenRotation,
+    rememberScreenPosition = rememberScreenPosition,
     useDynamicColors = useDynamicColors,
     themeColor = themeColor,
     paletteStyle = decodePaletteStyle(paletteStyle),
@@ -294,7 +347,6 @@ private fun LauncherSettingsEntity.toSettings() = LauncherSettings(
     weatherEnabled = weatherEnabled,
     weatherForecastDays = weatherForecastDays.coerceIn(1, 14),
     weatherLocationId = weatherLocationId,
-    widgetStackFolderIds = stringSetField(shortcutsFoldersJson, WidgetStackFoldersField),
     // The fork's own weather app choice predates upstream's; carry it over until the user picks one there.
     weatherConnection = WeatherConnectionPreferences.decode(weatherConnectionJson).let { weather ->
         if (weather.appKey != null) weather else weather.copy(appKey = stringField(clockStyleJson, WeatherAppKeyField))
@@ -313,6 +365,7 @@ private fun LauncherSettingsEntity.toSettings() = LauncherSettings(
     appFontId = appFontId,
     fontLibrary = FontLibrary.decode(fontLibraryJson, appFontId),
     fontColors = FontColors.decode(fontColorsJson),
+    fontShadow = FontShadow.decode(fontShadowJson),
     listAppearance = ListAppearance.decode(listAppearanceJson, hideFavoriteNames),
     applyFontToSettings = applyFontToSettings,
     privateSpace = ProfileSettings.decode(privateSpaceJson),

@@ -28,7 +28,8 @@ class AppNameVisibilitySettingsTest {
                     onBack = {}, onManageFonts = {})
             }
         }
-        compose.onNodeWithTag("list_appearance_controls").performScrollToNode(hasTestTag("list_show_names"))
+        // Fork: taller slider rows put these buttons and the switch under the floating toolbar after a minimal scroll; scroll to the end instead.
+        compose.onNodeWithTag("list_appearance_controls").performScrollToIndex(10)
         compose.onNodeWithTag("list_names_home").assertIsOn()
         compose.onNodeWithTag("list_names_app_list").assertIsOn()
         compose.runOnIdle { assertEquals(AppNameVisibility.Both, state.settings.listAppearance.names) }
@@ -36,8 +37,6 @@ class AppNameVisibilitySettingsTest {
         compose.runOnIdle { assertEquals(AppNameVisibility.AppList, state.settings.listAppearance.names) }
         compose.onNodeWithTag("list_names_app_list").performClick().assertIsOff()
         compose.runOnIdle { assertEquals(AppNameVisibility.Neither, state.settings.listAppearance.names) }
-        // Fork: taller slider rows put the switch under the floating toolbar after a minimal scroll; scroll to the end instead.
-        compose.onNodeWithTag("list_appearance_controls").performScrollToIndex(9)
         compose.onNodeWithTag("list_names_in_folders").assertIsOff()
         val home = compose.onNodeWithTag("list_names_home").fetchSemanticsNode().boundsInRoot
         val appList = compose.onNodeWithTag("list_names_app_list").fetchSemanticsNode().boundsInRoot

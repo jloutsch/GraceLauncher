@@ -59,7 +59,7 @@ class AppRepository(context: Context, private val iconPacks: IconPackRepository 
     private data class AppSourceSignature(val configuration: IconResourceConfiguration,
         val label: String, val installedAt: Long, val updatedAt: Long, val version: Long,
         val apkPaths: List<String>, val flags: Int, val iconResource: Int, val revision: Long,
-        val profileType: LauncherProfileType, val generation: Long)
+        val profileType: LauncherProfileType, val generation: Long, val archived: Boolean)
     private val personalSources = IconSnapshotCache<AppSourceSignature, LauncherApp>(
         maxBytes = 32 * 1024 * 1024, sizeOf = { iconBitmapBytes(it.icon, it.monochromeIcon) })
     private val profileSources = IconSnapshotCache<AppSourceSignature, LauncherApp>()
@@ -476,6 +476,8 @@ class AppRepository(context: Context, private val iconPacks: IconPackRepository 
                     runCatching { packageManager.getPackageInfo(component.packageName, 0) }.getOrNull()
                 } else null
                 val info = activity.applicationInfo
+                // Archive state is per package and only exists on API 35+.
+                val archived = Build.VERSION.SDK_INT >= 35 && info.isArchived
                 val revision = sourceRevisions?.get(component.packageName)
                     ?: synchronized(invalidations) { packageRevisions[profile.user to component.packageName] ?: 0L }
                 val installedAt = runCatching { activity.firstInstallTime }.getOrDefault(packageInfo?.firstInstallTime ?: 0L)
@@ -486,7 +488,7 @@ class AppRepository(context: Context, private val iconPacks: IconPackRepository 
                 val signature = AppSourceSignature(configuration, label, installedAt,
                     packageInfo?.lastUpdateTime ?: 0, packageInfo?.longVersionCode ?: 0,
                     listOfNotNull(info.sourceDir) + info.splitSourceDirs.orEmpty(), info.flags,
-                    activityInfo?.iconResource ?: info.icon, revision, profile.type, generation)
+                    activityInfo?.iconResource ?: info.icon, revision, profile.type, generation, archived)
                 val key = if (personal) component.flattenToString() else "profile:${profile.serial}:${component.flattenToString()}"
                 sources?.get(key, signature) ?: run {
                     val drawable = runCatching { activity.getIcon(0) }.getOrNull()
@@ -498,6 +500,7 @@ class AppRepository(context: Context, private val iconPacks: IconPackRepository 
                         isWorkProfile = profile.type == LauncherProfileType.Work,
                         isCloneProfile = profile.type == LauncherProfileType.Clone,
                         firstInstallTime = installedAt, isLauncherSettings = component.packageName == context.packageName,
+                        isArchived = archived,
                         englishLabel = activityInfo?.let(englishLabels::label), iconSourceRevision = signature,
                         profileIconSource = source, icon = source?.layers()?.original?.asImageBitmap() ?: app.icon)
                     }.also { app ->

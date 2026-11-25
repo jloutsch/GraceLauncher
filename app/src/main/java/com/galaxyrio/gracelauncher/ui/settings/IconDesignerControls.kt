@@ -447,8 +447,8 @@ private fun DesignerColorRow(label: String, choice: IconColor?, default: IconCol
 
 @Composable
 internal fun <T : Enum<T>> DesignerConnectedChoices(options: List<T>, selected: T, enabled: Boolean, tag: String,
-    label: @Composable (T) -> String, onSelect: (T) -> Unit) {
-    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).selectableGroup().padding(top = 12.dp),
+    label: @Composable (T) -> String, topPadding: androidx.compose.ui.unit.Dp = 12.dp, onSelect: (T) -> Unit) {
+    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min).selectableGroup().padding(top = topPadding),
         horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)) {
         options.forEachIndexed { index, option ->
             ToggleButton(checked = selected == option, onCheckedChange = { onSelect(option) }, enabled = enabled,

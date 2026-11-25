@@ -72,11 +72,26 @@ class HomeContentPersistenceTest {
 
     @Test fun homeMetadataRoundTripsWithoutChangingWidgetPresentation() {
         val layout = HomeLayout(homeOrder = listOf(GraceWidget.ClockCalendar.key, "grace:baseline", "widget:8"),
-            baselineEnabled = false, clockCalendarEnabled = false, baselineOffsetDp = 90f, popupContentScale = 120, popupFullWidth = true)
+            baselineEnabled = false, clockCalendarEnabled = false, baselineOffsetDp = 90f, popupContentScale = 120, widgetFullWidth = true)
         assertEquals(layout, HomeLayout.decode(layout.encode()))
         assertTrue(HomeLayout.decode("{}").baselineEnabled)
         assertTrue(HomeLayout.decode("{}").clockCalendarEnabled)
         assertNull(HomeLayout.decode("{}").homeOrder)
+    }
+
+    @Test fun retiredPopupPaddingFlagDoesNotEnableSurfaceFullWidth() {
+        val old = HomeLayout.decode("""{"widgetId":7,"widgetHeightDp":180,"popupWidthPercent":70,"popupContentScale":125,"popupFullWidth":true}""")
+        assertFalse(old.widgetFullWidth)
+        assertEquals(7, old.widgetId)
+        assertEquals(180, old.widgetHeightDp)
+        assertEquals(100, old.popupWidthPercent)
+        assertEquals(125, old.popupContentScale)
+
+        val wide = old.copy(widgetFullWidth = true)
+        assertEquals(wide, HomeLayout.decode(wide.encode()))
+        assertTrue(HomeLayout.decode("""{"popupFullWidth":false,"widgetFullWidth":true}""").widgetFullWidth)
+        assertEquals(70, HomeLayout.decode("""{"popupFullWidth":true,"widgetFullWidth":false,"popupWidthPercent":70}""").popupWidthPercent)
+        assertFalse(org.json.JSONObject(wide.encode()).has("popupFullWidth"))
     }
 
     @Test fun oldStoredClockCalendarOrderCollapsesWithoutRestoringHiddenWidgets() {

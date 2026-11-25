@@ -12,10 +12,14 @@ enum class CalendarRefreshMode(val intervalMillis: Long?) {
     Manual(null),
 }
 
+enum class DateAction { Calendar, Agenda, NewEvent, NewTask }
+
 data class CalendarPreferences(
     val daysAhead: Int = 14,
     val refreshMode: CalendarRefreshMode = CalendarRefreshMode.EveryMinute,
     val deprioritizeAllDay: Boolean = true,
+    val dateTapAction: DateAction = DateAction.Agenda,
+    val dateLongPressAction: DateAction = DateAction.Calendar,
     /** null follows system-visible calendars; an empty set explicitly selects none. */
     val selectedCalendarIds: Set<Long>? = null,
     /** null lets Android resolve the event with the user's system default. */
@@ -34,13 +38,15 @@ data class CalendarPreferences(
     fun encode(): String = normalized().let { value ->
         JSONObject().put("daysAhead", value.daysAhead).put("refreshMode", value.refreshMode.name)
             .put("deprioritizeAllDay", value.deprioritizeAllDay)
+            .put("dateTapAction", value.dateTapAction.name)
+            .put("dateLongPressAction", value.dateLongPressAction.name)
             .put("selectedCalendarIds", value.selectedCalendarIds?.let { JSONArray(it.sorted()) } ?: JSONObject.NULL)
             .put("appPackage", value.appPackage ?: JSONObject.NULL)
             .put("tasksOrg", value.tasksOrg.json()).toString()
     }
 
     companion object {
-        val DaysAheadOptions = listOf(1, 3, 7, 14, 30, 90)
+        val DaysAheadOptions = listOf(0, 1, 3, 7, 14, 30, 90)
         val DaysAheadRange = DaysAheadOptions.first()..DaysAheadOptions.last()
 
         fun decode(value: String?): CalendarPreferences = runCatching {
@@ -51,6 +57,10 @@ data class CalendarPreferences(
                 refreshMode = CalendarRefreshMode.entries.firstOrNull { it.name == json.optString("refreshMode") }
                     ?: defaults.refreshMode,
                 deprioritizeAllDay = json.optBoolean("deprioritizeAllDay", defaults.deprioritizeAllDay),
+                dateTapAction = DateAction.entries.firstOrNull { it.name == json.optString("dateTapAction") }
+                    ?: if (json.optString("dateTapAction") == "TapCalendar") DateAction.Calendar else defaults.dateTapAction,
+                dateLongPressAction = DateAction.entries.firstOrNull { it.name == json.optString("dateLongPressAction") }
+                    ?: defaults.dateLongPressAction,
                 selectedCalendarIds = json.optJSONArray("selectedCalendarIds")?.let { ids ->
                     buildSet {
                         for (index in 0 until ids.length()) {

@@ -3,18 +3,22 @@
 package com.galaxyrio.gracelauncher.ui.settings
 
 import android.text.format.DateFormat
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.toggleableState
@@ -30,7 +34,10 @@ import com.galaxyrio.gracelauncher.ui.components.LauncherSymbol
 import com.galaxyrio.gracelauncher.ui.overlays.CategoryItemsEditor
 import com.galaxyrio.gracelauncher.ui.overlays.TextEntryDialog
 import java.util.Calendar
+import java.util.Locale
 import java.util.UUID
+import java.time.DayOfWeek
+import java.time.format.TextStyle
 
 @Composable
 internal fun categoryLabel(category: AppCategory): String = category.name ?: stringResource(when (category.id) {
@@ -120,7 +127,10 @@ internal fun AppCategoryEditorSettings(categoryId: String?, uiState: LauncherUiS
             if (category.dynamicRule == CategoryDynamicRule.FrequentlyOpened) add("limit")
         }
         add("icon"); add("placement"); add("condition")
-        if (category.condition == CategoryCondition.Time) { add("start"); add("end") }
+        if (category.condition == CategoryCondition.Time) {
+            add("days"); add("allDay")
+            if (!category.allDay) { add("start"); add("end") }
+        }
     }
     val enabled = LocalSettingsStorageState.current.canEdit
     CategoryItemsEditor(category, uiState, actions, onBack) {
@@ -139,6 +149,15 @@ internal fun AppCategoryEditorSettings(categoryId: String?, uiState: LauncherUiS
                         "category_placement") { dialog = field }
                     "condition" -> SettingsActionItem(stringResource(R.string.app_category_condition), category.condition.label(), index, fields.size,
                         "category_condition") { dialog = field }
+                    "days" -> CategoryWeekdays(category.daysOfWeek, index, fields.size, enabled) { day, checked ->
+                        actions.updateAppCategory(category.id) {
+                            it.copy(daysOfWeek = if (checked) it.daysOfWeek + day else it.daysOfWeek - day)
+                        }
+                    }
+                    "allDay" -> SettingsToggleItem(stringResource(R.string.app_category_all_day), null, category.allDay,
+                        index, fields.size, "category_all_day") { checked ->
+                        actions.updateAppCategory(category.id) { it.copy(allDay = checked) }
+                    }
                     "start", "end" -> SettingsActionItem(stringResource(if (field == "start") R.string.app_category_start else R.string.app_category_end),
                         formatTime(if (field == "start") category.startMinute else category.endMinute), index, fields.size,
                         "category_$field") { dialog = field }
@@ -225,6 +244,50 @@ internal fun AppCategoryEditorSettings(categoryId: String?, uiState: LauncherUiS
                 }
             }, dismissButton = { TextButton(onClick = { dialog = null }) { Text(stringResource(R.string.settings_cancel)) } })
     }
+}
+
+@Composable
+private fun CategoryWeekdays(selectedDays: Set<DayOfWeek>, index: Int, count: Int, enabled: Boolean,
+    onToggle: (DayOfWeek, Boolean) -> Unit) {
+    val locale = LocalConfiguration.current.locales[0]
+    val days = remember { listOf(DayOfWeek.SUNDAY) + DayOfWeek.entries.filterNot { it == DayOfWeek.SUNDAY } }
+    val interactionSources = remember(days) { days.associateWith { MutableInteractionSource() } }
+    SegmentedListItem(
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        colors = ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceBright),
+        modifier = Modifier.testTag("category_weekdays"),
+        content = {
+            ButtonGroup(
+                overflowIndicator = { menuState -> ButtonGroupDefaults.OverflowIndicator(menuState, enabled = enabled) },
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                days.forEach { day ->
+                    val interactionSource = interactionSources.getValue(day)
+                    customItem(
+                        buttonGroupContent = {
+                            ToggleButton(checked = day in selectedDays, onCheckedChange = { onToggle(day, it) },
+                                enabled = enabled, interactionSource = interactionSource,
+                                shapes = ToggleButtonDefaults.shapesFor(ButtonDefaults.MinHeight)
+                                    .copy(shape = CircleShape, checkedShape = CircleShape),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
+                                modifier = Modifier.weight(1f).animateWidth(interactionSource, compressionLimit = 4.dp)
+                                    .testTag("category_weekday:${day.name}")
+                                    .semantics { contentDescription = day.getDisplayName(TextStyle.FULL, locale) },
+                            ) {
+                                Text(day.getDisplayName(TextStyle.NARROW, Locale.US), maxLines = 1, softWrap = false)
+                            }
+                        },
+                        menuContent = { menuState ->
+                            DropdownMenuItem(text = { Text(day.getDisplayName(TextStyle.FULL, locale)) }, enabled = enabled,
+                                trailingIcon = { Checkbox(day in selectedDays, onCheckedChange = null, enabled = enabled) },
+                                onClick = { onToggle(day, day !in selectedDays); menuState.dismiss() })
+                        },
+                    )
+                }
+            }
+        },
+    )
 }
 
 @Composable

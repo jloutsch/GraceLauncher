@@ -17,6 +17,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.galaxyrio.gracelauncher.data.LauncherApp
+import com.galaxyrio.gracelauncher.data.PopupGestureAction
 import com.galaxyrio.gracelauncher.data.ShortcutsFoldersSettings
 import com.galaxyrio.gracelauncher.ui.LauncherScreen
 import com.galaxyrio.gracelauncher.ui.LauncherActions
@@ -57,7 +58,7 @@ class PopupGestureSettingsTest {
                                 gestures = AppRowGestures(
                                     onDrag = { _, _, expanded -> expansions.add(expanded) },
                                     onDragEnd = { ends.add(it) },
-                                    onOpenFirst = if (settings.swipeLeftToOpenFirst) ({ _, _ -> firstLaunches++ }) else null,
+                                    onOpenFirst = if (PopupGestureAction.OpenFirstItem in settings.swipeLeft.selected) ({ _, _ -> firstLaunches++ }) else null,
                                 ))
                         }
                     }
@@ -107,7 +108,7 @@ class PopupGestureSettingsTest {
             swipe(center, center + Offset(slop + 16f * density, 0f), 200)
         }
         compose.runOnIdle { assertTrue(expansions.isEmpty()) }
-        compose.runOnIdle { settings = settings.copy(popupSwipeDistanceDp = 8, swipeLeftToOpenFirst = true) }
+        compose.runOnIdle { settings = settings.copy(popupSwipeDistanceDp = 8) }
         compose.onNodeWithTag("popup_row_0").performTouchInput {
             swipe(center, center + Offset(slop + 16f * density, 0f), 200)
         }
@@ -147,7 +148,7 @@ class PopupGestureSettingsTest {
             GraceLauncherTheme(dynamicColor = false) {
                 if (page == SettingsPage.LabPopup) {
                     LabPopupSettings(state, actions, onBack = { page = SettingsPage.Advanced })
-                } else AdvancedSettings(state, actions, onBack = {}, navigate = { page = it }, onChooseDefaultHome = {})
+                } else AdvancedSettings(onBack = {}, navigate = { page = it }, onChooseDefaultHome = {})
             }
         }
         compose.onNodeWithTag("lab_open_popup").performClick()

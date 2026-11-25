@@ -14,7 +14,6 @@ import androidx.room.Transaction
 import androidx.room.Upsert
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import com.galaxyrio.gracelauncher.data.backup.BackupDao
 import kotlinx.coroutines.flow.Flow
 import org.json.JSONArray
 import org.json.JSONObject
@@ -28,6 +27,7 @@ data class LauncherSettingsEntity(
     val showBatteryPercentage: Boolean,
     val allowHapticFeedback: Boolean,
     @ColumnInfo(defaultValue = "1") val allowScreenRotation: Boolean = true,
+    @ColumnInfo(defaultValue = "0") val rememberScreenPosition: Boolean = false,
     val useDynamicColors: Boolean,
     val themeColor: Int,
     @ColumnInfo(defaultValue = "'TonalSpot'") val paletteStyle: String = "TonalSpot",
@@ -61,6 +61,7 @@ data class LauncherSettingsEntity(
     val appFontId: String? = null,
     val fontLibraryJson: String? = null,
     val fontColorsJson: String? = null,
+    @ColumnInfo(defaultValue = "NULL") val fontShadowJson: String? = null,
     val listAppearanceJson: String? = null,
     @ColumnInfo(defaultValue = "1") val applyFontToSettings: Boolean = true,
     val privateSpaceJson: String? = null,
@@ -87,6 +88,7 @@ data class LauncherFolderEntity(
     @ColumnInfo(defaultValue = "1") val appListAtBottom: Boolean = true,
     @ColumnInfo(defaultValue = "0") val autoHideApps: Boolean = false,
     @ColumnInfo(defaultValue = "0") val isAppStack: Boolean = false,
+    @ColumnInfo(defaultValue = "NULL") val widgetStackJson: String? = null,
 )
 
 @Dao
@@ -105,6 +107,9 @@ abstract class LauncherSettingsDao {
 
     @Query("SELECT * FROM folders ORDER BY name COLLATE NOCASE, id")
     abstract fun observeFolders(): Flow<List<LauncherFolderEntity>>
+
+    @Query("SELECT * FROM folders ORDER BY name COLLATE NOCASE, id")
+    abstract suspend fun readFolders(): List<LauncherFolderEntity>
 
     @Query("SELECT * FROM folders WHERE id = :id")
     abstract suspend fun folder(id: String): LauncherFolderEntity?
@@ -138,17 +143,14 @@ abstract class LauncherSettingsDao {
     entities = [LauncherSettingsEntity::class, HiddenAppEntity::class,
         LauncherFolderEntity::class, ItemIconEntity::class,
         SavedShortcutEntity::class, AppPopupEntity::class],
-    version = LauncherDatabase.SCHEMA_VERSION,
+    version = 37,
     exportSchema = true,
 )
 abstract class LauncherDatabase : RoomDatabase() {
     abstract fun settingsDao(): LauncherSettingsDao
     abstract fun itemsDao(): LauncherItemsDao
-    abstract fun backupDao(): BackupDao
 
     companion object {
-        const val SCHEMA_VERSION = 34
-
         val Migration1To2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE launcher_settings ADD COLUMN iconPackPackage TEXT DEFAULT NULL")
@@ -384,14 +386,30 @@ abstract class LauncherDatabase : RoomDatabase() {
             }
         }
 
-        val Migrations: Array<Migration> = arrayOf(Migration1To2, Migration2To3, Migration3To4, Migration4To5, Migration5To6, Migration6To7, Migration7To8, Migration8To9, Migration9To10, Migration10To11, Migration11To12, Migration12To13, Migration13To14, Migration14To15, Migration15To16, Migration16To17, Migration17To18, Migration18To19, Migration19To20, Migration20To21, Migration21To22, Migration22To23, Migration23To24, Migration24To25, Migration25To26, Migration26To27, Migration27To28, Migration28To29, Migration29To30, Migration30To31, Migration31To32, Migration32To33, Migration33To34)
+        val Migration34To35 = object : Migration(34, 35) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE folders ADD COLUMN widgetStackJson TEXT DEFAULT NULL")
+            }
+        }
+
+        val Migration35To36 = object : Migration(35, 36) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE launcher_settings ADD COLUMN fontShadowJson TEXT DEFAULT NULL")
+            }
+        }
+
+        val Migration36To37 = object : Migration(36, 37) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE launcher_settings ADD COLUMN rememberScreenPosition INTEGER NOT NULL DEFAULT 0")
+            }
+        }
 
         fun getInstance(context: Context): LauncherDatabase = instance ?: synchronized(this) {
             instance ?: Room.databaseBuilder(
                 context.applicationContext,
                 LauncherDatabase::class.java,
                 "grace_launcher.db",
-            ).addMigrations(*Migrations).build().also { instance = it }
+            ).addMigrations(Migration1To2, Migration2To3, Migration3To4, Migration4To5, Migration5To6, Migration6To7, Migration7To8, Migration8To9, Migration9To10, Migration10To11, Migration11To12, Migration12To13, Migration13To14, Migration14To15, Migration15To16, Migration16To17, Migration17To18, Migration18To19, Migration19To20, Migration20To21, Migration21To22, Migration22To23, Migration23To24, Migration24To25, Migration25To26, Migration26To27, Migration27To28, Migration28To29, Migration29To30, Migration30To31, Migration31To32, Migration32To33, Migration33To34, Migration34To35, Migration35To36, Migration36To37).build().also { instance = it }
         }
     }
 }

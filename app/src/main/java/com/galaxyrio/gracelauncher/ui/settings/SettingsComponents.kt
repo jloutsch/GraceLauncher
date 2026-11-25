@@ -2,6 +2,7 @@
 
 package com.galaxyrio.gracelauncher.ui.settings
 
+import com.galaxyrio.gracelauncher.ui.theme.WithoutFontShadow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -97,7 +98,7 @@ internal fun SettingsScaffold(
     controlsAbovePreview: Boolean = false,
     actions: @Composable RowScope.() -> Unit = {},
     content: @Composable (PaddingValues) -> Unit,
-) {
+) = WithoutFontShadow {
     val reportSystemBarBackground = LocalSettingsSystemBarBackground.current
     SideEffect {
         reportSystemBarBackground(when {

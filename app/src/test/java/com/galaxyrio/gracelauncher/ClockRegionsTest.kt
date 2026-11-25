@@ -8,17 +8,16 @@ class ClockRegionsTest {
     @Test fun regionOrderingKeepsFirstOccurrencesAndCompletesMissingRegions() {
         val regions = ClockRegions(regionOrder = listOf(ClockRegion.Tertiary, ClockRegion.Primary,
             ClockRegion.Tertiary)).normalized()
-        // Agenda and Tasks were added after these three; a saved order gains them at the end, Tasks below Agenda.
-        assertEquals(listOf(ClockRegion.Tertiary, ClockRegion.Primary, ClockRegion.Secondary,
-            ClockRegion.Agenda, ClockRegion.Task), regions.regionOrder)
+        assertEquals(listOf(ClockRegion.Tertiary, ClockRegion.Primary, ClockRegion.Secondary, ClockRegion.Agenda, ClockRegion.Task),
+            regions.regionOrder)
         assertEquals(ClockRegion.entries, ClockRegions(regionOrder = emptyList()).normalized().regionOrder)
     }
 
     @Test fun legacyCalendarAboveClockMigratesOnlyBeforeExplicitRegionOrderExists() {
         val legacy = ClockStyle()
         val migrated = legacy.resolvedRegions(calendarAboveClock = true)
-        assertEquals(listOf(ClockRegion.Secondary, ClockRegion.Primary, ClockRegion.Tertiary,
-            ClockRegion.Agenda, ClockRegion.Task), migrated.regionOrder)
+        assertEquals(listOf(ClockRegion.Secondary, ClockRegion.Primary, ClockRegion.Tertiary, ClockRegion.Agenda, ClockRegion.Task),
+            migrated.regionOrder)
         assertEquals(ClockRegion.entries, legacy.resolvedRegions().regionOrder)
         val saved = legacy.withRegions(migrated.copy(regionOrder = listOf(ClockRegion.Tertiary,
             ClockRegion.Primary, ClockRegion.Secondary)))

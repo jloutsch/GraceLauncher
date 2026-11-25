@@ -2,6 +2,7 @@
 
 package com.galaxyrio.gracelauncher.ui.settings
 
+import com.galaxyrio.gracelauncher.ui.theme.LocalFontShadowEnabled
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
@@ -28,7 +29,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -62,6 +62,7 @@ import com.galaxyrio.gracelauncher.ui.overlays.PopupEditorScreen
 import com.galaxyrio.gracelauncher.ui.overlays.TextEntryDialog
 import com.galaxyrio.gracelauncher.ui.overlays.FolderPlacementDialog
 import com.galaxyrio.gracelauncher.ui.overlays.DeleteFolderDialog
+import com.galaxyrio.gracelauncher.ui.theme.withFontShadow
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherTypography
 import com.galaxyrio.gracelauncher.ui.theme.SystemLauncherTypography
 import java.util.UUID
@@ -127,7 +128,7 @@ internal fun ProductivitySettings(
             item { SettingsHeading(stringResource(R.string.settings_screens)) }
             item {
                 SettingsActionItem(stringResource(R.string.settings_home_screen), null, 0, 5, "settings_edit_homepage",
-                    leading = { LauncherIcon(LauncherSymbol.Home) }) { navigate(SettingsPage.Homepage) }
+                    leading = { LauncherIcon(LauncherSymbol.Home) }) { navigate(SettingsPage.HomeScreen) }
             }
             item {
                 SettingsActionItem(stringResource(R.string.settings_folder_app_list), null, 1, 5, "settings_app_list",
@@ -149,32 +150,36 @@ internal fun ProductivitySettings(
             item {
                 SettingsActionItem(
                     stringResource(R.string.settings_hide_apps), pluralStringResource(R.plurals.settings_hidden_count, uiState.effectiveHiddenAppKeys.size, uiState.effectiveHiddenAppKeys.size),
-                    0, 6, "settings_open_hidden_apps",
+                    0, 7, "settings_open_hidden_apps",
                     leading = { LauncherIcon(LauncherSymbol.VisibilityOff) },
                 ) { navigate(SettingsPage.HiddenApps) }
             }
             item {
-                SettingsActionItem(stringResource(R.string.app_categories_title), null, 1, 6, "settings_app_categories",
+                SettingsActionItem(stringResource(R.string.app_categories_title), null, 1, 7, "settings_app_categories",
                     leading = { LauncherIcon(LauncherSymbol.Category) }) { navigate(SettingsPage.AppCategories) }
             }
             item {
                 SettingsActionItem(
-                    stringResource(R.string.settings_folders), pluralStringResource(R.plurals.settings_folder_count, uiState.folders.count { !it.isAppStack }, uiState.folders.count { !it.isAppStack }),
-                    2, 6, "settings_open_folders",
+                    stringResource(R.string.settings_folders), pluralStringResource(R.plurals.settings_folder_count, uiState.folders.count { !it.isAppStack && !it.isWidgetStack }, uiState.folders.count { !it.isAppStack && !it.isWidgetStack }),
+                    2, 7, "settings_open_folders",
                     leading = { LauncherIcon(LauncherSymbol.Folder) },
                 ) { navigate(SettingsPage.Folders) }
             }
             item {
-                SettingsActionItem(stringResource(R.string.app_stacks_title), null, 3, 6, "settings_app_stacks",
+                SettingsActionItem(stringResource(R.string.app_stacks_title), null, 3, 7, "settings_app_stacks",
                     leading = { LauncherIcon(LauncherSymbol.Steppers) }) { navigate(SettingsPage.AppStacks) }
             }
             item {
+                SettingsActionItem(stringResource(R.string.widget_stacks_title), null, 4, 7, "settings_widget_stacks",
+                    leading = { LauncherIcon(LauncherSymbol.Widgets) }) { navigate(SettingsPage.WidgetStacks) }
+            }
+            item {
                 SettingsActionItem(stringResource(R.string.work_profile_title), stringResource(R.string.work_profile_summary),
-                    4, 6, "settings_open_work_profile", leading = { LauncherIcon(LauncherSymbol.Work) }) { navigate(SettingsPage.WorkProfile) }
+                    5, 7, "settings_open_work_profile", leading = { LauncherIcon(LauncherSymbol.Work) }) { navigate(SettingsPage.WorkProfile) }
             }
             item {
                 SettingsActionItem(stringResource(R.string.private_space_title), stringResource(R.string.private_space_summary),
-                    5, 6, "settings_open_private_space", leading = { LauncherIcon(LauncherSymbol.Lock) }) { navigate(SettingsPage.PrivateSpace) }
+                    6, 7, "settings_open_private_space", leading = { LauncherIcon(LauncherSymbol.Lock) }) { navigate(SettingsPage.PrivateSpace) }
             }
             item { SettingsHeading(stringResource(R.string.settings_advanced)) }
             item {
@@ -271,8 +276,9 @@ internal fun FavoriteFoldersScreen(uiState: LauncherUiState, actions: LauncherAc
         }
     }
     BackHandler(onBack = confirm)
-    MaterialTheme(typography = if (uiState.settings.applyFontToSettings) LocalLauncherTypography.current else SystemLauncherTypography) {
-        CompositionLocalProvider(LocalSettingsStorageState provides SettingsStorageState(
+    MaterialTheme(typography = (if (uiState.settings.applyFontToSettings) LocalLauncherTypography.current else SystemLauncherTypography)
+        .withFontShadow(androidx.compose.ui.graphics.Shadow.None)) {
+        CompositionLocalProvider(LocalFontShadowEnabled provides false, LocalSettingsStorageState provides SettingsStorageState(
             uiState.isLoadingSettings, uiState.settingsLoadFailed, uiState.settingsSaveFailed,
         )) {
             FolderSettings(uiState, actions, confirm, selectedIds = selectedIds, enabled = !saving,
@@ -294,11 +300,10 @@ internal fun FolderSettings(
     excludedIds: Set<String> = emptySet(),
     onEdit: (String) -> Unit,
 ) {
-    val folders = uiState.folders.filter { it.isAppStack == appStacks && it.id !in excludedIds }
+    val folders = uiState.folders.filter { !it.isWidgetStack && it.isAppStack == appStacks && it.id !in excludedIds }
     val title = stringResource(if (appStacks) R.string.app_stacks_title else R.string.settings_folders)
     val createTitle = stringResource(if (appStacks) R.string.app_stack_create else R.string.settings_folder_create)
     var creating by rememberSaveable { mutableStateOf(false) }
-    var creatingWidgetStack by rememberSaveable { mutableStateOf(false) }
     var openingId by rememberSaveable { mutableStateOf<String?>(null) }
     LaunchedEffect(openingId, uiState.folders, uiState.settingsSaveFailed) {
         val id = openingId ?: return@LaunchedEffect
@@ -312,18 +317,10 @@ internal fun FolderSettings(
             item { Spacer(Modifier.height(24.dp)) }
             item {
                 SettingsActionItem(
-                    createTitle, null, 0, if (appStacks) 2 else 1, "folder_create",
+                    createTitle, null, 0, 1, "folder_create",
                     enabled = enabled && openingId == null,
                     leading = { LauncherIcon(LauncherSymbol.Plus) },
-                ) { creatingWidgetStack = false; creating = true }
-            }
-            if (appStacks) item {
-                Spacer(Modifier.height(ListItemDefaults.SegmentedGap))
-                SettingsActionItem(
-                    stringResource(R.string.widget_stack_create), stringResource(R.string.widget_stack_create_summary), 1, 2, "widget_stack_create",
-                    enabled = enabled && openingId == null,
-                    leading = { LauncherIcon(LauncherSymbol.Widgets) },
-                ) { creatingWidgetStack = true; creating = true }
+                ) { creating = true }
             }
             if (folders.isEmpty()) {
                 item { Text(stringResource(if (appStacks) R.string.app_stacks_empty else R.string.settings_folder_empty), Modifier.padding(horizontal = 4.dp, vertical = 24.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
@@ -358,8 +355,7 @@ internal fun FolderSettings(
                                     else Checkbox(checked, onCheckedChange = null,
                                         enabled = enabled && LocalSettingsStorageState.current.canEdit)
                                 }
-                                if (folder.isWidgetStack) LauncherIcon(LauncherSymbol.Widgets)
-                                else if (appStacks) LauncherIcon(LauncherSymbol.Steppers) else AppIcon(uiState.folderItem(folder), size = 32.dp)
+                                if (appStacks) LauncherIcon(LauncherSymbol.Steppers) else AppIcon(uiState.folderItem(folder), size = 32.dp)
                             }
                         },
                     ) { if (selectedIds == null) onEdit(folder.id) else onToggle(folder.id) }
@@ -367,32 +363,22 @@ internal fun FolderSettings(
             }
         }
     }
-    if (creating) TextEntryDialog(if (creatingWidgetStack) stringResource(R.string.widget_stack_create) else createTitle, "", { creating = false }, { name ->
+    if (creating) TextEntryDialog(createTitle, "", { creating = false }, { name ->
         val id = UUID.randomUUID().toString()
-        val widgets = appStacks && creatingWidgetStack
-        actions.saveFolder(LauncherFolder(id, name, emptyList(), newPlacement, autoHideApps = appStacks && !widgets,
-            isAppStack = appStacks, isWidgetStack = widgets))
+        actions.saveFolder(LauncherFolder(id, name, emptyList(), newPlacement, autoHideApps = appStacks, isAppStack = appStacks))
         creating = false
         openingId = id
     })
-}
-
-/** Below the minimum, the slider means "Automatic": each widget keeps its own default height. */
-private const val MinWidgetStackHeight = 48f
-private const val MaxWidgetStackHeight = 640f
-
-/** − and + move one dp so any height can be reached exactly; Automatic (0) sits one step below the minimum. */
-internal fun stepStackHeight(current: Int, delta: Int): Int {
-    val min = MinWidgetStackHeight.toInt()
-    if (current < min) return if (delta > 0) min else 0
-    val next = current + delta
-    return if (next < min) 0 else next.coerceAtMost(MaxWidgetStackHeight.toInt())
 }
 
 @Composable
 internal fun FolderEditorSettings(folderId: String?, uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit,
     onEditIcon: (LauncherApp) -> Unit = {}) {
     val folder = uiState.folders.firstOrNull { it.id == folderId }
+    if (folder?.isWidgetStack == true) {
+        WidgetStackEditorSettings(folder.id, uiState, actions, onBack)
+        return
+    }
     if (folder == null) {
         SettingsScaffold(stringResource(R.string.settings_folder_edit), "settings_folder_editor", onBack) { padding ->
             Box(Modifier.padding(padding)) {
@@ -405,49 +391,31 @@ internal fun FolderEditorSettings(folderId: String?, uiState: LauncherUiState, a
     var rename by rememberSaveable(folder.id) { mutableStateOf(false) }
     var placement by rememberSaveable(folder.id) { mutableStateOf(false) }
     var confirmDelete by rememberSaveable(folder.id) { mutableStateOf(false) }
-    val widgets = folder.isWidgetStack
-    // Widget stacks show one widget at a time, so one height serves every widget in it.
-    val storedHeight = uiState.popups[folder.key].orEmpty().maxOfOrNull { it.widget?.widgetHeightDp ?: 0 } ?: 0
-    var stackHeight by remember(storedHeight) { mutableFloatStateOf(storedHeight.toFloat()) }
     PopupEditorScreen(app, uiState, actions, onBack, header = {
         Column(Modifier.padding(top = 16.dp)) {
-            SettingsActionItem(folder.name, stringResource(if (widgets) R.string.widget_stack_name else if (folder.isAppStack) R.string.app_stack_name else R.string.settings_folder_name), 0, 3, "folder_name",
-                leading = { if (widgets) LauncherIcon(LauncherSymbol.Widgets) else if (folder.isAppStack) LauncherIcon(LauncherSymbol.Apps)
+            SettingsActionItem(folder.name, stringResource(if (folder.isAppStack) R.string.app_stack_name else R.string.settings_folder_name), 0, 3, "folder_name",
+                leading = { if (folder.isAppStack) LauncherIcon(LauncherSymbol.Apps)
                     else AppIcon(app, Modifier.clickable(onClickLabel = stringResource(R.string.icon_designer_title)) { onEditIcon(app) }, size = 36.dp) }) { rename = true }
             Spacer(Modifier.height(ListItemDefaults.SegmentedGap))
-            SettingsActionItem(stringResource(if (widgets) R.string.widget_stack_placement else if (folder.isAppStack) R.string.app_stack_placement else R.string.settings_folder_placement),
+            SettingsActionItem(stringResource(if (folder.isAppStack) R.string.app_stack_placement else R.string.settings_folder_placement),
                 folder.placement.label(), 1, 3, "folder_placement",
                 leading = { LauncherIcon(LauncherSymbol.Folder) }) { placement = true }
             Spacer(Modifier.height(ListItemDefaults.SegmentedGap))
-            // Widget stacks use this slot for their height; auto-hide stays an app-stack setting.
-            if (!widgets) SettingsToggleItem(stringResource(R.string.settings_folder_auto_hide), stringResource(R.string.settings_folder_auto_hide_summary),
+            SettingsToggleItem(stringResource(R.string.settings_folder_auto_hide), stringResource(R.string.settings_folder_auto_hide_summary),
                 folder.autoHideApps, 2, 3, "folder_auto_hide") { actions.setFolderAutoHide(folder.id, it) }
-            else DesignerSegment(2, 3, "widget_stack_height_item") {
-                DesignerSlider(stringResource(R.string.widget_stack_height), stackHeight, 0f, 0f..MaxWidgetStackHeight,
-                    LocalSettingsStorageState.current.canEdit && uiState.popups[folder.key].orEmpty().any { it.widget != null },
-                    "widget_stack_height", suffix = " dp",
-                    valueText = if (stackHeight < MinWidgetStackHeight) stringResource(R.string.text_auto) else null,
-                    step = { current, delta -> stepStackHeight(current.toInt(), delta).toFloat() },
-                    onFinished = { value ->
-                        val height = if (value < MinWidgetStackHeight) 0 else value.toInt()
-                        actions.updatePopup(app, emptyList()) { items ->
-                            items.map { item -> item.widget?.let { item.copy(widget = it.copy(widgetHeightDp = height)) } ?: item }
-                        }
-                    }) { stackHeight = it }
-            }
             TextButton(onClick = { confirmDelete = true }, enabled = LocalSettingsStorageState.current.canEdit, modifier = Modifier.testTag("folder_delete")) {
-                Text(stringResource(if (widgets) R.string.widget_stack_delete else if (folder.isAppStack) R.string.app_stack_delete else R.string.settings_folder_delete), color = MaterialTheme.colorScheme.error)
+                Text(stringResource(if (folder.isAppStack) R.string.app_stack_delete else R.string.settings_folder_delete), color = MaterialTheme.colorScheme.error)
             }
         }
     })
-    if (rename) TextEntryDialog(stringResource(if (widgets) R.string.widget_stack_rename else if (folder.isAppStack) R.string.app_stack_rename else R.string.rename_folder), folder.name, { rename = false }, {
+    if (rename) TextEntryDialog(stringResource(if (folder.isAppStack) R.string.app_stack_rename else R.string.rename_folder), folder.name, { rename = false }, {
         actions.rename(app, it); rename = false
     })
     if (placement) FolderPlacementDialog(folder.placement, folder.appListAtBottom, { placement = false },
-        titleRes = if (widgets) R.string.widget_stack_placement else if (folder.isAppStack) R.string.app_stack_placement else R.string.settings_folder_placement) { selected, atBottom ->
+        titleRes = if (folder.isAppStack) R.string.app_stack_placement else R.string.settings_folder_placement) { selected, atBottom ->
         actions.updateFolder(folder.id, null, selected, atBottom); placement = false
     }
-    if (confirmDelete) DeleteFolderDialog(folder.name, { confirmDelete = false }, appStack = folder.isAppStack, widgetStack = widgets) {
+    if (confirmDelete) DeleteFolderDialog(folder.name, { confirmDelete = false }, appStack = folder.isAppStack) {
         actions.deleteFolder(folder.id); onBack()
     }
 }

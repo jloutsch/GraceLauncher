@@ -29,17 +29,32 @@ data class WidgetScreenSettings(
 }
 
 /** Null coordinates retain a resized widget's span when the list editor reorders it. */
-data class WidgetGridPlacement(val column: Int?, val row: Int?, val columns: Int = 1, val rows: Int = 1) {
+data class WidgetGridPlacement(val column: Int?, val row: Int?, val columns: Int = 1, val rows: Int = 1,
+    /** Normal geometry retained while the widget occupies the full screen width. */
+    val restoreColumn: Int? = null, val restoreColumns: Int? = null) {
     fun json(): JSONObject = JSONObject().put("columns", columns).put("rows", rows).apply {
         column?.let { put("column", it) }; row?.let { put("row", it) }
+        restoreColumn?.let { put("restoreColumn", it) }; restoreColumns?.let { put("restoreColumns", it) }
     }
     companion object {
         fun decode(value: JSONObject?): WidgetGridPlacement? = value?.let {
             WidgetGridPlacement(it.optInt("column", -1).takeIf { n -> n >= 0 },
                 it.optInt("row", -1).takeIf { n -> n >= 0 },
-                it.optInt("columns", 1).coerceIn(1, 8), it.optInt("rows", 1).coerceIn(1, 20))
+                it.optInt("columns", 1).coerceIn(1, 8), it.optInt("rows", 1).coerceIn(1, 20),
+                it.optInt("restoreColumn", -1).takeIf { n -> n >= 0 }?.coerceAtMost(7),
+                it.optInt("restoreColumns", -1).takeIf { n -> n > 0 }?.coerceAtMost(8))
         }
     }
+}
+
+/** Width changes keep row/height; occupancy resolution moves any displaced neighbours. */
+internal fun WidgetGridPlacement.withFullWidth(fullWidth: Boolean, capacity: Int): WidgetGridPlacement {
+    val available = capacity.coerceIn(2, 8)
+    if (fullWidth) return copy(column = 0, columns = available,
+        restoreColumn = restoreColumn ?: column ?: 0, restoreColumns = restoreColumns ?: columns)
+    val normalColumns = (restoreColumns ?: columns).coerceIn(1, available)
+    return copy(column = (restoreColumn ?: column ?: 0).coerceIn(0, available - normalColumns),
+        columns = normalColumns, restoreColumn = null, restoreColumns = null)
 }
 
 internal data class WidgetGridSize(val columns: Int = 1, val rows: Int = 1)
@@ -60,8 +75,9 @@ internal fun restoreWidgetGrid(entries: List<PopupItem>, columns: Int, sizes: Ma
         val saved = entry.grid
         val requested = if (entry.widget == null && entry.key !in resizable) sizes[entry.key] ?: WidgetGridSize() else
             saved?.let { WidgetGridSize(it.columns, it.rows) } ?: sizes[entry.key] ?: WidgetGridSize(2, 2)
-        val size = WidgetGridSize(requested.columns.coerceIn(1, width), requested.rows.coerceIn(1, 20))
-        val cell = WidgetGridCell(entry.key, (saved?.column ?: 0).coerceIn(0, width - size.columns),
+        val fullWidth = entry.widget?.widgetFullWidth == true
+        val size = WidgetGridSize(if (fullWidth) width else requested.columns.coerceIn(1, width), requested.rows.coerceIn(1, 20))
+        val cell = WidgetGridCell(entry.key, if (fullWidth) 0 else (saved?.column ?: 0).coerceIn(0, width - size.columns),
             saved?.row?.coerceAtLeast(0) ?: 0, size)
         placed += vacantWidgetCell(cell, width, placed)
     }

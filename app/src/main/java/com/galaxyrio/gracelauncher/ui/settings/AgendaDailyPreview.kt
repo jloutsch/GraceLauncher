@@ -2,6 +2,7 @@
 
 package com.galaxyrio.gracelauncher.ui.settings
 
+import com.galaxyrio.gracelauncher.ui.theme.LocalFontShadowEnabled
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -9,6 +10,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -49,22 +51,24 @@ internal fun AgendaDailyPreview(uiState: LauncherUiState, appearance: AgendaAppe
         if (uiState.settings.calendar.tasksOrg.enabled) listOf(task) else emptyList(), zone,
         uiState.settings.calendar.deprioritizeAllDay, appearance.tasksFirst,
     )[today].orEmpty()
-    MaterialTheme(typography = LocalLauncherTypography.current) {
-        Surface(modifier.testTag("agenda_daily_preview"), color = MaterialTheme.colorScheme.surfaceContainer,
-            shape = ListItemDefaults.segmentedShapes(0, 1).shape,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
-            // The editor already has 16 dp side insets; match the agenda sheet's 30 dp in total.
-            Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)
-                .verticalScroll(rememberScrollState()).padding(horizontal = 14.dp)) {
-                AgendaDayHeader(today, today, weather.daily.firstOrNull { it.date == today }, weather.current,
-                    appearance, uiState.settings.weatherEnabled, weather)
-                entries.forEach { entry ->
-                    when (entry) {
-                        is AgendaEntry.Calendar -> AgendaEvent(entry.event, now, appearance.calendarContent,
-                            appearance.calendarPrimaryFields, interactive = false, onClick = {})
-                        is AgendaEntry.Task -> AgendaTask(entry.task, now, appearance.taskContent, appearance.taskPrimaryFields,
-                            completing = false, onComplete = {}, onClick = {}, interactive = false)
+    CompositionLocalProvider(LocalFontShadowEnabled provides false) {
+        MaterialTheme(typography = LocalLauncherTypography.current) {
+            Surface(modifier.testTag("agenda_daily_preview"), color = MaterialTheme.colorScheme.surfaceContainer,
+                shape = ListItemDefaults.segmentedShapes(0, 1).shape,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline)) {
+                // The editor already has 16 dp side insets; match the agenda sheet's 30 dp in total.
+                Column(Modifier.fillMaxWidth().padding(vertical = 8.dp)
+                    .verticalScroll(rememberScrollState()).padding(horizontal = 14.dp)) {
+                    AgendaDayHeader(today, today, weather.daily.firstOrNull { it.date == today }, weather.current,
+                        appearance, uiState.settings.weatherEnabled, weather)
+                    entries.forEach { entry ->
+                        when (entry) {
+                            is AgendaEntry.Calendar -> AgendaEvent(entry.event, now, appearance.calendarContent,
+                                appearance.calendarPrimaryFields, interactive = false, onClick = {})
+                            is AgendaEntry.Task -> AgendaTask(entry.task, now, appearance.taskContent, appearance.taskPrimaryFields,
+                                completing = false, onComplete = {}, onClick = {}, interactive = false)
+                        }
                     }
                 }
             }

@@ -6,6 +6,8 @@ import android.os.SystemClock
 import android.provider.CalendarContract
 import java.time.Duration
 import java.time.Instant
+import java.time.ZoneId
+import java.time.ZoneOffset
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -99,7 +101,17 @@ class CalendarRepository(private val context: Context) {
         val calendarIds = query.selectedCalendarIds
         if (calendarIds != null && calendarIds.isEmpty()) return@withContext emptyList()
         val now = Instant.now()
-        val horizon = now.plus(Duration.ofDays(query.daysAhead.toLong()))
+        val zone = ZoneId.systemDefault()
+        val today = now.atZone(zone).toLocalDate()
+        val todayStart = today.atStartOfDay(zone).toInstant()
+        val todayOnly = query.daysAhead == 0
+        val horizon = if (todayOnly) today.plusDays(1).atStartOfDay(zone).toInstant()
+            else now.plus(Duration.ofDays(query.daysAhead.toLong()))
+        // All-day dates are encoded in UTC. Query both boundaries, then enforce the local day below.
+        val providerStart = if (todayOnly) minOf(todayStart, today.atStartOfDay(ZoneOffset.UTC).toInstant())
+            else now.minus(Duration.ofDays(1))
+        val providerHorizon = if (todayOnly) maxOf(horizon, today.plusDays(1).atStartOfDay(ZoneOffset.UTC).toInstant())
+            else horizon
         val projection = arrayOf(
             CalendarContract.Instances.EVENT_ID,
             CalendarContract.Instances.TITLE,
@@ -114,8 +126,8 @@ class CalendarRepository(private val context: Context) {
 
         val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().apply {
             // Include UTC all-day instances that may still be today in the user's zone.
-            ContentUris.appendId(this, now.minus(Duration.ofDays(1)).toEpochMilli())
-            ContentUris.appendId(this, horizon.toEpochMilli())
+            ContentUris.appendId(this, providerStart.toEpochMilli())
+            ContentUris.appendId(this, providerHorizon.toEpochMilli())
         }.build()
         // Instances.query() always adds VISIBLE = 1, excluding explicitly selected hidden calendars.
         val selection = if (calendarIds == null) CalendarContract.Calendars.VISIBLE + " = ?"
@@ -156,6 +168,11 @@ class CalendarRepository(private val context: Context) {
                         ),
                     )
                 }
+            }.let { events ->
+                if (todayOnly) events.filter { event ->
+                    event.localBoundary(event.startsAt, zone).isBefore(horizon) &&
+                        event.localBoundary(event.endsAt, zone).isAfter(todayStart)
+                } else events
             }
         }
     }

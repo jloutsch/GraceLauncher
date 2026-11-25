@@ -2,9 +2,11 @@
 
 package com.galaxyrio.gracelauncher.ui.components
 
+import com.galaxyrio.gracelauncher.ui.theme.WithoutFontShadow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.*
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowText as Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -27,7 +29,7 @@ internal fun LauncherSearchBar(
     onBack: (() -> Unit)? = null,
     onSearch: (() -> Unit)? = null,
     trailingIcon: (@Composable () -> Unit)? = null,
-) {
+) = WithoutFontShadow {
     // Keep the native input in its editable/results-visible state. There is no
     // expanding SearchBar or dialog; the collapsed SearchBar wrapper would
     // suppress the keyboard because it expects a separate expanded view.
@@ -45,6 +47,18 @@ internal fun LauncherSearchBar(
         shadowElevation = SearchBarDefaults.ShadowElevation,
     ) {
         val keyboard = LocalSoftwareKeyboardController.current
+        val leading: @Composable () -> Unit = {
+            if (onBack != null) IconButton(onClick = { keyboard?.hide(); onBack() }) {
+                Icon(painterResource(R.drawable.ms_arrow_back), stringResource(R.string.settings_back))
+            } else Icon(painterResource(R.drawable.ms_search), null)
+        }
+        val trailing: @Composable () -> Unit = {
+            if (trailingIcon != null) trailingIcon()
+            else if (textFieldState.text.isNotEmpty()) IconButton(onClick = { textFieldState.edit { replace(0, length, "") } }, enabled = enabled,
+                modifier = Modifier.testTag("${tag}_clear")) {
+                Icon(painterResource(R.drawable.ms_close), stringResource(R.string.search_clear_query))
+            }
+        }
         SearchBarDefaults.InputField(
             textFieldState = textFieldState,
             searchBarState = state,
@@ -53,18 +67,8 @@ internal fun LauncherSearchBar(
             modifier = Modifier.fillMaxWidth().focusRequester(focusRequester).testTag(tag),
             colors = colors.inputFieldColors,
             placeholder = { Text(placeholder) },
-            leadingIcon = {
-                if (onBack != null) IconButton(onClick = { keyboard?.hide(); onBack() }) {
-                    Icon(painterResource(R.drawable.ms_arrow_back), stringResource(R.string.settings_back))
-                } else Icon(painterResource(R.drawable.ms_search), null)
-            },
-            trailingIcon = {
-                if (trailingIcon != null) trailingIcon()
-                else if (textFieldState.text.isNotEmpty()) IconButton(onClick = { textFieldState.edit { replace(0, length, "") } }, enabled = enabled,
-                    modifier = Modifier.testTag("${tag}_clear")) {
-                    Icon(painterResource(R.drawable.ms_close), stringResource(R.string.search_clear_query))
-                }
-            },
+            leadingIcon = leading,
+            trailingIcon = trailing,
         )
     }
 }

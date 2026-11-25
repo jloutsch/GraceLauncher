@@ -59,6 +59,7 @@ data class ListAppearance(
     val applyNameVisibilityToFolders: Boolean = false,
     val appList: AppListLayout = AppListLayout(),
     val symbolHorizontalOffset: Int = 0,
+    val hideSymbol: Boolean = false,
 ) {
     fun showNames(favorites: Boolean, insideFolder: Boolean = false): Boolean =
         if (insideFolder && !applyNameVisibilityToFolders) true else when (names) {
@@ -85,6 +86,7 @@ data class ListAppearance(
         put("recentlyInstalledName", safe.recentlyInstalledName ?: JSONObject.NULL)
         put("appList", safe.appList.json())
         put("symbolHorizontalOffset", safe.symbolHorizontalOffset)
+        put("hideSymbol", safe.hideSymbol)
     }.toString() }
 
     companion object {
@@ -105,6 +107,7 @@ data class ListAppearance(
                 recentlyInstalledName = if (value.isNull("recentlyInstalledName")) null else value.optString("recentlyInstalledName"),
                 appList = AppListLayout.decode(value.optJSONObject("appList")),
                 symbolHorizontalOffset = value.optInt("symbolHorizontalOffset", 0),
+                hideSymbol = value.optBoolean("hideSymbol", false),
             ).normalized()
         }.getOrElse { ListAppearance() }
     }

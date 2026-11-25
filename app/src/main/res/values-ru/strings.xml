@@ -843,8 +843,6 @@
     <string name="shortcuts_folders_title">Ярлыки и папки</string>
     <string name="popups_title">Всплывающие окна</string>
     <string name="shortcuts_folders_enable">Включить всплывающие меню приложений</string>
-    <string name="popup_swipe_left_first">Свайп влево для открытия первого элемента</string>
-    <string name="popup_swipe_left_first_summary">Открывать первый ярлык, приложение или приложение виджета во всплывающем меню</string>
     <string name="popup_silent_notifications">Беззвучные уведомления</string>
     <string name="popup_normal_notifications">Обычные уведомления</string>
     <string name="popup_single_line_previews">Предпросмотр уведомлений в одну линию</string>

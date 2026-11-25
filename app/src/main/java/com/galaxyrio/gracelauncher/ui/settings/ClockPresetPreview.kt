@@ -1,5 +1,6 @@
 package com.galaxyrio.gracelauncher.ui.settings
 
+import com.galaxyrio.gracelauncher.ui.theme.LocalFontShadowEnabled
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -113,7 +114,7 @@ internal fun ClockPresetPreview(
         appearance.copy(darkText = contentColor.luminance() < 0.5f, textColor = contentColor)
     }
     CompositionLocalProvider(
-        LocalLauncherAppearance provides previewAppearance,
+        LocalFontShadowEnabled provides false, LocalLauncherAppearance provides previewAppearance,
         LocalWallpaperFontColor provides contentColor,
     ) {
         MaterialTheme(typography = LocalLauncherTypography.current) {

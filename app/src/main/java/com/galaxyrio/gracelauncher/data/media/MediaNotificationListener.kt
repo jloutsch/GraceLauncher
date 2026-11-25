@@ -68,7 +68,7 @@ class MediaNotificationListener : NotificationListenerService() {
         try {
             val notifications = activeNotifications.orEmpty().toList()
             mediaNotifications.connected(notifications)
-            appNotifications.connected(notifications, appRanking(currentRanking)) { key -> runCatching { cancelNotification(key) }.isSuccess }
+            appNotifications.connected(notifications, appRanking(currentRanking), context = this) { key -> runCatching { cancelNotification(key) }.isSuccess }
         } catch (_: RuntimeException) {
             mediaNotifications.disconnected()
             appNotifications.disconnected()
@@ -94,6 +94,8 @@ class MediaNotificationListener : NotificationListenerService() {
             // muting the phone does not turn ordinary messages into silent channels.
             silent = ranking.importance in NotificationManager.IMPORTANCE_MIN..NotificationManager.IMPORTANCE_LOW,
             importance = ranking.importance,
+            smartActions = if (Build.VERSION.SDK_INT >= 29) ranking.smartActions else emptyList(),
+            smartReplies = if (Build.VERSION.SDK_INT >= 29) ranking.smartReplies.map(CharSequence::toString) else emptyList(),
         )
     }
     override fun onListenerDisconnected() { mediaNotifications.disconnected(); appNotifications.disconnected() }

@@ -27,6 +27,7 @@ import com.galaxyrio.gracelauncher.data.HourWeatherChartType
 import com.galaxyrio.gracelauncher.data.HourWeatherFieldStyle
 import com.galaxyrio.gracelauncher.data.weather.WeatherSnapshot
 import com.galaxyrio.gracelauncher.ui.weather.labelResource
+import com.galaxyrio.gracelauncher.ui.weather.valueColors
 
 @Composable
 internal fun AgendaHourlyWeatherSettings(draft: AgendaAppearance, snapshot: WeatherSnapshot?, enabled: Boolean,
@@ -121,7 +122,8 @@ private fun HourlyWeatherFieldEditor(field: AgendaHourWeatherField, draft: Agend
     val style = draft.hourWeatherStyle(field)
     val chartEnabled = field in draft.hourWeatherChartFields
     val hasChartType = field.supportsChart && field != AgendaHourWeatherField.WindDirection && chartEnabled
-    val chartCount = if (hasChartType) 4 else 2
+    val chartCount = if (hasChartType) 5 else 3
+    val hasValueColors = field.valueColors != null
     val innerColor = MaterialTheme.colorScheme.surfaceContainer
     fun changeStyle(value: HourWeatherFieldStyle) = onChange(draft.copy(hourWeatherStyles =
         if (value == HourWeatherFieldStyle.defaults(field)) draft.hourWeatherStyles - field
@@ -137,11 +139,16 @@ private fun HourlyWeatherFieldEditor(field: AgendaHourWeatherField, draft: Agend
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(ListItemDefaults.SegmentedGap)) {
                 SettingsToggleItem(stringResource(R.string.weather_hour_show_text), null,
-                    field in draft.hourWeatherSelected, 0, 2, "agenda_hour_show_text", enabled, containerColor = innerColor) {
+                    field in draft.hourWeatherSelected, 0, 3, "agenda_hour_show_text", enabled, containerColor = innerColor) {
                     onChange(draft.copy(hourWeatherSelected = if (it) draft.hourWeatherSelected + field else draft.hourWeatherSelected - field))
                 }
+                SettingsToggleItem(stringResource(R.string.weather_hour_use_value_color), null,
+                    hasValueColors && style.useValueColorText, 1, 3, "agenda_hour_text_value_color",
+                    enabled && hasValueColors, containerColor = innerColor) {
+                    changeStyle(style.copy(useValueColorText = it))
+                }
                 SettingsToggleItem(stringResource(R.string.weather_hour_always_show), null, style.alwaysShowText,
-                    1, 2, "agenda_hour_text_always_show", enabled, containerColor = innerColor) {
+                    2, 3, "agenda_hour_text_always_show", enabled, containerColor = innerColor) {
                     changeStyle(style.copy(alwaysShowText = it))
                 }
             }
@@ -150,12 +157,17 @@ private fun HourlyWeatherFieldEditor(field: AgendaHourWeatherField, draft: Agend
                     chartEnabled, 0, chartCount, "agenda_hour_show_chart", enabled, containerColor = innerColor) {
                     onChange(draft.copy(hourWeatherChartFields = if (it) draft.hourWeatherChartFields + field else draft.hourWeatherChartFields - field))
                 }
+                SettingsToggleItem(stringResource(R.string.weather_hour_use_value_color), null,
+                    hasValueColors && style.useValueColorChart, 1, chartCount, "agenda_hour_chart_value_color",
+                    enabled && hasValueColors, containerColor = innerColor) {
+                    changeStyle(style.copy(useValueColorChart = it))
+                }
                 SettingsToggleItem(stringResource(R.string.weather_hour_always_show), null, style.alwaysShowChart,
-                    1, chartCount, "agenda_hour_chart_always_show", enabled, containerColor = innerColor) {
+                    2, chartCount, "agenda_hour_chart_always_show", enabled, containerColor = innerColor) {
                     changeStyle(style.copy(alwaysShowChart = it))
                 }
                 if (hasChartType) {
-                    ClockControlSegment(2, chartCount, "agenda_hour_chart_type", containerColor = innerColor) {
+                    ClockControlSegment(3, chartCount, "agenda_hour_chart_type", containerColor = innerColor) {
                         OrderedIconChoices(tag = "agenda_hour_chart_type", order = HourWeatherChartType.entries,
                             selected = setOf(style.chartType), enabled = enabled, hapticsEnabled = haptics,
                             labelFor = { stringResource(if (it == HourWeatherChartType.Bar) R.string.weather_chart_bar else R.string.weather_chart_line) },
@@ -164,12 +176,12 @@ private fun HourlyWeatherFieldEditor(field: AgendaHourWeatherField, draft: Agend
                     }
                     if (style.chartType == HourWeatherChartType.Line) {
                         SettingsToggleItem(stringResource(R.string.weather_chart_wavy), null, style.wavy,
-                            3, chartCount, "agenda_hour_chart_wavy", enabled, containerColor = innerColor) {
+                            4, chartCount, "agenda_hour_chart_wavy", enabled, containerColor = innerColor) {
                             changeStyle(style.copy(wavy = it))
                         }
                     } else ClockSlider(stringResource(R.string.weather_chart_bar_width), style.barWidth,
                         HourWeatherFieldStyle.defaults(field).barWidth, HourWeatherFieldStyle.BarWidthRange, 2,
-                        3, chartCount, "agenda_hour_bar_width", enabled,
+                        4, chartCount, "agenda_hour_bar_width", enabled,
                         valueLabel = stringResource(R.string.weather_chart_height_value, style.barWidth),
                         containerColor = innerColor) { changeStyle(style.copy(barWidth = it)) }
                 }

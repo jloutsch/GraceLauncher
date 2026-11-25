@@ -46,10 +46,10 @@ class PopupWidgetEditingTest {
         val old = HomeLayout.decode("""{"widgetId":7,"widgetHeightDp":180}""")
         assertEquals(100, old.popupWidthPercent)
         assertEquals(100, old.popupContentScale)
-        assertFalse(old.popupFullWidth)
+        assertFalse(old.widgetFullWidth)
         assertFalse(old.popupBackground)
         val changed = old.copy(popupWidthPercent = 70, popupContentScale = 125,
-            popupFullWidth = true, popupBackground = true)
+            widgetFullWidth = true, popupBackground = true)
         val entry = PopupItem("widget:7", changed)
         assertEquals(listOf(entry), PopupItem.decode(PopupItem.encode(listOf(entry))))
         assertEquals(HomeLayout(), changed.withoutWidget())
@@ -87,7 +87,7 @@ class PopupWidgetEditingTest {
         compose.onNodeWithTag("popup_widget_controls").assertDoesNotExist()
         compose.runOnIdle {
             val layout = saved.first().widget!!
-            assertFalse(layout.popupFullWidth)
+            assertFalse(layout.widgetFullWidth)
             assertTrue(layout.popupBackground)
             assertEquals(125, layout.popupContentScale)
         }

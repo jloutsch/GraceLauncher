@@ -10,6 +10,7 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.click
+import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performClick
@@ -50,6 +51,7 @@ class ClockRegionRenderingTest {
         var clockClicks = 0
         var dateClicks = 0
         var weatherClicks = 0
+        var calendarClicks = 0
         val regions = ClockRegions(
             primary = ClockElement.Weekday,
             primaryAlignment = ClockAlignment.Center,
@@ -64,7 +66,7 @@ class ClockRegionRenderingTest {
             GraceLauncherTheme(dynamicColor = false) {
                 HomeClockHeader(now, null, { dateClicks++ }, { clockClicks++ }, false,
                     ClockStyle(regions = regions), weather, Modifier.width(360.dp),
-                    onWeatherClick = { weatherClicks++ })
+                    onWeatherClick = { weatherClicks++ }, onCalendarClick = { calendarClicks++ })
             }
         }
         val primary = bounds("clock_region:Primary")
@@ -83,8 +85,30 @@ class ClockRegionRenderingTest {
         compose.onNodeWithTag("home_weather").performClick()
         compose.runOnIdle {
             assertEquals(1, clockClicks)
-            assertEquals(2, dateClicks)
+            assertEquals(0, dateClicks)
+            assertEquals(2, calendarClicks)
             assertEquals(1, weatherClicks)
+        }
+    }
+
+    @Test fun longPressOnDateRunsTheCalendarLongClickInsteadOfTheAgenda() {
+        var dateClicks = 0
+        var calendarClicks = 0
+        var calendarLongClicks = 0
+        val regions = ClockRegions(primary = null,
+            secondary = ClockRegionRow(selected = setOf(ClockElement.Date)))
+        compose.setContent {
+            GraceLauncherTheme(dynamicColor = false) {
+                HomeClockHeader(now, null, { dateClicks++ }, {}, false,
+                    ClockStyle(regions = regions), weather, Modifier.width(360.dp),
+                    onCalendarClick = { calendarClicks++ }, onCalendarLongClick = { calendarLongClicks++ })
+            }
+        }
+        compose.onNodeWithTag("home_date").performTouchInput { longClick() }
+        compose.runOnIdle {
+            assertEquals(1, calendarLongClicks)
+            assertEquals(0, calendarClicks)
+            assertEquals(0, dateClicks)
         }
     }
 
@@ -157,6 +181,7 @@ class ClockRegionRenderingTest {
         var clockClicks = 0
         var dateClicks = 0
         var weatherClicks = 0
+        var calendarClicks = 0
         val regions = ClockRegions(primaryAlignment = ClockAlignment.Right,
             secondary = ClockRegionRow(selected = setOf(ClockElement.Date)),
             tertiary = ClockRegionRow(selected = setOf(ClockElement.Weather)))
@@ -164,7 +189,7 @@ class ClockRegionRenderingTest {
             GraceLauncherTheme(dynamicColor = false) {
                 HomeClockHeader(now, null, { dateClicks++ }, { clockClicks++ }, false,
                     ClockStyle(regions = regions.copy(rotatePrimary = rotatePrimary)), weather, Modifier.width(360.dp),
-                    onWeatherClick = { weatherClicks++ })
+                    onWeatherClick = { weatherClicks++ }, onCalendarClick = { calendarClicks++ })
             }
         }
         val originalClock = bounds("home_clock")
@@ -183,7 +208,8 @@ class ClockRegionRenderingTest {
         touch("home_weather")
         compose.runOnIdle {
             assertEquals(1, clockClicks)
-            assertEquals(1, dateClicks)
+            assertEquals(0, dateClicks)
+            assertEquals(1, calendarClicks)
             assertEquals(1, weatherClicks)
         }
     }
@@ -193,6 +219,7 @@ class ClockRegionRenderingTest {
         var clockClicks = 0
         var dateClicks = 0
         var weatherClicks = 0
+        var calendarClicks = 0
         val regions = ClockRegions(
             secondary = ClockRegionRow(selected = setOf(ClockElement.Date)),
             tertiary = ClockRegionRow(selected = setOf(ClockElement.Weather)))
@@ -201,7 +228,7 @@ class ClockRegionRenderingTest {
             GraceLauncherTheme(dynamicColor = false) {
                 HomeClockHeader(now, event, { dateClicks++ }, { clockClicks++ }, false,
                     ClockStyle(regions = regions.copy(rotateAll = rotateAll)), weather, Modifier.width(360.dp),
-                    onWeatherClick = { weatherClicks++ })
+                    onWeatherClick = { weatherClicks++ }, onCalendarClick = { calendarClicks++ })
             }
         }
         val originalRegions = ClockRegion.entries.associateWith { bounds("clock_region:$it") }
@@ -228,7 +255,8 @@ class ClockRegionRenderingTest {
         touch("home_agenda")
         compose.runOnIdle {
             assertEquals(1, clockClicks)
-            assertEquals(2, dateClicks)
+            assertEquals(1, dateClicks)
+            assertEquals(1, calendarClicks)
             assertEquals(1, weatherClicks)
         }
     }

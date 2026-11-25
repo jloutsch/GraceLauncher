@@ -123,7 +123,7 @@ class AppGroupEditorsTest {
         val appNode = compose.onNodeWithTag("widget_screen_item:${member.key}")
         appNode.performTouchInput { longClick(durationMillis = 1600L) }
         compose.onNodeWithTag("widget_screen_item:${widget.key}").performTouchInput { longClick(durationMillis = 1600L) }
-        compose.onNodeWithTag("widget_screen_delete").assertDoesNotExist()
+        compose.onNodeWithTag("popup_widget_controls").assertDoesNotExist()
         compose.onNodeWithTag("widget_resize:right").assertDoesNotExist()
         appNode.performTouchInput { click() }
         compose.runOnIdle { assertEquals(listOf(member.key), opened) }

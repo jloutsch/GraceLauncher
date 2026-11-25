@@ -9,6 +9,7 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.CalendarPreferences
+import com.galaxyrio.gracelauncher.data.DateAction
 import com.galaxyrio.gracelauncher.data.CalendarRefreshMode
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
@@ -27,6 +28,17 @@ internal fun CalendarSettings(
             { it.toString() }, { pluralStringResource(R.plurals.calendar_days_value, it, it) },
             onSelect = { days ->
                 actions.updateSettings { it.copy(calendar = it.calendar.copy(daysAhead = days)) }
+                dialog = null
+            }, onDismiss = { dialog = null },
+        )
+        "date_tap", "date_long_press" -> SettingsSelectionDialog(
+            stringResource(if (dialog == "date_tap") R.string.calendar_date_tap else R.string.calendar_date_long_press),
+            DateAction.entries, if (dialog == "date_tap") calendar.dateTapAction else calendar.dateLongPressAction,
+            "calendar_$dialog", { it.name }, { it.label() },
+            onSelect = { action ->
+                val tap = dialog == "date_tap"
+                actions.updateSettings { it.copy(calendar = if (tap) it.calendar.copy(dateTapAction = action)
+                    else it.calendar.copy(dateLongPressAction = action)) }
                 dialog = null
             }, onDismiss = { dialog = null },
         )
@@ -88,7 +100,15 @@ internal fun CalendarSettings(
             item { SettingsHeading(stringResource(R.string.calendar_open_events)) }
             item {
                 SettingsActionItem(stringResource(R.string.calendar_app), calendarAppSummary(uiState),
-                    0, 1, "calendar_app", onClick = onCalendarApp)
+                    0, 3, "calendar_app", onClick = onCalendarApp)
+            }
+            item {
+                SettingsActionItem(stringResource(R.string.calendar_date_tap), calendar.dateTapAction.label(),
+                    1, 3, "calendar_date_tap_item", onClick = { dialog = "date_tap" })
+            }
+            item {
+                SettingsActionItem(stringResource(R.string.calendar_date_long_press), calendar.dateLongPressAction.label(),
+                    2, 3, "calendar_date_long_press_item", onClick = { dialog = "date_long_press" })
             }
             item { SettingsHeading(stringResource(R.string.settings_tasks)) }
             item {
@@ -98,6 +118,14 @@ internal fun CalendarSettings(
         }
     }
 }
+
+@Composable
+private fun DateAction.label(): String = stringResource(when (this) {
+    DateAction.Calendar -> R.string.calendar_action_open_calendar
+    DateAction.Agenda -> R.string.calendar_action_open_agenda
+    DateAction.NewEvent -> R.string.calendar_action_new_event
+    DateAction.NewTask -> R.string.calendar_action_new_task
+})
 
 @Composable
 private fun CalendarRefreshMode.label(): String = stringResource(when (this) {
