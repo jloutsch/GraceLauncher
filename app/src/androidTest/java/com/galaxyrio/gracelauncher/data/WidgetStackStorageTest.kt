@@ -56,6 +56,7 @@ class WidgetStackStorageTest {
     }
 
     @Test fun forkWidgetStacksBecomeUpstreamWidgetStacksOnce() = runBlocking {
+        settings.mutateSettings { it } // creates the settings row the UPDATE below changes
         // Before upstream's column, a fork stack was an app stack listed in shortcutsFoldersJson.
         settings.saveFolder(LauncherFolder("ws", "Widgets", emptyList(), FolderPlacement.Favorites, isAppStack = true))
         settings.saveFolder(LauncherFolder("apps", "Apps", emptyList(), FolderPlacement.Favorites, isAppStack = true))

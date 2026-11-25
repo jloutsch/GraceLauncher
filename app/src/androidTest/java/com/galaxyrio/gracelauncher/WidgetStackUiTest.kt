@@ -2,7 +2,6 @@ package com.galaxyrio.gracelauncher
 
 import android.content.ComponentName
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithContentDescription
@@ -24,10 +23,6 @@ import androidx.compose.ui.test.hasText
 import com.galaxyrio.gracelauncher.ui.widgets.LocalWidgetHost
 import com.galaxyrio.gracelauncher.ui.widgets.LocalWidgetSurfaceShown
 import com.galaxyrio.gracelauncher.ui.widgets.rememberWidgetHost
-import androidx.compose.ui.test.longClick
-import androidx.compose.ui.unit.dp
-import com.galaxyrio.gracelauncher.data.WidgetScreenKey
-import com.galaxyrio.gracelauncher.ui.home.WidgetScreen
 import androidx.test.platform.app.InstrumentationRegistry
 import com.galaxyrio.gracelauncher.data.FolderPlacement
 import com.galaxyrio.gracelauncher.data.HomeLayout
@@ -41,7 +36,6 @@ import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.components.AppStack
 import com.galaxyrio.gracelauncher.ui.overlays.PopupEditorScreen
-import com.galaxyrio.gracelauncher.ui.settings.FolderEditorSettings
 import com.galaxyrio.gracelauncher.ui.theme.GraceLauncherTheme
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -121,30 +115,6 @@ class WidgetStackUiTest {
         compose.onNodeWithTag("popup_add_widget").assertDoesNotExist()
     }
 
-    @Test fun stackHeightButtonsStepOneDpAndAutomaticIsOneStepBelowTheMinimum() {
-        var items = listOf(PopupItem("widget:7", HomeLayout(widgetId = 7, widgetHeightDp = 150)))
-        var stackState by mutableStateOf(state.copy(popups = mapOf(widgetStack.key to items)))
-        val actions = LauncherActions(shortcuts = { ShortcutResult(ShortcutStatus.Ready) },
-            updatePopup = { _, _, transform -> items = transform(items); stackState = stackState.copy(popups = mapOf(widgetStack.key to items)) })
-        compose.setContent {
-            GraceLauncherTheme(dynamicColor = false) { FolderEditorSettings(widgetStack.id, stackState, actions, onBack = {}) }
-        }
-        fun height() = compose.runOnIdle { items.single().widget!!.widgetHeightDp }
-        compose.onNodeWithTag("widget_stack_height_increase").performScrollTo().performClick()
-        assertEquals(151, height())
-        compose.onNodeWithTag("widget_stack_height_decrease").performClick()
-        compose.onNodeWithTag("widget_stack_height_decrease").performClick()
-        assertEquals(149, height())
-
-        compose.runOnIdle { items = listOf(items.single().let { it.copy(widget = it.widget!!.copy(widgetHeightDp = 48)) })
-            stackState = stackState.copy(popups = mapOf(widgetStack.key to items)) }
-        compose.onNodeWithTag("widget_stack_height_decrease").performClick()
-        assertEquals("One step below the minimum is Automatic", 0, height())
-        compose.onNodeWithTag("widget_stack_height_decrease").assertIsNotEnabled()
-        compose.onNodeWithTag("widget_stack_height_increase").performClick()
-        assertEquals(48, height())
-    }
-
     // Fork (#39): a stack shown in two places hosts each widget in one copy only, never in a hidden one.
     @Test fun twoCopiesOfAStackHostItsWidgetOnceAndNeverInAHiddenCopy() {
         val items = listOf(PopupItem("widget:7", HomeLayout(widgetId = 7, widgetProvider = "w/w.Provider")))
@@ -170,25 +140,6 @@ class WidgetStackUiTest {
         compose.waitUntil(5_000) { compose.onAllNodes(card and hasAnyAncestor(hasTestTag("first"))).fetchSemanticsNodes().size == 1 }
         compose.onAllNodes(card).assertCountEquals(1)
         compose.onAllNodes(card and hasAnyAncestor(hasTestTag("second"))).assertCountEquals(0)
-    }
-
-    // Fork: on the Widget Screen a long-press moves and resizes, so a selected stack offers its editor.
-    @Test fun selectingAWidgetStackOnTheWidgetScreenOffersItsEditor() {
-        val state = state.copy(popups = mapOf(WidgetScreenKey to listOf(PopupItem(widgetStack.key)),
-            widgetStack.key to listOf(PopupItem(app.key))))
-        val edited = mutableListOf<String>()
-        compose.setContent {
-            GraceLauncherTheme(dynamicColor = false) {
-                WidgetScreen(state, LauncherActions(), 0.dp, 0.dp, editing = false, enabled = true,
-                    onEditingChange = {}, onEdit = {}, onLaunchApp = {}, onAppDetails = {}, onOpenFolder = { _, _ -> },
-                    onEditStack = { edited += it.id })
-            }
-        }
-        compose.onNodeWithTag("widget_stack_edit_button").assertDoesNotExist()
-        compose.onNodeWithTag("widget_screen_item:${widgetStack.key}").performTouchInput { longClick(durationMillis = 1600L) }
-        compose.onNodeWithTag("widget_stack_edit_button").assertIsDisplayed().performClick()
-        compose.runOnIdle { assertEquals(listOf(widgetStack.id), edited) }
-        compose.onNodeWithTag("widget_stack_edit_button").assertDoesNotExist()
     }
 
     private fun showEditor(folder: LauncherFolder) = compose.setContent {

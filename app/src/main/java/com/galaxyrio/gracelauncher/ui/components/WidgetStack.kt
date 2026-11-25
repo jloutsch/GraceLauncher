@@ -152,6 +152,8 @@ internal fun WidgetStack(
         }
         fun pageKey(index: Int): String? = (pages.getOrNull(index)?.first() as? HomeLayout)?.let { keyByWidget[it.widgetId] }
         LaunchedEffect(selectedKey, count) {
+            // App pages have no key, so without a selection they would match and the stack would open on them.
+            if (selectedKey == null) return@LaunchedEffect
             val target = (0 until count).firstOrNull { pageKey(it) == selectedKey } ?: return@LaunchedEffect
             val current = pager.currentPage
             if (current % count == target) return@LaunchedEffect
