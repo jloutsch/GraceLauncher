@@ -31,9 +31,11 @@ import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.*
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
+import com.galaxyrio.gracelauncher.ui.components.LauncherLayout
 import com.galaxyrio.gracelauncher.ui.overlays.PopupWidgetControls
 import com.galaxyrio.gracelauncher.ui.overlays.PopupWidgetItem
 import com.galaxyrio.gracelauncher.ui.overlays.panelWindowHeight
+import com.galaxyrio.gracelauncher.ui.widgets.WidgetStack
 import kotlinx.coroutines.launch
 
 private val AgendaAppearanceSaver = Saver<AgendaAppearance, String>(save = { it.encode() }, restore = { AgendaAppearance.decode(it) })
@@ -53,6 +55,7 @@ internal fun AgendaAppearanceSettings(uiState: LauncherUiState, actions: Launche
     var widgetEdited by rememberSaveable { mutableStateOf(false) }
     var observedWidgetId by rememberSaveable { mutableIntStateOf(-1) }
     var editingWidget by rememberSaveable { mutableStateOf(false) }
+    var choosingWidgetStack by rememberSaveable { mutableStateOf(false) }
     var resizingWidget by remember { mutableStateOf(false) }
     val navController = rememberNavController()
     val currentEntry by navController.currentBackStackEntryAsState()
@@ -60,9 +63,9 @@ internal fun AgendaAppearanceSettings(uiState: LauncherUiState, actions: Launche
     var contentPage by rememberSaveable { mutableStateOf<AgendaDailyContentPage?>(null) }
     var hourlyField by rememberSaveable { mutableStateOf<AgendaHourWeatherField?>(null) }
     // The standalone settings activity can retain an older weather snapshot than HOME.
-    // Refresh the selected source on entry, and when its location or mode changes.
+    // Check freshness on entry; source and location edits already trigger an immediate read.
     LifecycleResumeEffect(uiState.settings.weatherEnabled, uiState.settings.weatherLocationId, uiState.settings.weatherConnection) {
-        if (uiState.settings.weatherEnabled) actions.refreshWeather()
+        if (uiState.settings.weatherEnabled) actions.refreshWeatherIfNeeded()
         onPauseOrDispose { }
     }
     val distance = with(LocalDensity.current) { 30.dp.roundToPx() }
@@ -75,11 +78,13 @@ internal fun AgendaAppearanceSettings(uiState: LauncherUiState, actions: Launche
         if (newWidget != null && newWidget.widgetId != observedWidgetId) {
             observedWidgetId = newWidget.widgetId
             widgetJson = newWidget.encode()
+            draft = draft.copy(widgetStackKey = null)
             widgetEdited = true
             editingWidget = false
         }
     }
     val widget = remember(widgetJson) { widgetJson?.let { HomeLayout.decode(it) }?.takeIf { it.hasWidget } }
+    val widgetStack = uiState.folders.firstOrNull { it.key == draft.widgetStackKey && it.isWidgetStack }
     // The settings snapshot and widget snapshot arrive independently.
     val enabled = uiState.itemRevision > 0 && !saving && LocalSettingsStorageState.current.canEdit
     val weatherEnabled = enabled && uiState.settings.weatherEnabled
@@ -130,6 +135,17 @@ internal fun AgendaAppearanceSettings(uiState: LauncherUiState, actions: Launche
             TextButton(::discardAndExit, enabled = !saving) { Text(stringResource(R.string.icon_designer_discard)) }
         } }, modifier = Modifier.testTag("agenda_appearance_unsaved"),
     )
+    if (choosingWidgetStack) {
+        WidgetStackPickerScreen(uiState, actions, setOfNotNull(draft.widgetStackKey),
+            onBack = { choosingWidgetStack = false }, onToggle = { stack ->
+                draft = draft.copy(widgetStackKey = stack.key)
+                widgetJson = null
+                widgetEdited = true
+                editingWidget = false
+                choosingWidgetStack = false
+            })
+        return
+    }
     NavHost(navController, startDestination = AgendaEditorPage.Overview.name,
         modifier = Modifier.fillMaxSize().testTag("agenda_appearance_navigation"),
         enterTransition = { settingsEnter(distance) }, exitTransition = { settingsExit(distance) },
@@ -196,20 +212,36 @@ internal fun AgendaAppearanceSettings(uiState: LauncherUiState, actions: Launche
                             }
                             item("widget_heading") { SettingsHeading(stringResource(R.string.agenda_widget_region)) }
                             clockSetting("widget_add") {
-                                SettingsActionItem(stringResource(R.string.settings_add_widget), null, 0, 1, "agenda_widget_add",
+                                SettingsActionItem(stringResource(R.string.settings_add_widget), null, 0, 2, "agenda_widget_add",
                                     enabled = pageEnabled && widget == null, onClick = actions.addAgendaWidget)
                             }
-                            if (widget != null) {
+                            clockSetting("widget_stack_add") {
+                                SettingsActionItem(stringResource(R.string.widget_stack_add), widgetStack?.name, 1, 2,
+                                    "agenda_widget_stack_add", enabled = pageEnabled, onClick = { choosingWidgetStack = true })
+                            }
+                            if (widgetStack != null) {
+                                clockSetting("widget_stack_preview:${widgetStack.id}") {
+                                    WidgetStack(widgetStack, uiState, Modifier.fillMaxWidth().padding(horizontal = 14.dp), preview = true)
+                                }
+                                clockSetting("widget_stack_remove") {
+                                    SettingsActionItem(stringResource(R.string.widget_stack_remove), null, 0, 1,
+                                        "agenda_widget_stack_remove", enabled = pageEnabled) {
+                                        draft = draft.copy(widgetStackKey = null)
+                                    }
+                                }
+                            } else if (widget != null) {
                                 clockSetting("widget_preview:${widget.widgetId}") {
-                                    Box(Modifier.fillMaxWidth().padding(horizontal = 14.dp)) {
+                                    Box(Modifier.fillMaxWidth()) {
                                         PopupWidgetItem(widget, editingWidget, pageEnabled, haptics,
                                             maxHeight = panelWindowHeight().value.toInt(), onChange = { layout, _ -> changeWidget(layout) },
                                             onDragStart = { editingWidget = true }, onDrag = {}, onDragEnd = {},
-                                            onResizing = { resizingWidget = it }, horizontalInset = 0.dp)
+                                            onResizing = { resizingWidget = it },
+                                            horizontalInset = LauncherLayout.AgendaContentInset)
                                     }
                                 }
                                 if (editingWidget) clockSetting("widget_controls") {
-                                    PopupWidgetControls(widget, onChange = { layout, _ -> changeWidget(layout) }, onDone = { editingWidget = false })
+                                    PopupWidgetControls(widget, onChange = { layout, _ -> changeWidget(layout) }, onDone = { editingWidget = false },
+                                        onDelete = { widgetJson = null; widgetEdited = true; editingWidget = false })
                                 }
                                 clockSetting("widget_remove") {
                                     SettingsActionItem(stringResource(R.string.widget_remove), null, 0, 1, "agenda_widget_remove", enabled = pageEnabled) {

@@ -25,6 +25,7 @@ internal fun LauncherAppTheme(viewModel: LauncherViewModel, content: @Composable
         paletteStyle = state.settings.paletteStyle,
         fontLibrary = state.settings.fontLibrary,
         fontColors = state.settings.fontColors,
+        fontShadow = state.settings.fontShadow,
         content = content,
     )
 }

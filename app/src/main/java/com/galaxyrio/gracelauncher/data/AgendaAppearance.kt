@@ -28,6 +28,8 @@ data class HourWeatherFieldStyle(
     val chartType: HourWeatherChartType = HourWeatherChartType.Line,
     val wavy: Boolean = false,
     val barWidth: Int = 18,
+    val useValueColorText: Boolean = false,
+    val useValueColorChart: Boolean = true,
     val alwaysShowText: Boolean = false,
     val alwaysShowChart: Boolean = false,
 ) {
@@ -73,6 +75,8 @@ data class AgendaAppearance(
     val hourWeatherColumnWidth: Int = 80,
     val showUndatedTasks: Boolean = true,
     val lastCreateAction: AgendaCreateAction = AgendaCreateAction.Event,
+    /** References a shared widget stack instead of owning a separate agenda widget. */
+    val widgetStackKey: String? = null,
 ) {
     fun hourWeatherStyle(field: AgendaHourWeatherField) = hourWeatherStyles[field] ?: HourWeatherFieldStyle.defaults(field)
 
@@ -90,6 +94,7 @@ data class AgendaAppearance(
         hourWeatherColumnWidth = hourWeatherColumnWidth.coerceIn(HourWeatherColumnWidthRange),
         calendarContent = calendarContent.normalized(),
         taskContent = taskContent.normalized(),
+        widgetStackKey = widgetStackKey?.takeIf { it.startsWith("folder:") && it.length > "folder:".length },
     )
 
     fun encode(): String = normalized().let { value -> JSONObject().apply {
@@ -116,6 +121,8 @@ data class AgendaAppearance(
                 put("chartType", style.chartType.name)
                 put("wavy", style.wavy)
                 put("barWidth", style.barWidth)
+                put("useValueColorText", style.useValueColorText)
+                put("useValueColorChart", style.useValueColorChart)
                 put("alwaysShowText", style.alwaysShowText)
                 put("alwaysShowChart", style.alwaysShowChart)
             }) }
@@ -125,6 +132,7 @@ data class AgendaAppearance(
         put("hourWeatherColumnWidth", value.hourWeatherColumnWidth)
         put("showUndatedTasks", value.showUndatedTasks)
         put("lastCreateAction", value.lastCreateAction.name)
+        put("widgetStackKey", value.widgetStackKey)
     }.toString() }
 
     companion object {
@@ -196,6 +204,8 @@ data class AgendaAppearance(
                                 ?: fallback.chartType,
                             wavy = style.optBoolean("wavy", fallback.wavy),
                             barWidth = style.optInt("barWidth", fallback.barWidth),
+                            useValueColorText = style.optBoolean("useValueColorText", fallback.useValueColorText),
+                            useValueColorChart = style.optBoolean("useValueColorChart", fallback.useValueColorChart),
                             alwaysShowText = style.optBoolean("alwaysShowText", style.optBoolean("alwaysShow", fallback.alwaysShowText)),
                             alwaysShowChart = style.optBoolean("alwaysShowChart", false),
                         )
@@ -207,6 +217,7 @@ data class AgendaAppearance(
                 showUndatedTasks = data.optBoolean("showUndatedTasks", defaults.showUndatedTasks),
                 lastCreateAction = AgendaCreateAction.entries.firstOrNull { it.name == data.optString("lastCreateAction") }
                     ?: defaults.lastCreateAction,
+                widgetStackKey = data.optString("widgetStackKey").takeIf { it.startsWith("folder:") },
             ).normalized()
         }.getOrDefault(AgendaAppearance())
     }

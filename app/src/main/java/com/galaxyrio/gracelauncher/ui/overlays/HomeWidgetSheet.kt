@@ -1,5 +1,6 @@
 package com.galaxyrio.gracelauncher.ui.overlays
 
+import com.galaxyrio.gracelauncher.ui.theme.WithoutFontShadow
 import android.content.ComponentName
 import android.appwidget.AppWidgetManager
 import android.os.Process
@@ -9,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowText as Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -35,7 +37,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 @Composable
-internal fun HomeWidgetSheet(uiState: LauncherUiState, actions: LauncherActions, onChange: (LauncherOverlay?) -> Unit, custom: Boolean) {
+internal fun HomeWidgetSheet(uiState: LauncherUiState, actions: LauncherActions, onChange: (LauncherOverlay?) -> Unit, custom: Boolean) = WithoutFontShadow {
     val settings = uiState.settings
     val widget = settings.homeLayout
     val component = widget.widgetProvider?.let(ComponentName::unflattenFromString)

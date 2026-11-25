@@ -11,6 +11,8 @@ data class AppListLayout(
     val order: List<String>? = null,
     val showGraceLauncher: Boolean = true,
     val showGraceSettings: Boolean = true,
+    /** Start the app list at the same height as the home content instead of a fixed offset. */
+    val alignWithHome: Boolean = false,
 ) {
     /** Empty categories remain selectable blocks even when their runtime headings are hidden. */
     fun orderedKeys(categories: List<AppCategory>): List<String> {
@@ -27,6 +29,7 @@ data class AppListLayout(
         value.order?.let { put("order", JSONArray(it)) }
         put("showGraceLauncher", value.showGraceLauncher)
         put("showGraceSettings", value.showGraceSettings)
+        put("alignWithHome", value.alignWithHome)
     } }
 
     companion object {
@@ -39,6 +42,7 @@ data class AppListLayout(
             },
             showGraceLauncher = value.optBoolean("showGraceLauncher", true),
             showGraceSettings = value.optBoolean("showGraceSettings", true),
+            alignWithHome = value.optBoolean("alignWithHome", false),
         ).normalized()
     }
 }

@@ -2,6 +2,7 @@
 
 package com.galaxyrio.gracelauncher.ui.settings
 
+import com.galaxyrio.gracelauncher.ui.theme.LocalFontShadowEnabled
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
 import androidx.compose.animation.core.tween
@@ -238,7 +239,7 @@ private fun AlphabetPreview(uiState: LauncherUiState, draft: AlphabetAppearance,
         previewTop = with(density) { it.positionInWindow().y.toDp().value }
         positioned = true
     }.clipToBounds()) {
-        CompositionLocalProvider(LocalLauncherAppearance provides appearance, LocalFontLibrary provides settings.fontLibrary) {
+        CompositionLocalProvider(LocalFontShadowEnabled provides true, LocalLauncherAppearance provides appearance, LocalFontLibrary provides settings.fontLibrary) {
             // A window into the desktop, not another screen with a shorter coordinate
             // system. Preserve actual letter spacing, glyph sizes and indicator geometry.
             if (positioned) AlphabetRail(model.letters, selected, layout.heightDp.dp,
@@ -272,12 +273,14 @@ private fun rememberAlphabetPreviewModel(uiState: LauncherUiState): AppListModel
     }
     val now by rememberHomeTime()
     val headphones by rememberHeadphonesConnected()
-    val time = now.atZone(java.time.ZoneId.systemDefault()).toLocalTime()
+    val time = now.atZone(java.time.ZoneId.systemDefault())
     val minute = time.hour * 60 + time.minute
-    return remember(apps, uiState.folders, privateFolder, workFolder, recentFolder, settings.listAppearance.appList, categories, members, headphones, minute,
+    val day = time.dayOfWeek
+    return remember(apps, uiState.folders, privateFolder, workFolder, recentFolder, settings.listAppearance.appList, categories, members, headphones, minute, day,
         settings.listAppearance.alphabet.numbersFirst) {
         AppListModel(apps, uiState.folders, privateFolder, recentlyInstalledFolder = recentFolder, workFolder = workFolder,
             appList = settings.listAppearance.appList, categories = categories, categoryItems = members,
-            headphones = headphones, minuteOfDay = minute, numbersFirst = settings.listAppearance.alphabet.numbersFirst)
+            headphones = headphones, minuteOfDay = minute, dayOfWeek = day,
+            numbersFirst = settings.listAppearance.alphabet.numbersFirst)
     }
 }

@@ -34,12 +34,13 @@ data class TasksState(
     val lists: List<TaskList> = emptyList(),
 )
 
-/** Include every unfinished task, regardless of start date, and apply the saved display order. */
+/** Keep provider data intact; filter overdue tasks only when requested, before sorting and display limits. */
 fun visibleTaskItems(
     tasks: List<TaskItem>,
     preferences: TasksPreferences = TasksPreferences(),
     zone: ZoneId = ZoneId.systemDefault(),
     locale: Locale = Locale.getDefault(),
+    now: Instant = Instant.now(),
 ): List<TaskItem> {
     val byDueDate = compareBy<TaskItem> { task -> task.dueAt?.let { due ->
         if (task.dueAllDay) due.atZone(zone).toLocalDate().atStartOfDay(zone).toInstant() else due
@@ -53,5 +54,14 @@ fun visibleTaskItems(
         }
     }
     val grouped = if (preferences.undatedFirst) compareBy<TaskItem> { it.dueAt != null }.then(order) else order
-    return tasks.distinctBy { it.id }.sortedWith(grouped.thenBy { it.id })
+    return tasks.asSequence()
+        .filter { preferences.showOverdue || !it.isOverdue(now, zone) }
+        .distinctBy { it.id }.sortedWith(grouped.thenBy { it.id }).toList()
+}
+
+/** Date-only tasks remain due throughout their local day. Tasks without a due date never expire. */
+private fun TaskItem.isOverdue(now: Instant, zone: ZoneId): Boolean {
+    val due = dueAt ?: return false
+    return if (dueAllDay) due.atZone(zone).toLocalDate().isBefore(now.atZone(zone).toLocalDate())
+        else due.isBefore(now)
 }

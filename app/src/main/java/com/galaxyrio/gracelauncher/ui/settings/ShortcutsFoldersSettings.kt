@@ -15,6 +15,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.NotificationDisplay
+import com.galaxyrio.gracelauncher.data.PopupGesture
+import com.galaxyrio.gracelauncher.data.PopupGestureAction
 import com.galaxyrio.gracelauncher.data.ShortcutsFoldersSettings
 import com.galaxyrio.gracelauncher.ui.LauncherActions
 import com.galaxyrio.gracelauncher.ui.LauncherUiState
@@ -24,7 +26,6 @@ import com.galaxyrio.gracelauncher.ui.components.LauncherSymbol
 @Composable
 internal fun ShortcutsFoldersSettingsScreen(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit) {
     val settings = uiState.settings.shortcutsFolders
-    val itemCount = 3
     var requestAccess by rememberSaveable { mutableStateOf(false) }
     fun update(change: (ShortcutsFoldersSettings) -> ShortcutsFoldersSettings) =
         actions.updateSettings { it.copy(shortcutsFolders = change(it.shortcutsFolders)) }
@@ -41,22 +42,86 @@ internal fun ShortcutsFoldersSettingsScreen(uiState: LauncherUiState, actions: L
                     0, 1, "notifications_access", leading = { LauncherIcon(LauncherSymbol.Notifications) }) { requestAccess = true }
                 Spacer(Modifier.height(12.dp))
             }
-            item {
-                SettingsToggleItem(stringResource(R.string.popup_swipe_left_first), stringResource(R.string.popup_swipe_left_first_summary),
-                    settings.swipeLeftToOpenFirst, 0, itemCount, "popup_swipe_left_first") { value ->
-                    update { it.copy(swipeLeftToOpenFirst = value) }
-                }
-            }
+            item { SettingsHeading(stringResource(R.string.popup_notifications_heading)) }
             item {
                 NotificationDisplayItem(stringResource(R.string.popup_silent_notifications),
-                    settings.silentNotifications, settings.enabled, 1, itemCount, "popup_silent") { mode ->
+                    settings.silentNotifications, settings.enabled, 0, 6, "popup_silent") { mode ->
                     update { it.copy(silentNotifications = mode) }
                 }
             }
             item {
                 NotificationDisplayItem(stringResource(R.string.popup_normal_notifications),
-                    settings.normalNotifications, settings.enabled, 2, itemCount, "popup_normal") { mode ->
+                    settings.normalNotifications, settings.enabled, 1, 6, "popup_normal") { mode ->
                     update { it.copy(normalNotifications = mode) }
+                }
+            }
+            item {
+                SettingsToggleItem(stringResource(R.string.popup_notification_actions), null,
+                    settings.notificationActions, 2, 6, "popup_notification_actions", enabled = settings.enabled) { value ->
+                    update { it.copy(notificationActions = value) }
+                }
+            }
+            item {
+                SettingsToggleItem(stringResource(R.string.popup_notification_direct_reply), null,
+                    settings.notificationDirectReply, 3, 6, "popup_notification_direct_reply", enabled = settings.enabled) { value ->
+                    update { it.copy(notificationDirectReply = value) }
+                }
+            }
+            item {
+                SettingsToggleItem(stringResource(R.string.popup_notification_suggested_replies), null,
+                    settings.notificationSuggestedReplies, 4, 6, "popup_notification_suggested_replies", enabled = settings.enabled) { value ->
+                    update { it.copy(notificationSuggestedReplies = value) }
+                }
+            }
+            item {
+                SettingsToggleItem(stringResource(R.string.popup_notification_progress), null,
+                    settings.notificationProgress, 5, 6, "popup_notification_progress", enabled = settings.enabled) { value ->
+                    update { it.copy(notificationProgress = value) }
+                }
+            }
+            item { SettingsHeading(stringResource(R.string.popup_gestures_heading)) }
+            PopupGesture.entries.forEach { gesture ->
+                item("popup_gesture:${gesture.id}") {
+                    val options = settings.gesture(gesture).normalized()
+                    Column {
+                        Text(stringResource(when (gesture) {
+                            PopupGesture.SwipeLeft -> R.string.grace_button_swipe_left
+                            PopupGesture.SwipeRight -> R.string.grace_button_swipe_right
+                            PopupGesture.DoubleTap -> R.string.grace_button_double_tap
+                        }), Modifier.padding(start = 4.dp, top = 16.dp, bottom = 8.dp), style = MaterialTheme.typography.titleMedium)
+                        ClockFieldOrder(options.order, options.selected, LocalSettingsStorageState.current.canEdit,
+                            uiState.settings.allowHapticFeedback, "popup_gesture_${gesture.id}",
+                            label = { action -> stringResource(when (action) {
+                                PopupGestureAction.OpenPopup -> R.string.popup_action_open
+                                PopupGestureAction.OpenFirstItem -> R.string.popup_action_first_item
+                                PopupGestureAction.OpenFirstNotification -> R.string.popup_action_first_notification
+                                PopupGestureAction.DismissFirstNotification -> R.string.popup_action_dismiss_first
+                                PopupGestureAction.DismissAllNotifications -> R.string.popup_action_dismiss_all
+                            }) },
+                            onSelect = { action, checked -> update { current ->
+                                val value = current.gesture(gesture)
+                                current.withGesture(gesture, value.copy(selected = if (checked) value.selected + action else value.selected - action))
+                            } },
+                            onReorder = { order -> update { current -> current.withGesture(gesture, current.gesture(gesture).copy(order = order)) } },
+                            modifier = Modifier.height(64.dp * options.order.size + 2.dp * (options.order.size - 1) +
+                                if (PopupGestureAction.DismissAllNotifications in options.selected) 80.dp else 0.dp),
+                            containerColor = MaterialTheme.colorScheme.surfaceBright,
+                            fieldSupportingContent = { action ->
+                                if (action == PopupGestureAction.DismissAllNotifications && action in options.selected) {
+                                    Box(Modifier.height(80.dp).padding(start = 40.dp, end = 8.dp),
+                                        contentAlignment = androidx.compose.ui.Alignment.Center) {
+                                        SettingsToggleItem(stringResource(R.string.popup_confirm_multiple_apps), null,
+                                            options.confirmDismissAll, 0, 1, "popup_confirm_multiple_apps_${gesture.id}") { confirm ->
+                                            update { current -> current.withGesture(gesture, current.gesture(gesture).copy(confirmDismissAll = confirm)) }
+                                        }
+                                    }
+                                }
+                            })
+                        if (gesture == PopupGesture.DoubleTap && options.selected.isNotEmpty()) Text(
+                            stringResource(R.string.popup_double_tap_delay),
+                            Modifier.padding(horizontal = 4.dp, vertical = 8.dp).testTag("popup_double_tap_delay"),
+                            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
             }
         }

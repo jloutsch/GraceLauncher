@@ -187,7 +187,7 @@ class SearchGestureInteractionTest {
         showSearch()
         results().performTouchInput {
             val start = Offset(centerX, height * 0.35f)
-            swipeWithVelocity(start, start + Offset(0f, 80f * compose.density.density),
+            swipeWithVelocity(start, start + Offset(0f, 120f * compose.density.density),
                 endVelocity = 4000f * compose.density.density, durationMillis = 40)
         }
         compose.runOnIdle { assertEquals(1, dismissals) }

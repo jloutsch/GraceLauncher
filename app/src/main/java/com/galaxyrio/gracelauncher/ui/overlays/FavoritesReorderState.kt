@@ -90,10 +90,12 @@ internal class FavoritesReorderState(
     }
 
     /** Frame-paced edge scrolling also works while the finger is stationary. */
-    suspend fun autoScroll(edge: Float, maxStep: Float) {
+    suspend fun autoScroll(edge: Float, maxStep: Float, viewportTranslation: Float = 0f) {
         val item = draggedItem ?: return
         val layout = list.layoutInfo
-        val end = layout.viewportEndOffset - layout.afterContentPadding
+        // A temporarily lowered canvas has less visible room below; retain its
+        // logical item coordinates while detecting the physical bottom edge.
+        val end = layout.viewportEndOffset - layout.afterContentPadding - viewportTranslation
         val start = layout.viewportStartOffset + layout.beforeContentPadding
         val last = layout.visibleItemsInfo.firstOrNull { it.key == itemKey(keys.lastOrNull()) }
         val first = layout.visibleItemsInfo.firstOrNull { it.key == itemKey(keys.firstOrNull()) }

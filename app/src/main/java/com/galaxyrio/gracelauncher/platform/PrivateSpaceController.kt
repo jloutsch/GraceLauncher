@@ -22,7 +22,6 @@ import androidx.core.content.ContextCompat
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.LauncherProfiles
 import com.galaxyrio.gracelauncher.data.ProfileSettings
-import com.galaxyrio.gracelauncher.data.PrivateSpaceDisplay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -54,11 +53,11 @@ class PrivateSpaceController private constructor(private val context: Context) {
     private var configured = false
 
     fun configure(value: ProfileSettings) {
-        val previous = settings
+        val protectionEnabled = configured && !settings.protectsApps && value.protectsApps
         settings = value
         configured = true
         if (!value.locksOnExit) lockOnReturn = false
-        if (!value.enabled || (!previous.protectsApps && value.protectsApps)) lock()
+        if (!value.enabled || protectionEnabled) lock()
         else refresh()
     }
 
@@ -74,7 +73,8 @@ class PrivateSpaceController private constructor(private val context: Context) {
             ContextCompat.registerReceiver(context, object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
                     if (intent?.action == Intent.ACTION_SCREEN_OFF) {
-                        if (settings.enabled && settings.display != PrivateSpaceDisplay.NormalApp) lock() else clearSession()
+                        // Android owns automatic locking unless the user opts into locking on exit.
+                        if (settings.locksOnExit) lock() else clearSession()
                     } else refresh()
                 }
             }, IntentFilter().apply {
@@ -120,7 +120,7 @@ class PrivateSpaceController private constructor(private val context: Context) {
         val locked = user == null || runCatching { users.isQuietModeEnabled(user) || !users.isUserUnlocked(user) }.getOrDefault(true)
         val previous = _state.value
         _state.value = previous.copy(user = user, serial = profile?.second ?: -1,
-            locked = locked, accessible = !locked && (settings.exposesApps || (previous.accessible && previous.user == user)),
+            locked = locked, accessible = configured && !locked && (settings.exposesApps || (previous.accessible && previous.user == user)),
             lockVersion = previous.lockVersion + if ((locked && !previous.locked) || previous.user != user) 1 else 0)
         val request = pending
         if (request != null) {

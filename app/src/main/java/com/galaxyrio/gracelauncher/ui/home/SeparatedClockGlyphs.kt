@@ -1,6 +1,7 @@
 package com.galaxyrio.gracelauncher.ui.home
 
 import android.graphics.Paint
+import android.graphics.Canvas
 import android.graphics.Path
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
@@ -11,6 +12,8 @@ import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowMaskCache
+import com.galaxyrio.gracelauncher.ui.theme.ResolvedFontShadow
 import java.text.BreakIterator
 import kotlin.math.abs
 
@@ -26,6 +29,7 @@ internal data class PositionedClockGlyph(
     val letterSpacingEm: Float = 0f,
     /** Logical hour, minute and second tens/ones, independent of omitted leading zeros. */
     val digitSlot: Int? = null,
+    val fontScale: Float = 1f,
 )
 
 internal data class ClockGlyphDrawing(
@@ -52,6 +56,8 @@ internal fun measureClockGlyphs(
     maxHeight: Float,
     equalWidthDigits: Boolean = false,
     centerDigits: Boolean = false,
+    minuteScale: Float = 1f,
+    secondScale: Float = 1f,
 ): ClockGlyphDrawing {
     val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
         this.typeface = typeface
@@ -67,7 +73,7 @@ internal fun measureClockGlyphs(
         return bounds
     }
     fun run(value: String, firstDigitSlot: Int? = null, cellWidth: Float? = null,
-        leadingEmptyCells: Int = 0, minimumCells: Int = 0): ClockGlyphRun {
+        leadingEmptyCells: Int = 0, minimumCells: Int = 0, fontScale: Float = 1f): ClockGlyphRun {
         val boundaries = BreakIterator.getCharacterInstance().apply { setText(value) }
         val clusters = buildList {
             var start = boundaries.first()
@@ -91,7 +97,8 @@ internal fun measureClockGlyphs(
             val cellInset = if (cellWidth != null && centerDigits) (cellWidth - bounds.width()) / 2 else 0f
             val cellIndex = index + if (cellWidth != null) leadingEmptyCells else 0
             PositionedClockGlyph(cluster, bounds, positions[cellIndex] + cellInset - bounds.left,
-                digitSlot = if (firstDigitSlot != null && cluster.codePoints().anyMatch(Character::isDigit)) digitSlot++ else null)
+                digitSlot = if (firstDigitSlot != null && cluster.codePoints().anyMatch(Character::isDigit)) digitSlot++ else null,
+                fontScale = fontScale)
         }
         return ClockGlyphRun(glyphs, ClockInkBox(
             width = if (cellWidth != null) (positions.maxOrNull() ?: 0f) + cellWidth
@@ -106,13 +113,13 @@ internal fun measureClockGlyphs(
         var lastBaseline = 0f
         var reservedWidth: Float? = null
         val glyphs = if (separator >= 0) {
-            // The two stacked rows remain hours and minutes even if seconds were
-            // enabled before switching layouts or supplied by an older caller.
-            val groups = text.split(':').take(if (stacked) 2 else 3)
+            val groups = text.split(':').take(3)
+            val scales = listOf(1f, minuteScale.coerceIn(.2f, 1.5f), secondScale.coerceIn(.2f, 1.5f)).take(groups.size)
             val hourText = groups[0]
             val hourDigits = hourText.codePoints().filter(Character::isDigit).count().toInt()
             val missingHourDigits = (2 - hourDigits).coerceAtLeast(0)
-            val cellWidth = if (stacked && equalWidthDigits) {
+            val cellWidth = if (equalWidthDigits) {
+                paint.textSize = size * scales.max()
                 // Decimal digits are contiguous within each Unicode digit set. Use
                 // the rendered clock's localized set rather than the system locale.
                 val zeroes = groups.joinToString("").codePoints().filter(Character::isDigit)
@@ -122,25 +129,32 @@ internal fun measureClockGlyphs(
                     (0..9).maxOf { digit -> inkBounds(String(Character.toChars(zero + digit))).width() }
                 }
             } else null
-            val hours = run(hourText, firstDigitSlot = missingHourDigits, cellWidth = cellWidth,
-                leadingEmptyCells = missingHourDigits, minimumCells = 2)
-            val minutes = run(groups[1], firstDigitSlot = 2, cellWidth = cellWidth, minimumCells = 2)
+            val runs = groups.mapIndexed { index, group ->
+                paint.textSize = size * scales[index]
+                run(group, firstDigitSlot = if (index == 0) missingHourDigits else index * 2,
+                    cellWidth = cellWidth, leadingEmptyCells = if (index == 0) missingHourDigits else 0,
+                    minimumCells = 2, fontScale = scales[index])
+            }
+            paint.textSize = size
             val colon = if (showColon && !stacked) run(":") else null
-            val positions = clockGroupPositions(hours.ink, minutes.ink, groupGapPx, stacked, colon?.ink?.width, centerLines)
-            lastBaseline = positions.minuteBaseline
-            if (cellWidth != null) reservedWidth = maxOf(hours.ink.width, minutes.ink.width)
+            val widest = runs.maxOf { it.ink.width }
             buildList {
-                addAll(hours.glyphs.map { it.copy(x = it.x + positions.hourX) })
-                if (colon != null) addAll(colon.glyphs.map { it.copy(x = it.x + requireNotNull(positions.colonX)) })
-                addAll(minutes.glyphs.map { it.copy(x = it.x + positions.minuteX, y = positions.minuteBaseline) })
-                if (!stacked && groups.size == 3) {
-                    val seconds = run(groups[2], firstDigitSlot = 4)
-                    val secondsPositions = clockGroupPositions(minutes.ink, seconds.ink, groupGapPx,
-                        stacked = false, colonWidth = colon?.ink?.width)
-                    if (colon != null) addAll(colon.glyphs.map {
-                        it.copy(x = it.x + positions.minuteX + requireNotNull(secondsPositions.colonX))
-                    })
-                    addAll(seconds.glyphs.map { it.copy(x = it.x + positions.minuteX + secondsPositions.minuteX) })
+                var x = 0f
+                var baseline = 0f
+                runs.forEachIndexed { index, current ->
+                    if (index > 0) {
+                        val previous = runs[index - 1]
+                        if (stacked) baseline += previous.ink.bottom + groupGapPx - current.ink.top
+                        else {
+                            x += previous.ink.width
+                            if (colon != null) addAll(colon.glyphs.map { it.copy(x = it.x + x + groupGapPx / 2) })
+                            x += groupGapPx + (colon?.ink?.width ?: 0f)
+                        }
+                    }
+                    val groupX = if (stacked && centerLines) (widest - current.ink.width) / 2 else x
+                    addAll(current.glyphs.map { it.copy(x = it.x + groupX, y = baseline) })
+                    lastBaseline = baseline
+                    if (cellWidth != null) reservedWidth = if (stacked) widest else x + current.ink.width
                 }
             }
         } else {
@@ -189,12 +203,29 @@ internal fun measureClockGlyphs(
 }
 
 internal fun DrawScope.drawClockGlyphs(drawing: ClockGlyphDrawing, color: Color, shadow: Shadow, separate: Boolean,
-    digitColors: List<Color>? = null) {
+    digitColors: List<Color>? = null, spread: Float = 0f, shadowMask: FontShadowMaskCache? = null) {
+    val canvas = drawContext.canvas.nativeCanvas
+    if (shadowMask != null && shadow != Shadow.None) {
+        shadowMask.draw(canvas, drawing to separate, drawing.bounds.width(), drawing.bounds.height(),
+            drawing.fontSizePx * CLOCK_CUTOUT_STROKE_EM, ResolvedFontShadow(shadow, spread)) { target, expansion ->
+            drawClockGlyphsOnCanvas(target, drawing, Color.White, Shadow.None, separate, null, expansion)
+        }
+    }
+    drawClockGlyphsOnCanvas(canvas, drawing, color, if (shadowMask == null) shadow else Shadow.None, separate, digitColors)
+}
+
+private fun drawClockGlyphsOnCanvas(canvas: Canvas, drawing: ClockGlyphDrawing, color: Color, shadow: Shadow,
+    separate: Boolean, digitColors: List<Color>?, spread: Float = 0f) {
     val fill = Paint(Paint.ANTI_ALIAS_FLAG or Paint.SUBPIXEL_TEXT_FLAG).apply {
         typeface = drawing.typeface
         textSize = drawing.fontSizePx
         fontFeatureSettings = "tnum"
         this.color = color.toArgb()
+        if (spread > 0f) {
+            style = Paint.Style.FILL_AND_STROKE
+            strokeWidth = spread * 2f
+            strokeJoin = Paint.Join.ROUND
+        }
         if (shadow != Shadow.None) {
             setShadowLayer(shadow.blurRadius, shadow.offset.x, shadow.offset.y, shadow.color.toArgb())
         }
@@ -210,19 +241,22 @@ internal fun DrawScope.drawClockGlyphs(drawing: ClockGlyphDrawing, color: Color,
         strokeCap = Paint.Cap.ROUND
         xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
     }
-    val overflow = cutout.strokeWidth + shadow.blurRadius + maxOf(abs(shadow.offset.x), abs(shadow.offset.y)) + 2f
-    val canvas = drawContext.canvas.nativeCanvas
+    val overflow = cutout.strokeWidth * (drawing.glyphs.maxOfOrNull { it.fontScale } ?: 1f) + spread +
+        shadow.blurRadius + maxOf(abs(shadow.offset.x), abs(shadow.offset.y)) + 2f
     // Only separated text needs an isolated layer, so CLEAR cannot erase the wallpaper.
     val layer = if (separate) {
-        canvas.saveLayer(-overflow, -overflow, size.width + overflow, size.height + overflow, null)
+        canvas.saveLayer(-overflow, -overflow, drawing.bounds.width() + overflow, drawing.bounds.height() + overflow, null)
     } else canvas.save()
     try {
         drawing.glyphs.forEach { glyph ->
             val x = glyph.x - drawing.bounds.left
             val y = glyph.y - drawing.bounds.top
             fill.color = (glyph.digitSlot?.let { digitColors?.getOrNull(it) } ?: color).toArgb()
+            fill.textSize = drawing.fontSizePx * glyph.fontScale
             fill.letterSpacing = glyph.letterSpacingEm
             if (separate) {
+                cutout.textSize = fill.textSize
+                cutout.strokeWidth = fill.textSize * CLOCK_CUTOUT_STROKE_EM
                 cutout.letterSpacing = glyph.letterSpacingEm
                 canvas.drawText(glyph.text, x, y, cutout)
             }

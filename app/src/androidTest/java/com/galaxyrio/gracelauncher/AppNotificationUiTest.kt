@@ -43,8 +43,12 @@ class AppNotificationUiTest {
     private val dismissed = mutableListOf<String>()
     private val opened = mutableListOf<String>()
     private var launchedApps = 0
+    private var others: Map<String, List<AppNotification>> = emptyMap()
 
-    private fun show(drawer: Boolean = false, shortcutAccess: Boolean = true) {
+    private fun show(drawer: Boolean = false, shortcutAccess: Boolean = true, folders: List<LauncherFolder> = emptyList(),
+        shortcutsFolders: ShortcutsFoldersSettings = ShortcutsFoldersSettings(),
+        otherNotifications: Map<String, List<AppNotification>> = emptyMap()) {
+        others = otherNotifications
         val shortcuts = ShortcutResult(if (shortcutAccess) ShortcutStatus.Ready else ShortcutStatus.DefaultLauncherRequired,
             if (shortcutAccess) listOf(LauncherShortcut("compose", app.packageName, "Compose", null),
                 LauncherShortcut("inbox", app.packageName, "Inbox", null)) else emptyList())
@@ -52,15 +56,16 @@ class AppNotificationUiTest {
             GraceLauncherTheme(dynamicColor = false) {
                 Box(Modifier.fillMaxSize().background(Color(0xFF25302F))) {
                     LauncherScreen(
-                        LauncherUiState(apps = listOf(browser, app), favoriteKeys = setOf(browser.key, app.key),
+                        LauncherUiState(apps = listOf(browser, app), favoriteKeys = setOf(browser.key, app.key), folders = folders,
                             isLoadingApps = false, hasShortcutAccess = shortcutAccess, textMode = WallpaperTextMode.Light,
-                            notifications = mapOf(app.packageName to notifications)),
+                            notifications = mapOf(app.packageName to notifications) + otherNotifications,
+                            settings = LauncherSettings(shortcutsFolders = shortcutsFolders)),
                         onDateClick = {}, onClockClick = {}, onToggleFavorite = {}, onLaunchApp = { launchedApps++ },
                         initialDrawerOpen = drawer,
                         actions = LauncherActions(
                             shortcuts = { shortcuts }, cachedShortcuts = { shortcuts },
                             dismissNotification = { key, revision ->
-                                val current = notifications.firstOrNull { it.key == key && it.revision == revision }
+                                val current = (notifications + others.values.flatten()).firstOrNull { it.key == key && it.revision == revision }
                                 if (current == null) false else {
                                     dismissed += key
                                     notifications = notifications.filterNot { it.key == key }
@@ -88,6 +93,45 @@ class AppNotificationUiTest {
         compose.onNodeWithTag("notification:${message.key}").assertDoesNotExist()
         compose.onNodeWithTag("shortcut:compose").assertIsDisplayed()
         compose.runOnIdle { assertEquals(listOf(message.key), dismissed); assertEquals(0, launchedApps); assertTrue(opened.isEmpty()) }
+    }
+
+    @Test fun folderPopupRowLeftSwipeDismissesItsAppWithoutConfirmationWhenDismissIsChosen() {
+        val folder = LauncherFolder(id = "chats", name = "Chats", appKeys = listOf(app.key), placement = FolderPlacement.Favorites)
+        show(folders = listOf(folder), shortcutsFolders = ShortcutsFoldersSettings(
+            swipeLeft = PopupGestureActions(selected = setOf(PopupGestureAction.DismissAllNotifications))))
+        compose.onNodeWithTag("folder:${folder.id}").performClick()
+        compose.onNodeWithTag("folder_app:${app.key}").assertIsDisplayed().performTouchInput { swipeLeft() }
+        compose.onNodeWithTag("notification:${message.key}").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(listOf(message.key), dismissed); assertEquals(0, launchedApps) }
+    }
+
+    @Test fun homeFolderSwipeAsksBeforeClearingSeveralAppsAndCancelClearsNothing() {
+        val browserMessage = message.copy(key = "browser-1", packageName = browser.packageName, title = "Download finished")
+        val folder = LauncherFolder(id = "mixed", name = "Mixed", appKeys = listOf(app.key, browser.key), placement = FolderPlacement.Favorites)
+        // Previews are hidden so the swipe lands on the folder row itself, not a notification preview.
+        show(folders = listOf(folder), otherNotifications = mapOf(browser.packageName to listOf(browserMessage)),
+            shortcutsFolders = ShortcutsFoldersSettings(normalNotifications = NotificationDisplay.Hidden,
+                swipeLeft = PopupGestureActions(selected = setOf(PopupGestureAction.DismissAllNotifications))))
+        compose.onNodeWithTag("folder:${folder.id}").performTouchInput { swipeLeft() }
+        compose.onNodeWithTag("dismiss_notifications_confirm").assertIsDisplayed()
+        compose.onNodeWithText("Cancel").performClick()
+        compose.onNodeWithTag("dismiss_notifications_confirm").assertDoesNotExist()
+        compose.runOnIdle { assertTrue(dismissed.isEmpty()); assertEquals(0, launchedApps) }
+
+        compose.onNodeWithTag("folder:${folder.id}").performTouchInput { swipeLeft() }
+        compose.onNodeWithTag("dismiss_notifications_confirm").assertIsDisplayed().performClick()
+        compose.waitUntil(5_000) { dismissed.size == 2 }
+        compose.runOnIdle { assertEquals(setOf(message.key, browserMessage.key), dismissed.toSet()); assertEquals(0, launchedApps) }
+    }
+
+    @Test fun homeFolderSwipeWithOneAppNotificationClearsWithoutAsking() {
+        val folder = LauncherFolder(id = "solo", name = "Solo", appKeys = listOf(app.key), placement = FolderPlacement.Favorites)
+        show(folders = listOf(folder), shortcutsFolders = ShortcutsFoldersSettings(normalNotifications = NotificationDisplay.Hidden,
+            swipeLeft = PopupGestureActions(selected = setOf(PopupGestureAction.DismissAllNotifications))))
+        compose.onNodeWithTag("folder:${folder.id}").performTouchInput { swipeLeft() }
+        compose.waitUntil(5_000) { dismissed.size == 1 }
+        compose.onNodeWithTag("dismiss_notifications_confirm").assertDoesNotExist()
+        compose.runOnIdle { assertEquals(listOf(message.key), dismissed) }
     }
 
     @Test fun drawerRightSwipeOpensSamePanelAndRightDismissKeepsOtherMessages() {

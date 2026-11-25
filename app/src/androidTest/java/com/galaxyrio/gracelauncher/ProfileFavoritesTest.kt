@@ -28,6 +28,7 @@ class ProfileFavoritesTest {
         user = workUser, userSerial = 11, isWorkProfile = true)
     private fun availableState() = LauncherUiState(apps = listOf(personal, workApp), privateApps = listOf(privateApp),
         isLoadingApps = false, isDefaultHome = true,
+        settings = LauncherSettings(privateSpace = ProfileSettings(passwordProtected = true, lockImmediately = true)),
         privateSpace = PrivateSpaceState(supported = true, user = privateUser, serial = 10, locked = true),
         workProfiles = listOf(WorkProfile(workUser, 11)))
 

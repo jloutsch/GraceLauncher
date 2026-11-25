@@ -97,7 +97,8 @@ private fun FontOption(id: String?, checked: Boolean, onSelect: (String?) -> Uni
 }
 
 @Composable
-internal fun FontSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit, onFontColors: () -> Unit) {
+internal fun FontSettings(uiState: LauncherUiState, actions: LauncherActions, onBack: () -> Unit,
+    onFontColors: () -> Unit, onFontShadow: () -> Unit) {
     val context = LocalContext.current
     val store = remember(context) { ClockFontStore(context) }
     val scope = rememberCoroutineScope()
@@ -186,12 +187,15 @@ internal fun FontSettings(uiState: LauncherUiState, actions: LauncherActions, on
                 userScrollEnabled = reorder.draggingKey == null) {
                 item("settings") {
                     SettingsToggleItem(stringResource(R.string.font_apply_settings), stringResource(R.string.font_apply_settings_summary),
-                        uiState.settings.applyFontToSettings, 0, 2, "apply_font_to_settings", enabled = enabled) { value ->
+                        uiState.settings.applyFontToSettings, 0, 3, "apply_font_to_settings", enabled = enabled) { value ->
                         actions.updateSettings { it.copy(applyFontToSettings = value) }
                     }
                     Spacer(Modifier.height(ListItemDefaults.SegmentedGap))
                     SettingsActionItem(stringResource(R.string.list_font_color), null,
-                        1, 2, "font_colors", enabled = enabled, onClick = onFontColors)
+                        1, 3, "font_colors", enabled = enabled, onClick = onFontColors)
+                    Spacer(Modifier.height(ListItemDefaults.SegmentedGap))
+                    SettingsActionItem(stringResource(R.string.clock_font_shadow), null,
+                        2, 3, "font_shadow", enabled = enabled, onClick = onFontShadow)
                     Spacer(Modifier.height(16.dp))
                 }
                 item("add") {

@@ -68,13 +68,14 @@ internal fun rememberLauncherListGestureConnection(
     protectSwipeUp: Boolean = false,
     protectSwipeDown: Boolean = false,
     onPullReady: () -> Unit = {},
+    locked: Boolean = false,
 ): LauncherListGestureConnection {
     val density = LocalDensity.current
     val sensitivity = swipeSensitivity.coerceIn(50, 200) / 100f
     val latestCanTrigger by rememberUpdatedState(canTrigger)
     val latestOnGesture by rememberUpdatedState(onGesture)
     val latestOnPullReady by rememberUpdatedState(onPullReady)
-    return remember(effect, list, density, sensitivity, protectSwipeUp, protectSwipeDown) {
+    return remember(effect, list, density, sensitivity, protectSwipeUp, protectSwipeDown, locked) {
         LauncherListGestureConnection(effect, list,
             pullThreshold = with(density) { 96.dp.toPx() } / sensitivity,
             flingThreshold = with(density) { 3000.dp.toPx() } / sensitivity,
@@ -82,7 +83,8 @@ internal fun rememberLauncherListGestureConnection(
             onGesture = { latestOnGesture(it) },
             protectSwipeUp = protectSwipeUp,
             protectSwipeDown = protectSwipeDown,
-            onPullReady = { latestOnPullReady() })
+            onPullReady = { latestOnPullReady() },
+            locked = locked)
     }
 }
 
@@ -123,6 +125,8 @@ internal class LauncherListGestureConnection(
     private val protectSwipeDown: Boolean = false,
     private val protectedPullThreshold: Float = pullThreshold * 1.5f,
     private val onPullReady: () -> Unit = {},
+    // A locked list never moves: every drag is treated as a pull past both edges.
+    private val locked: Boolean = false,
 ) : NestedScrollConnection {
     private var edgePull = 0f
     private var armed = false
@@ -136,14 +140,14 @@ internal class LauncherListGestureConnection(
         edgePull = 0f; armed = true; fired = false; readyFeedbackSent = false
         // A fling, or a drag that merely reaches the end, must finish before a
         // fresh contact can deliberately pull beyond the bottom boundary.
-        upPullEligible = !list.isScrollInProgress && !list.canScrollForward
-        downPullEligible = !list.isScrollInProgress && !list.canScrollBackward
+        upPullEligible = locked || (!list.isScrollInProgress && !list.canScrollForward)
+        downPullEligible = locked || (!list.isScrollInProgress && !list.canScrollBackward)
     }
     fun cancelGesture() { armed = false; edgePull = 0f; upPullEligible = false; downPullEligible = false }
 
     private fun boundaryGesture(delta: Float): GraceButtonGesture? = when {
-        delta > 0 && !list.canScrollBackward -> GraceButtonGesture.SwipeDown
-        delta < 0 && !list.canScrollForward -> GraceButtonGesture.SwipeUp
+        delta > 0 && (locked || !list.canScrollBackward) -> GraceButtonGesture.SwipeDown
+        delta < 0 && (locked || !list.canScrollForward) -> GraceButtonGesture.SwipeUp
         else -> null
     }
 
@@ -168,6 +172,8 @@ internal class LauncherListGestureConnection(
     }
 
     override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+        // Consume the drag so the list never moves; the pull is still measured.
+        if (locked) { onPostScroll(Offset.Zero, available, source); return Offset(0f, available.y) }
         // Reversing a pull cancels its accumulated distance, including stretch relaxation.
         if (source == NestedScrollSource.UserInput && available.y * edgePull < 0f) {
             edgePull = if (abs(available.y) >= abs(edgePull)) 0f else edgePull + available.y
@@ -209,7 +215,7 @@ internal class LauncherListGestureConnection(
             !protected(gesture) && abs(edgePull) > 0.5f && edgePull * available.y > 0f && abs(available.y) >= flingThreshold -> available.y
             else -> 0f
         }
-        if (!trigger(direction)) return Velocity.Zero
+        if (!trigger(direction)) return if (locked) available else Velocity.Zero
         effect?.applyToFling(Velocity(0f, available.y)) { Velocity.Zero }
         return Velocity(0f, available.y)
     }

@@ -4,14 +4,13 @@ package com.galaxyrio.gracelauncher.ui.home
 
 import android.graphics.Typeface
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.material3.Text
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowText as Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.AbsoluteAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.layout.FirstBaseline
@@ -33,7 +32,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.constrainWidth
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.galaxyrio.gracelauncher.data.AppFont
 import com.galaxyrio.gracelauncher.data.ClockPresetFont
@@ -41,6 +39,9 @@ import com.galaxyrio.gracelauncher.data.ClockStyle
 import com.galaxyrio.gracelauncher.ui.theme.LauncherFontFamily
 import com.galaxyrio.gracelauncher.ui.theme.family
 import com.galaxyrio.gracelauncher.ui.theme.rememberAppFontFamily
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowMaskCache
+import com.galaxyrio.gracelauncher.ui.theme.ResolvedFontShadow
+import com.galaxyrio.gracelauncher.ui.theme.resolvedFontShadow
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -76,8 +77,10 @@ internal fun ClockFace(
         value = time, semanticsText = clockFaceText(time, style), family = family, weight = FontWeight(face.weight),
         fontSize = face.size * scale, digitSpacing = face.letterSpacing * scale, groupSpacing = face.hourMinuteSpacing * scale,
         stacked = style.layout.stacked, showColon = face.showColon, separate = face.separateDigits,
-        color = color, shadow = clockFontShadow(face.fontShadow, scale), modifier = modifier, textAlign = textAlign,
-        digitColors = digitColors, equalWidthDigits = face.equalWidthDigits, centerDigits = face.centerDigits,
+        color = color, shadow = resolvedFontShadow(face.shadow).scaled(scale), modifier = modifier, textAlign = textAlign,
+        digitColors = digitColors, equalWidthDigits = face.equalWidthDigits(style.layout.stacked),
+        centerDigits = face.centerDigits(style.layout.stacked),
+        minuteScale = face.minuteScale / 100f, secondScale = face.secondScale / 100f,
     )
 }
 
@@ -112,22 +115,13 @@ internal fun ClockTimeLabel(time: String, style: ClockStyle, textStyle: TextStyl
         weight = textStyle.fontWeight ?: FontWeight.Normal, fontSize = size,
         digitSpacing = face.letterSpacing * scale, groupSpacing = face.hourMinuteSpacing * scale,
         stacked = false, showColon = face.showColon, separate = false,
-        color = color, shadow = clockFontShadow(face.fontShadow, scale), modifier = modifier,
+        color = color, shadow = resolvedFontShadow(), modifier = modifier,
         digitColors = digitColors,
     )
 }
 
-@Composable
-internal fun clockFontShadow(strength: Int, scale: Float = 1f): Shadow {
-    if (strength <= 0) return Shadow.None
-    val amount = strength.coerceIn(0, 24)
-    val density = LocalDensity.current
-    return Shadow(
-        color = Color.Black.copy(alpha = 0.12f + 0.38f * amount / 24f),
-        offset = Offset(0f, with(density) { (amount * scale / 8f).dp.toPx() }),
-        blurRadius = with(density) { (amount * scale).dp.toPx() },
-    )
-}
+private fun ResolvedFontShadow.scaled(scale: Float): ResolvedFontShadow = copy(
+    shadow = shadow.copy(offset = shadow.offset * scale, blurRadius = shadow.blurRadius * scale), spread = spread * scale)
 
 @Composable
 private fun ClockGlyphContent(
@@ -142,12 +136,14 @@ private fun ClockGlyphContent(
     showColon: Boolean,
     separate: Boolean,
     color: Color,
-    shadow: Shadow,
+    shadow: ResolvedFontShadow,
     modifier: Modifier,
     textAlign: TextAlign = TextAlign.Start,
     digitColors: List<Color>? = null,
     equalWidthDigits: Boolean = false,
     centerDigits: Boolean = false,
+    minuteScale: Float = 1f,
+    secondScale: Float = 1f,
 ) {
     val typeface = LocalFontFamilyResolver.current.resolve(family, weight, FontStyle.Normal, FontSynthesis.All).value as Typeface
     val density = LocalDensity.current
@@ -155,6 +151,7 @@ private fun ClockGlyphContent(
     val digitGapPx = with(density) { digitSpacing.sp.toPx() }
     val groupGapPx = with(density) { groupSpacing.sp.toPx() }
     val centered = textAlign == TextAlign.Center
+    val shadowMask = remember { FontShadowMaskCache() }
     BoxWithConstraints(
         modifier.semantics { text = AnnotatedString(semanticsText) },
         contentAlignment = when (textAlign) {
@@ -168,11 +165,13 @@ private fun ClockGlyphContent(
         val availableWidth = constraints.maxWidth.toFloat()
         val availableHeight = constraints.maxHeight.toFloat()
         val drawing = remember(value, typeface, fontPx, digitGapPx, groupGapPx, stacked, showColon, centered,
-            availableWidth, availableHeight, equalWidthDigits, centerDigits) {
+            availableWidth, availableHeight, equalWidthDigits, centerDigits, minuteScale, secondScale) {
             measureClockGlyphs(value, typeface, fontPx, digitGapPx, groupGapPx, stacked, showColon, centered,
-                availableWidth, availableHeight, equalWidthDigits, centerDigits)
+                availableWidth, availableHeight, equalWidthDigits, centerDigits, minuteScale, secondScale)
         }
-        Layout(content = {}, modifier = Modifier.drawBehind { drawClockGlyphs(drawing, color, shadow, separate, digitColors) }) { _, limits ->
+        Layout(content = {}, modifier = Modifier.drawBehind {
+            drawClockGlyphs(drawing, color, shadow.shadow, separate, digitColors, shadow.spread, shadowMask)
+        }) { _, limits ->
             val width = limits.constrainWidth(ceil(drawing.bounds.width()).toInt().coerceAtLeast(0))
             val height = limits.constrainHeight(ceil(drawing.bounds.height()).toInt().coerceAtLeast(0))
             layout(width, height, mapOf(
@@ -184,7 +183,7 @@ private fun ClockGlyphContent(
 }
 
 internal fun clockFaceText(time: String, style: ClockStyle): String = when {
-    style.layout.stacked -> time.split(':').take(2).joinToString("\n")
+    style.layout.stacked -> time.split(':').take(3).joinToString("\n")
     style.face.showColon -> time
     else -> time.replace(':', ' ')
 }

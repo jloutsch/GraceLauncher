@@ -1,6 +1,5 @@
 package com.galaxyrio.gracelauncher
 
-import com.galaxyrio.gracelauncher.data.LauncherSettings
 import com.galaxyrio.gracelauncher.data.WeatherAppKeyField
 import com.galaxyrio.gracelauncher.data.WidgetStackFoldersField
 import com.galaxyrio.gracelauncher.data.stringField
@@ -35,6 +34,5 @@ class ForkSettingsJsonTest {
         assertNull(stringField("not json", WeatherAppKeyField))
         assertEquals(emptySet<String>(), stringSetField(null, WidgetStackFoldersField))
         assertEquals(emptySet<String>(), stringSetField("""{"widgetStackFolderIds":"x"}""", WidgetStackFoldersField))
-        assertEquals(emptySet<String>(), LauncherSettings().widgetStackFolderIds)
     }
 }

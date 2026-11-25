@@ -1,5 +1,7 @@
 package com.galaxyrio.gracelauncher.ui.components
 
+import com.galaxyrio.gracelauncher.ui.theme.WithoutFontShadow
+
 import android.os.SystemClock
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
@@ -7,6 +9,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowText as Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -167,7 +170,9 @@ internal fun SwipeDismissContainer(
             Row(Modifier.matchParentSize().background(backgroundColor, LauncherLayout.RowShape).padding(horizontal = 16.dp),
                 horizontalArrangement = if (offset > 0f) Arrangement.Absolute.Left else Arrangement.Absolute.Right,
                 verticalAlignment = Alignment.CenterVertically) {
-                Text(label, color = contentColor, style = MaterialTheme.typography.labelLarge)
+                WithoutFontShadow {
+                    Text(label, color = contentColor, style = MaterialTheme.typography.labelLarge)
+                }
                 Spacer(Modifier.width(12.dp))
                 Icon(painterResource(R.drawable.ms_close), null, Modifier.size(24.dp), tint = contentColor)
             }

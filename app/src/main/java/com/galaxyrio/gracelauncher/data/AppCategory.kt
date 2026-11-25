@@ -2,6 +2,7 @@ package com.galaxyrio.gracelauncher.data
 
 import org.json.JSONArray
 import org.json.JSONObject
+import java.time.DayOfWeek
 
 const val FavoritesCategoryId = "favorites"
 const val MusicCategoryId = "music"
@@ -38,16 +39,22 @@ data class AppCategory(
     val notificationLevels: Set<CategoryNotificationLevel> = CategoryNotificationLevel.entries.toSet(),
     val appLimit: Int = 8,
     val icon: CategoryIcon = defaultCategoryIcon(id),
+    val daysOfWeek: Set<DayOfWeek> = DayOfWeek.entries.toSet(),
+    val allDay: Boolean = false,
 ) {
     val key: String get() = "category:$id"
     val isBuiltIn: Boolean get() = id in BuiltInCategoryIds
     val showOnHome: Boolean get() = placement == CategoryPlacement.Home
 
-    fun isVisible(headphones: Boolean, minuteOfDay: Int): Boolean = when (condition) {
+    fun isVisible(headphones: Boolean, minuteOfDay: Int, dayOfWeek: DayOfWeek): Boolean = when (condition) {
         CategoryCondition.Always -> true
         CategoryCondition.Headphones -> headphones
-        CategoryCondition.Time -> if (startMinute < endMinute) minuteOfDay in startMinute until endMinute
-            else minuteOfDay >= startMinute || minuteOfDay < endMinute
+        // Weekdays gate the current calendar day, including both parts of an overnight range.
+        CategoryCondition.Time -> dayOfWeek in daysOfWeek && when {
+            allDay -> true
+            startMinute < endMinute -> minuteOfDay in startMinute until endMinute
+            else -> minuteOfDay >= startMinute || minuteOfDay < endMinute
+        }
     }
 
     fun normalized() = copy(name = name?.trim()?.takeIf(String::isNotEmpty),
@@ -76,6 +83,8 @@ data class AppCategory(
                 put(JSONObject().put("id", it.id).put("name", it.name ?: JSONObject.NULL)
                     .put("items", JSONArray(it.itemKeys)).put("condition", it.condition.name)
                     .put("startMinute", it.startMinute).put("endMinute", it.endMinute).put("placement", it.placement.name)
+                    .put("daysOfWeek", JSONArray(DayOfWeek.entries.filter { day -> day in it.daysOfWeek }.map { day -> day.name }))
+                    .put("allDay", it.allDay)
                     .put("inclusion", it.inclusion.name).put("dynamicRule", it.dynamicRule.name)
                     .put("notificationLevels", JSONArray(CategoryNotificationLevel.entries.filter { level -> level in it.notificationLevels }.map { level -> level.name }))
                     .put("appLimit", it.appLimit).put("icon", it.icon.name))
@@ -89,12 +98,16 @@ data class AppCategory(
                 val id = (value.opt("id") as? String)?.takeIf(String::isNotBlank) ?: return@mapNotNull null
                 val keys = value.optJSONArray("items") ?: JSONArray()
                 val levels = value.optJSONArray("notificationLevels")
+                val days = value.optJSONArray("daysOfWeek")
                 AppCategory(
                     id = id,
                     name = (value.opt("name") as? String)?.takeIf(String::isNotBlank),
                     itemKeys = (0 until keys.length()).mapNotNull { i -> keys.opt(i) as? String },
                     condition = CategoryCondition.entries.firstOrNull { entry -> entry.name == value.optString("condition") } ?: CategoryCondition.Always,
                     startMinute = value.optInt("startMinute", 480), endMinute = value.optInt("endMinute", 1080),
+                    daysOfWeek = if (days == null) DayOfWeek.entries.toSet() else
+                        (0 until days.length()).mapNotNull { i -> DayOfWeek.entries.firstOrNull { day -> day.name == days.optString(i) } }.toSet(),
+                    allDay = value.optBoolean("allDay", false),
                     placement = CategoryPlacement.entries.firstOrNull { entry -> entry.name == value.optString("placement") }
                         ?: if (value.optBoolean("showOnHome", false)) CategoryPlacement.Home else CategoryPlacement.None,
                     inclusion = CategoryInclusion.entries.firstOrNull { entry -> entry.name == value.optString("inclusion") } ?: CategoryInclusion.Manual,
@@ -126,7 +139,7 @@ internal data class CategoryHomeContent(val items: List<PopupItem>, val owners: 
 
 /** Expand only active categories; the first visible occurrence owns each row. */
 internal fun expandHomeCategories(
-    entries: List<PopupItem>, categories: List<AppCategory>, headphones: Boolean, minuteOfDay: Int,
+    entries: List<PopupItem>, categories: List<AppCategory>, headphones: Boolean, minuteOfDay: Int, dayOfWeek: DayOfWeek,
     categoryItems: (AppCategory) -> List<String> = { it.itemKeys },
     available: (String) -> Boolean,
 ): CategoryHomeContent {
@@ -137,7 +150,7 @@ internal fun expandHomeCategories(
             val category = byKey[entry.key]
             if (category == null) {
                 if (owners.putIfAbsent(entry.key, entry.key) == null) add(entry)
-            } else if (category.isVisible(headphones, minuteOfDay)) {
+            } else if (category.isVisible(headphones, minuteOfDay, dayOfWeek)) {
                 categoryItems(category).forEach { key ->
                     if (available(key) && owners.putIfAbsent(key, entry.key) == null) add(PopupItem(key))
                 }

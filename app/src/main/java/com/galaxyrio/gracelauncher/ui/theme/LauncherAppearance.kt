@@ -33,10 +33,9 @@ import com.materialkolor.palettes.TonalPalette
 import java.util.function.Consumer
 
 data class LauncherAppearance(val darkText: Boolean = false, val themedIcons: Boolean = false, val iconSize: Int = 100,
-    val iconDisplay: IconDisplaySettings = IconDisplaySettings(), val textColor: Color? = null) {
+    val iconDisplay: IconDisplaySettings = IconDisplaySettings(), val textColor: Color? = null,
+    val textShadow: Shadow = Shadow.None) {
     val text: Color get() = textColor ?: if (darkText) Color(0xFF202025) else Color(0xFFFAF9FE)
-    val textShadow: Shadow get() = if (text.luminance() < 0.5f) Shadow.None
-        else Shadow(Color.Black.copy(alpha = 0.32f), blurRadius = 4f)
 }
 
 val LocalLauncherAppearance = staticCompositionLocalOf { LauncherAppearance() }
@@ -66,6 +65,7 @@ fun rememberLauncherAppearance(mode: WallpaperTextMode, themedIcons: Boolean, ic
         iconSize = iconSize.coerceIn(80, 150),
         iconDisplay = iconDisplay,
         textColor = text,
+        textShadow = resolvedFontShadow().shadow,
     )
 }
 

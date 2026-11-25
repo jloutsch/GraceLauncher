@@ -14,7 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowText as Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -56,6 +56,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.constrainWidth
+import com.galaxyrio.gracelauncher.ui.theme.ProvideFontShadow
+import com.galaxyrio.gracelauncher.ui.theme.resolvedFontShadow
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.ClockAlignment
 import com.galaxyrio.gracelauncher.data.ClockColorPart
@@ -112,12 +114,14 @@ internal fun HomeClockHeader(
     showTasks: Boolean = false,
     onTaskClick: (TaskItem) -> Unit = {},
     taskPreferences: TasksPreferences = TasksPreferences(),
+    onCalendarClick: () -> Unit = onDateClick,
+    onCalendarLongClick: (() -> Unit)? = null,
 ) {
     val regions = clockStyle.regions ?: if (showTasks) clockStyle.resolvedRegions(calendarAboveClock) else null
     if (regions == null) {
         LegacyHomeClockHeader(now, event, onDateClick, onClockClick, showBattery, clockStyle, weather ?: weatherSnapshot?.current,
             modifier, interactive, clockTag, dateTag, onLongClick, onAnchorOffsetChange,
-            showClock, showCalendar, calendarAboveClock, onWeatherClick)
+            showClock, showCalendar, calendarAboveClock, onWeatherClick, onCalendarClick, onCalendarLongClick)
         return
     }
     val appearance = LocalLauncherAppearance.current
@@ -145,7 +149,7 @@ internal fun HomeClockHeader(
         }
         .let { rows -> if (regions.agenda.eventCount > 0) rows.take(regions.agenda.eventCount) else rows }
         else emptyList()
-    val taskRows = if (showTasks) visibleTaskItems(tasks, taskPreferences, locale = locale).mapNotNull { task ->
+    val taskRows = if (showTasks) visibleTaskItems(tasks, taskPreferences, locale = locale, now = now).mapNotNull { task ->
         clockTaskFields(task, regions.tasks.visibleFields).takeIf { it.isNotEmpty() }?.let { task to it }
     }.let { rows -> if (regions.tasks.taskCount > 0) rows.take(regions.tasks.taskCount) else rows } else emptyList()
     fun isVisible(element: ClockElement): Boolean = when (element) {
@@ -173,9 +177,9 @@ internal fun HomeClockHeader(
         val calendarLocale = remember(locale, useLatinLetters) { clockCalendarLocale(locale, useLatinLetters) }
         val action = when (element) {
             ClockElement.Clock -> onClockClick
-            ClockElement.Weekday, ClockElement.Date -> onDateClick
+            ClockElement.Weekday, ClockElement.Date -> onCalendarClick
             ClockElement.Weather -> onWeatherClick
-            ClockElement.Battery -> null
+            ClockElement.Battery -> ({}) // no-op: swallows the tap so the row's agenda action does not fire
         }
         val description = when (element) {
             ClockElement.Weekday, ClockElement.Date -> stringResource(R.string.date_calendar_action,
@@ -190,19 +194,17 @@ internal fun HomeClockHeader(
             ClockElement.Battery -> "${dateTag}_battery"
             ClockElement.Weather -> "home_weather"
         }
-        // Compact rows own their agenda action; only weather keeps an independent pointer target.
+        // Compact rows own their agenda action; date, weekday, battery and weather keep their own pointer targets.
         val contentModifier = elementModifier.testTag(tag).then(
-            if (!primary || element == ClockElement.Weather) Modifier else Modifier
+            if (element == ClockElement.Weather || (!primary && element != ClockElement.Weekday && element != ClockElement.Date && element != ClockElement.Battery)) Modifier else Modifier
                 .then(if (description == null) Modifier else Modifier.semantics { contentDescription = description })
-                .then(if (interactive && action != null) Modifier.combinedClickable(
+                .then(if (interactive) Modifier.combinedClickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = ripple(color = appearance.text),
                     role = Role.Button,
-                    onClick = action, onLongClick = onLongClick,
-                ) else if (interactive) Modifier
-                    .pointerInput(onLongClick) { detectTapGestures(onLongPress = { onLongClick() }) }
-                    .semantics { semanticOnLongClick { onLongClick(); true } }
-                else Modifier),
+                    onClick = action,
+                    onLongClick = if (element == ClockElement.Weekday || element == ClockElement.Date) onCalendarLongClick ?: onLongClick else onLongClick,
+                ) else Modifier),
         )
         when (element) {
             ClockElement.Clock -> ClockRegionTime(now, primary, showSeconds, clockActive,
@@ -236,24 +238,26 @@ internal fun HomeClockHeader(
     fun primaryRegion(fillWidth: Boolean = true, inset: Boolean = true) {
         val primary = regions.primary?.takeIf(::isVisible) ?: return
         val face = regions.face(primary)
-        val primaryStyle = MaterialTheme.typography.bodyLarge.copy(
-            fontFamily = rememberAppFontFamily(face.fontId), fontWeight = FontWeight(face.weight),
-            fontSize = face.size.sp, lineHeight = (face.size * 1.15f).sp,
-            letterSpacing = face.letterSpacing.sp, shadow = clockFontShadow(face.fontShadow),
-        )
-        val alignment = when (regions.primaryAlignment) {
-            ClockAlignment.Left -> AbsoluteAlignment.CenterLeft
-            ClockAlignment.Center -> Alignment.Center
-            ClockAlignment.Right -> AbsoluteAlignment.CenterRight
-        }
-        Box(Modifier.then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
-            .then(if (inset) Modifier.padding(horizontal = LauncherLayout.ContentInset) else Modifier)
-            .testTag("clock_region:Primary"), contentAlignment = alignment) {
-            if (regions.rotatePrimary && !regions.rotateAll) ClockQuarterTurn(maxRotatedHeightPx) {
-                element(primary, true, primaryStyle, Modifier,
-                    showSeconds = !regions.stackedClock && face.showSeconds, useLatinLetters = face.useLatinLetters)
-            } else element(primary, true, primaryStyle, Modifier,
-                showSeconds = !regions.stackedClock && face.showSeconds, useLatinLetters = face.useLatinLetters)
+        ProvideFontShadow(face.shadow) {
+            val primaryStyle = MaterialTheme.typography.bodyLarge.copy(
+                fontFamily = rememberAppFontFamily(face.fontId), fontWeight = FontWeight(face.weight),
+                fontSize = face.size.sp, lineHeight = (face.size * 1.15f).sp,
+                letterSpacing = face.letterSpacing.sp, shadow = resolvedFontShadow().shadow,
+            )
+            val alignment = when (regions.primaryAlignment) {
+                ClockAlignment.Left -> AbsoluteAlignment.CenterLeft
+                ClockAlignment.Center -> Alignment.Center
+                ClockAlignment.Right -> AbsoluteAlignment.CenterRight
+            }
+            Box(Modifier.then(if (fillWidth) Modifier.fillMaxWidth() else Modifier)
+                .then(if (inset) Modifier.padding(horizontal = LauncherLayout.ContentInset) else Modifier)
+                .testTag("clock_region:Primary"), contentAlignment = alignment) {
+                if (regions.rotatePrimary && !regions.rotateAll) ClockQuarterTurn(maxRotatedHeightPx) {
+                    element(primary, true, primaryStyle, Modifier,
+                        showSeconds = face.showSeconds, useLatinLetters = face.useLatinLetters)
+                } else element(primary, true, primaryStyle, Modifier,
+                    showSeconds = face.showSeconds, useLatinLetters = face.useLatinLetters)
+            }
         }
     }
 
@@ -263,36 +267,38 @@ internal fun HomeClockHeader(
         val right = row.rightItems.filter(::isVisible)
         if (left.isEmpty() && right.isEmpty()) return
         val typography = row.typography
-        val rowStyle = MaterialTheme.typography.bodyLarge.copy(
-            fontFamily = rememberAppFontFamily(typography.fontId),
-            fontSize = typography.size.sp, lineHeight = (typography.size * 1.5f).sp,
-            fontWeight = FontWeight(typography.weight), shadow = clockFontShadow(typography.fontShadow),
-        )
-        val interactions = remember { MutableInteractionSource() }
-        Box(Modifier.then(if (wrapWidth) Modifier else Modifier.fillMaxWidth())
-            .testTag("clock_region:$name")
-            .semantics { contentDescription = dateDescription }
-            .then(if (interactive) Modifier.combinedClickable(
-                interactionSource = interactions, indication = null,
-                role = Role.Button, onClick = onDateClick, onLongClick = onLongClick,
-            ) else Modifier), propagateMinConstraints = true) {
-            ClockRegionRowLayout(left.size, right.size,
-                Modifier.then(if (inset) Modifier.padding(horizontal = LauncherLayout.ContentInset) else Modifier),
-                wrapWidth = wrapWidth, centered = row.centered) {
-                (left + right).forEach { item ->
-                    key(item) {
-                        if (interactive) element(item, false, rowStyle, Modifier,
-                            showSeconds = row.showSeconds, useLatinLetters = row.useLatinLetters,
-                            fixedClockWidth = row.fixedClockWidth)
-                        else ClockRegionItemMotion { movement -> element(item, false, rowStyle, movement,
-                            showSeconds = row.showSeconds, useLatinLetters = row.useLatinLetters,
-                            fixedClockWidth = row.fixedClockWidth) }
+        ProvideFontShadow(typography.shadow) {
+            val rowStyle = MaterialTheme.typography.bodyLarge.copy(
+                fontFamily = rememberAppFontFamily(typography.fontId),
+                fontSize = typography.size.sp, lineHeight = (typography.size * 1.5f).sp,
+                fontWeight = FontWeight(typography.weight), shadow = resolvedFontShadow().shadow,
+            )
+            val interactions = remember { MutableInteractionSource() }
+            Box(Modifier.then(if (wrapWidth) Modifier else Modifier.fillMaxWidth())
+                .testTag("clock_region:$name")
+                .semantics { contentDescription = dateDescription }
+                .then(if (interactive) Modifier.combinedClickable(
+                    interactionSource = interactions, indication = null,
+                    role = Role.Button, onClick = onDateClick, onLongClick = onLongClick,
+                ) else Modifier), propagateMinConstraints = true) {
+                ClockRegionRowLayout(left.size, right.size,
+                    Modifier.then(if (inset) Modifier.padding(horizontal = LauncherLayout.ContentInset) else Modifier),
+                    wrapWidth = wrapWidth, centered = row.centered) {
+                    (left + right).forEach { item ->
+                        key(item) {
+                            if (interactive) element(item, false, rowStyle, Modifier,
+                                showSeconds = row.showSeconds, useLatinLetters = row.useLatinLetters,
+                                fixedClockWidth = row.fixedClockWidth)
+                            else ClockRegionItemMotion { movement -> element(item, false, rowStyle, movement,
+                                showSeconds = row.showSeconds, useLatinLetters = row.useLatinLetters,
+                                fixedClockWidth = row.fixedClockWidth) }
+                        }
                     }
                 }
-            }
-            if (interactive) {
-                Box(Modifier.matchParentSize().clip(LauncherLayout.RowShape)
-                    .indication(interactions, ripple(color = appearance.text)))
+                if (interactive) {
+                    Box(Modifier.matchParentSize().clip(LauncherLayout.RowShape)
+                        .indication(interactions, ripple(color = appearance.text)))
+                }
             }
         }
     }
@@ -317,7 +323,7 @@ internal fun HomeClockHeader(
                                 animatePositions = !interactive,
                                 useLatinLetters = regions.agenda.useLatinLetters, wrapWidth = wrapWidth,
                                 color = colors.getValue(ClockColorPart.Agenda), centered = regions.agenda.centered,
-                                rightAligned = regions.agenda.rightAligned)
+                                rightAligned = regions.agenda.rightAligned, useRelativeDates = regions.agenda.useRelativeDates)
                         }
                     }
                 }
@@ -565,7 +571,10 @@ internal fun ClockRegionItemMotion(content: @Composable (Modifier) -> Unit) {
     val position = target?.let {
         animateOffsetAsState(it, MaterialTheme.motionScheme.defaultSpatialSpec(), label = "clockRegionItemPosition")
     }
-    Box(Modifier.onPlaced { target = it.positionInParent() }) {
+    Box(Modifier.onPlaced {
+        // Lazy layouts can dispatch placement while deactivating an item for reuse.
+        if (it.isAttached) target = it.positionInParent()
+    }) {
         content(Modifier.graphicsLayer {
             val currentTarget = target
             val offset = if (position != null && currentTarget != null) position.value - currentTarget else Offset.Zero

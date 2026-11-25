@@ -30,7 +30,8 @@ class PopupSwipeStartTest {
 
     @Test fun leftActionRetainsSystemSlopAndDoesNotUseOpeningThresholds() {
         assertEquals(Left, PopupSwipeStart(8f, 48f, 10, true).evaluate(-9f, 5f))
-        assertEquals(Pending, PopupSwipeStart(8f, 48f, 10, false).evaluate(-9f, 5f))
+        assertEquals(Reject, PopupSwipeStart(8f, 48f, 10, false).evaluate(-9f, 5f))
+        assertEquals(Reject, PopupSwipeStart(8f, 8f, 45, true, rightEnabled = false).evaluate(20f, 0f))
     }
 
     @Test fun thresholdScalesWithDensity() {

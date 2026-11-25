@@ -13,6 +13,7 @@ data class ClockTasks(
     val useLatinLetters: Boolean = false,
     val centered: Boolean = false,
     val rightAligned: Set<ClockTaskField> = emptySet(),
+    val useRelativeDates: Boolean = false,
 ) {
     val visibleFields: List<ClockTaskField> get() = normalized().order.filter { it in selected }.let { fields ->
         fields.filterNot { it in rightAligned } + fields.filter { it in rightAligned }
@@ -28,10 +29,12 @@ data class ClockTasks(
             put("size", value.typography.size)
             put("weight", value.typography.weight)
             put("fontShadow", value.typography.fontShadow)
+            put("shadow", value.typography.shadow.json())
             put("fontId", value.typography.fontId ?: JSONObject.NULL)
         })
         put("taskCount", value.taskCount)
         put("useLatinLetters", value.useLatinLetters)
+        put("useRelativeDates", value.useRelativeDates)
         put("centered", value.centered)
         put("rightAligned", JSONArray(value.order.filter { it in value.rightAligned }.map { it.name }))
     } }
@@ -53,10 +56,13 @@ data class ClockTasks(
                     size = typography?.optInt("size", defaults.typography.size) ?: defaults.typography.size,
                     weight = typography?.optInt("weight", defaults.typography.weight) ?: defaults.typography.weight,
                     fontShadow = typography?.optInt("fontShadow", defaults.typography.fontShadow) ?: defaults.typography.fontShadow,
+                    shadow = FontShadowOverride.decode(typography?.optJSONObject("shadow"),
+                        typography?.optInt("fontShadow", defaults.typography.fontShadow) ?: defaults.typography.fontShadow),
                     fontId = typography?.optString("fontId")?.takeIf { it.isNotBlank() && it != "null" },
                 ),
                 taskCount = json.optInt("taskCount", defaults.taskCount),
                 useLatinLetters = json.optBoolean("useLatinLetters", defaults.useLatinLetters),
+                useRelativeDates = json.optBoolean("useRelativeDates", defaults.useRelativeDates),
                 centered = json.optBoolean("centered", json.optString("alignment") == ClockAlignment.Center.name),
                 rightAligned = fields("rightAligned")?.toSet() ?: if (json.optString("alignment") == ClockAlignment.Right.name)
                     ClockTaskField.entries.toSet() else defaults.rightAligned,

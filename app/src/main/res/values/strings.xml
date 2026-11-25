@@ -5,6 +5,7 @@
     <string name="tasks_enable">Enable Tasks.org</string>
     <string name="tasks_connection">Connection</string>
     <string name="tasks_data">Task data</string>
+    <string name="tasks_show_overdue">Show overdue tasks</string>
     <string name="tasks_sorting">Task order</string>
     <string name="tasks_sort_by">Sort by</string>
     <string name="tasks_undated_first">Undated tasks first</string>
@@ -77,9 +78,13 @@
     <string name="calendar_hidden">Hidden in the system calendar</string>
     <string name="calendar_open_events">Open events</string>
     <string name="calendar_app">Default calendar app</string>
+    <string name="calendar_date_tap">Date tap</string>
+    <string name="calendar_date_tap_calendar">Tap opens calendar</string>
+    <string name="calendar_date_long_press_calendar">Long press opens calendar</string>
     <string name="calendar_system_default_app">System default</string>
     <string name="calendar_choose_app_description">Choose the app used to open calendar events.</string>
     <string name="calendar_read_days">Days to read ahead</string>
+    <string name="calendar_no_events_today">No events today</string>
     <string name="calendar_deprioritize_all_day">Lower priority for all-day events</string>
     <string name="calendar_deprioritize_all_day_summary">Show timed events before all-day events on the same day</string>
     <string name="calendar_display">Display</string>
@@ -206,7 +211,7 @@
     <string name="private_space_indicator_summary">Show a badge on private app icons</string>
     <string name="private_space_lock_immediately">Lock immediately</string>
     <string name="private_space_lock_on_exit">Close automatically when leaving the list</string>
-    <string name="private_space_lock_on_screen">Keep unlocked until the screen locks</string>
+    <string name="private_space_lock_on_screen">Follow the system’s automatic locking settings</string>
     <string name="private_space_display_folder">Folder</string>
     <string name="private_space_edit">Edit</string>
     <string name="private_space_edit_summary">Change the name, icon and app order</string>
@@ -274,7 +279,7 @@
     <string name="icon_edit_failed">Couldn’t save this icon. Please try another image or icon.</string>
     <string name="edit_app_popup">Edit %1$s pop-up</string>
     <string name="popup_app_shortcuts">%1$s shortcuts</string>
-    <string name="popup_custom_widget">Custom widget</string>
+    <string name="popup_custom_widget">Widgets</string>
     <string name="popup_add_new">Add new</string>
     <string name="popup_show_in_app_list">Show in app list</string>
     <string name="popup_empty">Choose shortcuts, apps or widgets below.</string>
@@ -316,6 +321,7 @@
     <!-- Search and app drawer -->
     <string name="search_apps">Search apps</string>
     <string name="search_no_results">No matching apps</string>
+    <string name="app_archived_label">Archived</string>
     <string name="launcher_fab_description">Search apps. Touch and hold for settings.</string>
     <string name="drawer_folders">Folders</string>
     <string name="recently_installed">Recently Installed</string>
@@ -346,7 +352,8 @@
     <string name="app_category_condition">Show when</string>
     <string name="app_category_always">Always</string>
     <string name="app_category_headphones">Headphones are connected</string>
-    <string name="app_category_time">Daily time range</string>
+    <string name="app_category_time">Time range</string>
+    <string name="app_category_all_day">All day</string>
     <string name="app_category_start">Start time</string>
     <string name="app_category_end">End time</string>
     <string name="app_category_delete">Delete category</string>
@@ -364,6 +371,19 @@
     <string name="empty_folder">No apps in this folder</string>
 
     <!-- Notifications -->
+    <string name="popup_notification_actions">Action buttons</string>
+    <string name="popup_notification_direct_reply">Direct reply</string>
+    <string name="popup_notification_suggested_replies">Suggested replies</string>
+    <string name="popup_notification_progress">Progress notifications</string>
+    <string name="notification_wider_details">Wider notification details</string>
+    <string name="notification_wider_details_summary">Use the full width below the avatar in pop-ups</string>
+    <string name="notification_reply_hint">Type a reply…</string>
+    <string name="notification_reply_send">Send reply</string>
+    <string name="notification_reply_close">Close reply</string>
+    <string name="notification_reply_sent">Reply sent</string>
+    <string name="notification_action_failed">This action is no longer available. Open the app to continue.</string>
+    <string name="notification_unlock_required">Unlock your device to continue</string>
+    <string name="notification_progress_label">Progress</string>
     <string name="notification_dismiss">Dismiss</string>
     <string name="notification_now">now</string>
     <string name="notification_minutes">%1$dm</string>
@@ -426,6 +446,8 @@
     <string name="settings_language">Language</string>
     <string name="settings_allow_screen_rotation">Allow screen rotation</string>
     <string name="settings_allow_screen_rotation_summary">Follow system rotation settings. Turn off to keep the home screen in portrait.</string>
+    <string name="settings_remember_screen_position">Remember screen position</string>
+    <string name="settings_remember_screen_position_summary">Keep the last screen after unlocking or returning from an app. Turn off to return to the home screen.</string>
     <string name="settings_tablets_foldables">Tablets &amp; foldables</string>
     <string name="settings_lab">Lab</string>
     <string name="lab_accessibility">Accessibility</string>
@@ -442,68 +464,6 @@
     <string name="settings_advanced_summary">More options for your launcher</string>
     <string name="settings_about">About</string>
     <string name="settings_about_summary">Grace Launcher, updates, and licenses</string>
-    <string name="settings_backup">Backup and restore</string>
-    <string name="settings_backup_summary">Export, import, and automatic backup</string>
-    <string name="backup_export">Export backup</string>
-    <string name="backup_export_summary">Save your setup to a file</string>
-    <string name="backup_exporting">Exporting…</string>
-    <string name="backup_export_failed">Export failed. Try again or choose another location.</string>
-    <string name="backup_import">Import backup</string>
-    <string name="backup_import_summary">Replace your setup with a saved backup</string>
-    <string name="backup_importing">Importing…</string>
-    <string name="backup_import_confirm_title">Import backup?</string>
-    <string name="backup_import_confirm">This replaces your current setup.</string>
-    <string name="backup_import_action">Import</string>
-    <string name="backup_last_exported_never">Last exported: Never</string>
-    <string name="backup_last_exported_today">Last exported: today</string>
-    <plurals name="backup_last_exported_days">
-        <item quantity="one">Last exported: %1$d day ago</item>
-        <item quantity="other">Last exported: %1$d days ago</item>
-    </plurals>
-    <string name="backup_auto">Automatic backup</string>
-    <string name="backup_auto_summary">Once a day, when your setup has changed</string>
-    <string name="backup_folder">Backup folder</string>
-    <string name="backup_folder_none">Not chosen</string>
-    <string name="backup_auto_failed">Automatic backup failed on %1$s: %2$s</string>
-    <string name="backup_summary_title">Import complete</string>
-    <string name="backup_summary_restored">Restored %1$s.</string>
-    <plurals name="backup_summary_folders">
-        <item quantity="one">%1$d folder</item>
-        <item quantity="other">%1$d folders</item>
-    </plurals>
-    <plurals name="backup_summary_apps">
-        <item quantity="one">%1$d app</item>
-        <item quantity="other">%1$d apps</item>
-    </plurals>
-    <plurals name="backup_summary_favorites">
-        <item quantity="one">%1$d favorite</item>
-        <item quantity="other">%1$d favorites</item>
-    </plurals>
-    <plurals name="backup_summary_widgets">
-        <item quantity="one">%1$d widget</item>
-        <item quantity="other">%1$d widgets</item>
-    </plurals>
-    <string name="backup_summary_settings">all settings</string>
-    <string name="backup_summary_not_installed">Not installed yet (will appear once installed): %1$s</string>
-    <string name="backup_summary_widgets_setup">Widgets that need setup: %1$d</string>
-    <string name="backup_summary_widgets_hint">They appear one at a time on the home screen</string>
-    <string name="backup_summary_widgets_missing">Widgets left out (app not installed): %1$s</string>
-    <string name="backup_summary_left_out">Left out (work profile or private space not on this phone): %1$s</string>
-    <string name="backup_access_title">Needs your permission</string>
-    <string name="backup_access_explanation">Android doesn\'t restore these. Each Allow shows Android\'s own request; notification access opens Android settings.</string>
-    <string name="backup_access_calendar">Calendar</string>
-    <string name="backup_access_weather">Weather from Breezy Weather</string>
-    <string name="backup_access_notifications">Media player and notification previews</string>
-    <string name="backup_access_allow">Allow</string>
-    <string name="backup_import_failed_title">Import failed</string>
-    <string name="backup_import_failed_restored">Import failed. Your setup was not changed.</string>
-    <string name="backup_import_failed_unrestored">Import failed and your previous setup could not be fully restored. Import an earlier backup to recover.</string>
-    <string name="backup_rejected_title">Cannot import this file</string>
-    <string name="backup_rejected_newer">This backup was made by a newer version of Grace Launcher. Update the app and try again.</string>
-    <string name="backup_rejected_not_backup">This file is not a Grace Launcher backup.</string>
-    <string name="backup_rejected_too_large">This backup is too large to import.</string>
-    <string name="backup_rejected_unsafe">This backup contains a file name that is not allowed, so it was not imported.</string>
-    <string name="backup_ok">OK</string>
     <string name="settings_open_home">Go directly to home</string>
     <string name="settings_open_home_summary">Go directly to home without setting Grace as the default launcher</string>
     <string name="settings_instant_access">Instant access</string>
@@ -738,17 +698,6 @@
     <string name="weather_settings_location">Location</string>
     <string name="weather_settings_first_location">First location in Breezy Weather</string>
     <string name="weather_settings_forecast_days">Forecast days</string>
-    <string name="widget_restore_title">Widgets to set up</string>
-    <plurals name="widget_restore_count">
-        <item quantity="one">%1$d widget from your backup is waiting</item>
-        <item quantity="other">%1$d widgets from your backup are waiting</item>
-    </plurals>
-    <string name="widget_restore_next">Set up next</string>
-    <string name="widget_restore_app_missing">This widget\'s app isn\'t installed, so the widget was removed from the list.</string>
-    <string name="widget_bind_note_title">Allow Grace to add widgets</string>
-    <string name="widget_bind_note_text">Android will ask whether Grace can create widgets. Tick “Always allow” so it doesn\'t ask again for each widget from your backup.</string>
-    <string name="widget_bind_note_continue">Continue</string>
-    <string name="widget_bind_note_later">Not now</string>
     <string name="weather_mode_location_update_notifier">Location Update Notifier</string>
     <string name="weather_mode_gadgetbridge">Gadgetbridge</string>
     <string name="weather_gadgetbridge_setup">Breezy Weather: Enable Gadgetbridge sharing, select Grace Launcher, and refresh the weather.</string>
@@ -823,8 +772,10 @@
     <!-- Clock style -->
     <string name="clock_style_apply">Apply</string>
     <string name="clock_layout">Clock layout</string>
-    <string name="clock_single_line">Single line</string>
-    <string name="clock_two_lines">Two lines</string>
+    <string name="clock_single_line">Horizontal</string>
+    <string name="clock_two_lines">Vertical</string>
+    <string name="clock_minute_scale">Minute font scale</string>
+    <string name="clock_second_scale">Second font scale</string>
     <string name="clock_week" translatable="false">Week</string>
     <string name="clock_sacramento" translatable="false">Sacramento</string>
     <string name="clock_bokor" translatable="false">Bokor</string>
@@ -888,7 +839,7 @@
 
     <!-- Home widgets -->
     <string name="widget_home_menu">Grace widget</string>
-    <string name="widget_add">Add custom widget</string>
+    <string name="widget_add">Add widget</string>
     <string name="widget_choose">Choose a widget</string>
     <string name="widget_search">Search widgets</string>
     <string name="widget_none">No widgets found</string>
@@ -902,10 +853,13 @@
     <string name="widget_move_home">Move the clock and app list</string>
     <string name="widget_resize">Resize widget</string>
     <string name="grace_widgets_title">Grace widgets</string>
+    <string name="grace_widgets_add">Add Grace widgets</string>
     <string name="grace_widget_baseline">Baseline (invisible)</string>
     <string name="popup_widget_full_width">Full width</string>
     <string name="popup_widget_background">Background</string>
-    <string name="popup_widget_content_scale">Content scale · %1$d%%</string>
+    <string name="popup_widget_background_color">Background color</string>
+    <string name="popup_widget_background_opacity">Background opacity</string>
+    <string name="popup_widget_content_scale">Content · %1$d%%</string>
     <string name="widget_adjust_up">Move up / decrease height</string>
     <string name="widget_adjust_down">Move down / increase height</string>
     <string name="widget_calendar">Calendar</string>
@@ -949,8 +903,6 @@
     <string name="shortcuts_folders_title">Shortcuts &amp; folders</string>
     <string name="popups_title">Pop-ups</string>
     <string name="shortcuts_folders_enable">Enable app pop-ups</string>
-    <string name="popup_swipe_left_first">Swipe left to open the first item</string>
-    <string name="popup_swipe_left_first_summary">Open the first shortcut, app, or widget’s app in the pop-up</string>
     <string name="popup_silent_notifications">Silent notifications</string>
     <string name="popup_normal_notifications">Normal notifications</string>
     <string name="popup_single_line_previews">Single-line notification previews</string>
@@ -992,6 +944,7 @@
     <string name="widget_screen_swipe_disabled">You can open this screen using a gesture or a Grace button action</string>
     <string name="widget_screen_columns">Cells per row</string>
     <string name="widget_screen_edit">Edit widget screen</string>
+    <string name="widget_screen_add_items">Add apps, shortcuts &amp; widgets</string>
     <string name="widget_screen_open">Open widget screen</string>
     <string name="app_stacks_title">App stacks</string>
     <string name="app_stack_create">Create app stack</string>
@@ -1006,16 +959,8 @@
     <string name="app_stack_collapse">Collapse app stack</string>
     <string name="app_stack_position">Page %1$d of %2$d</string>
     <string name="app_stack_empty">Choose apps or shortcuts below.</string>
-    <string name="widget_stack_create">Create widget stack</string>
     <string name="widget_stack_create_summary">Several widgets in one space. Swipe to switch between them</string>
-    <string name="widget_stack_edit">Edit widget stack</string>
-    <string name="widget_stack_name">Widget stack name</string>
     <string name="widget_stack_rename">Rename widget stack</string>
-    <string name="widget_stack_placement">Show widget stack in</string>
-    <string name="widget_stack_delete">Delete widget stack</string>
-    <string name="widget_stack_delete_confirmation">Delete “%1$s”? The widgets inside it will be removed.</string>
-    <string name="widget_stack_empty">Add widgets, apps, or shortcuts below. Drag them to set the swipe order.</string>
-    <string name="widget_stack_height">Stack height</string>
     <string name="widget_stack_position">Widget %1$d of %2$d</string>
     <string name="lab_popup">Pop up</string>
     <string name="lab_popup_distance">Extra swipe distance</string>
@@ -1025,6 +970,9 @@
     <string name="lab_dp">%1$d dp</string>
     <string name="lab_degrees">±%1$d°</string>
     <string name="favorites_lock_editing">Lock editing</string>
+    <string name="favorites_list_stretch">Allow scrolling the home list</string>
+    <string name="home_list_heading">Home list</string>
+    <string name="home_layout_heading">Home layout</string>
     <string name="widget_settings_button">Settings</string>
     <string name="widget_bind_error">Couldn’t bind this widget. Please try again.</string>
     <string name="widget_configuration_launch_error">Couldn’t open this widget’s settings. Please try again.</string>
@@ -1096,6 +1044,8 @@
     <string name="clock_equal_width_characters">Equal character widths</string>
     <string name="clock_center_characters">Center characters</string>
     <string name="clock_use_latin_letters">Always use Latin letters</string>
+    <string name="clock_use_relative_dates">Use relative dates</string>
+    <string name="clock_use_relative_dates_summary">Show today and tomorrow instead of their dates</string>
     <string name="clock_layout_section">Layout</string>
     <string name="clock_show_clock">Show clock</string>
     <string name="clock_show_weekday">Show weekday</string>
@@ -1154,9 +1104,11 @@
     <string name="category_open_dw">Open Digital wellbeing</string>
     <string name="app_list_bottom_folders">Bottom folders</string>
     <string name="app_list_edit">Edit app list</string>
+    <string name="app_list_align_with_home">Align with home</string>
     <string name="app_list_grace_settings">Grace settings</string>
     <string name="app_list_add_grace">Grace launcher</string>
     <string name="alphabet_show_in">Show in</string>
+    <string name="list_hide_symbol">Hide symbol</string>
     <string name="list_symbol_horizontal_offset">Symbol horizontal offset</string>
     <string name="alphabet_touch_area">Show touch area</string>
     <string name="alphabet_touch_width">Right touch width</string>
@@ -1207,6 +1159,7 @@
     <string name="weather_chart">Chart</string>
     <string name="weather_chart_always_expanded">Always expand</string>
     <string name="weather_hour_show_text">Show text</string>
+    <string name="weather_hour_use_value_color">Use value color</string>
     <string name="weather_hour_show_chart">Show in chart</string>
     <string name="weather_chart_bar">Bar chart</string>
     <string name="weather_chart_line">Line chart</string>
@@ -1263,7 +1216,7 @@
     <string name="agenda_title_time">Current time</string>
     <string name="agenda_title_quote">Quote</string>
     <string name="agenda_title_text">Custom text</string>
-    <string name="agenda_widget_region">Widget region</string>
+    <string name="agenda_widget_region">Widgets</string>
     <string name="agenda_daily">Daily</string>
     <string name="agenda_daily_content">Daily content</string>
     <string name="agenda_calendar_content">Calendar content</string>
@@ -1276,4 +1229,74 @@
     <string name="agenda_choose_create_action">Choose what to add</string>
     <string name="agenda_new_task">New task</string>
     <string name="agenda_unsaved_message">Your agenda changes haven’t been saved.</string>
+    <string name="widget_stacks_title">Widget stacks</string>
+    <string name="widget_stack_create">Add widget stack</string>
+    <string name="widget_stacks_empty">Create a widget stack to keep several widgets in one place.</string>
+    <string name="widget_stack_edit">Edit widget stack</string>
+    <string name="widget_stack_name">Widget stack name</string>
+    <string name="widget_stack_placement">Show widget stack in</string>
+    <string name="widget_stack_delete">Delete widget stack</string>
+    <string name="widget_stack_delete_confirmation">Delete “%1$s” and its widgets?</string>
+    <string name="widget_stack_empty">Add widgets, apps, or shortcuts below. Drag them to set the swipe order.</string>
+    <string name="widget_stack_add">Add widget stack</string>
+    <string name="widget_stack_remove">Remove widget stack</string>
+    <string name="widget_stack_height">Stack height</string>
+    <string name="widget_stack_apps">Apps and shortcuts</string>
+    <plurals name="widget_stack_apps_summary">
+        <item quantity="one">%1$d app, shown after the widgets</item>
+        <item quantity="other">%1$d apps, shown after the widgets</item>
+    </plurals>
+    <string name="widget_stack_background_color">Background color</string>
+    <string name="widget_stack_opacity">Background opacity</string>
+    <string name="widget_stack_apply_background_all">Apply background color to all</string>
+    <string name="widget_stack_remove_widget_title">Remove widget</string>
+    <string name="widget_stack_remove_widget_confirmation">Remove “%1$s” from this stack?</string>
+    <string name="font_shadow_soft">Soft</string>
+    <string name="font_shadow_sharp">Sharp</string>
+    <string name="font_shadow_custom">Custom</string>
+    <string name="font_shadow_opacity">Shadow opacity</string>
+    <string name="font_shadow_blur">Blur</string>
+    <string name="font_shadow_offset_x">X offset</string>
+    <string name="font_shadow_offset_y">Y offset</string>
+    <string name="font_shadow_spread">Spread</string>
+    <string name="font_shadow_override">Override default shadow</string>
+    <string name="font_shadow_unsaved_message">Save changes to the font shadow before leaving?</string>
+    <string name="popup_notifications_heading">Notifications</string>
+    <string name="popup_gestures_heading">Gestures</string>
+    <string name="popup_action_open">Open pop-up</string>
+    <string name="popup_action_first_item">Open the first item</string>
+    <string name="popup_action_first_notification">Open the first notification</string>
+    <string name="popup_action_dismiss_first">Dismiss the first notification</string>
+    <string name="popup_action_dismiss_all">Dismiss all app notifications</string>
+    <string name="dismiss_notifications_title">Dismiss notifications?</string>
+    <plurals name="dismiss_notifications_message">
+        <item quantity="one">Dismiss %1$d notification? This can’t be undone.</item>
+        <item quantity="other">Dismiss all %1$d notifications? This can’t be undone.</item>
+    </plurals>
+    <string name="dismiss_notifications_confirm">Dismiss</string>
+    <string name="popup_double_tap_delay">Enabling double-tap gestures delays single taps.</string>
+    <string name="settings_backup">Backup and restore</string>
+    <string name="settings_backup_summary">Save and restore settings</string>
+    <string name="backup_export">Back up to file</string>
+    <string name="backup_export_summary">Save everything to a .zip file you choose</string>
+    <string name="backup_restore">Restore from file</string>
+    <string name="backup_restore_summary">Replace the current setup with a backup</string>
+    <string name="backup_restore_title">Replace current setup?</string>
+    <string name="backup_restore_message">Your layout, favorites, folders and settings will be replaced by the backup. The launcher will restart.</string>
+    <string name="backup_restore_confirm">Restore</string>
+    <string name="backup_exported">Backup saved.</string>
+    <string name="backup_export_failed">The backup could not be saved.</string>
+    <string name="backup_restore_failed">The backup could not be restored.</string>
+    <string name="home_screen_enable">Enable home screen</string>
+    <string name="home_disable_scrolling">Disable scrolling</string>
+    <string name="home_disable_scrolling_summary">Lock the home screen. Some home screen content may be hidden.</string>
+    <string name="home_disable_stretch">Disable stretch effect</string>
+    <string name="calendar_date_long_press">Date long press</string>
+    <string name="calendar_action_open_calendar">Open calendar</string>
+    <string name="calendar_action_open_agenda">Open agenda</string>
+    <string name="calendar_action_new_event">New event</string>
+    <string name="calendar_action_new_task">New task</string>
+    <string name="notification_reduce_repeated_senders">Reduce repeated sender information</string>
+    <string name="popup_confirm_multiple_apps">Confirm before clearing notifications from multiple apps</string>
+    <string name="backup_in_progress">Please wait…</string>
 </resources>

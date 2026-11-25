@@ -97,10 +97,10 @@ class FavoritesStore internal constructor(private val preferences: SharedPrefere
         return if (firstMatch >= 0) firstMatch else Int.MAX_VALUE
     }
 
-    internal companion object {
-        const val FILE_NAME = "grace_launcher_preferences"
-        const val KEY_FAVORITES = "favorite_components"
-        const val KEY_ORDER = "favorite_component_order"
-        const val DEFAULT_FAVORITE_COUNT = 6
+    companion object {
+        internal const val FILE_NAME = "grace_launcher_preferences"
+        private const val KEY_FAVORITES = "favorite_components"
+        private const val KEY_ORDER = "favorite_component_order"
+        private const val DEFAULT_FAVORITE_COUNT = 6
     }
 }

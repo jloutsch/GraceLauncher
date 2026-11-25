@@ -1,12 +1,15 @@
 package com.galaxyrio.gracelauncher.ui
 
+import com.galaxyrio.gracelauncher.data.FontShadow
 import androidx.compose.ui.geometry.Rect
 import android.net.Uri
+import com.galaxyrio.gracelauncher.data.notifications.NotificationActionResult
 import com.galaxyrio.gracelauncher.data.ItemIcon
 import com.galaxyrio.gracelauncher.data.AppCategory
 import com.galaxyrio.gracelauncher.data.PopupItem
 import com.galaxyrio.gracelauncher.data.LauncherApp
 import com.galaxyrio.gracelauncher.data.LauncherFolder
+import com.galaxyrio.gracelauncher.data.WidgetStackStyle
 import com.galaxyrio.gracelauncher.data.FolderPlacement
 import com.galaxyrio.gracelauncher.data.LauncherSettings
 import com.galaxyrio.gracelauncher.data.ClockStyle
@@ -24,8 +27,8 @@ import com.galaxyrio.gracelauncher.data.media.MediaCommand
 /** Platform actions are injected so all launcher surfaces can be previewed and tested. */
 data class LauncherActions(
     val requestDefaultHome: () -> Unit = {},
-    /** Sets up the next imported widget (fork). */
-    val restoreWidgets: () -> Unit = {},
+    val exportBackup: suspend (Uri) -> Result<Unit> = { Result.failure(UnsupportedOperationException()) },
+    val restoreBackup: suspend (Uri) -> Result<Unit> = { Result.failure(UnsupportedOperationException()) },
     val openHome: () -> Unit = {},
     val chooseWallpaper: () -> Unit = {},
     val requestUsageAccess: () -> Unit = {},
@@ -70,6 +73,7 @@ data class LauncherActions(
     val refreshApps: () -> Unit = {},
     val updateSettings: ((LauncherSettings) -> LauncherSettings) -> Unit = {},
     val applyClockStyle: suspend (ClockStyle) -> Boolean = { false },
+    val applyFontShadow: suspend (FontShadow) -> Boolean = { false },
     val applyAgendaAppearance: suspend (AgendaAppearance, HomeLayout?) -> Boolean = { _, _ -> false },
     val discardAgendaWidgetDraft: suspend () -> Boolean = { false },
     val applyMediaStyle: suspend (MediaPlayerStyle) -> Boolean = { false },
@@ -80,6 +84,7 @@ data class LauncherActions(
     val hideApp: (LauncherApp) -> Unit = {},
     val setFolderAutoHide: (String, Boolean) -> Unit = { _, _ -> },
     val saveFolder: (LauncherFolder) -> Unit = {},
+    val updateWidgetStackStyle: (String, WidgetStackStyle) -> Unit = { _, _ -> },
     val updateFolder: (String, String?, FolderPlacement?, Boolean?) -> Unit = { _, _, _, _ -> },
     val setFolderFavorites: suspend (Map<String, Boolean>) -> Boolean = { false },
     val deleteFolder: (String) -> Unit = {},
@@ -100,7 +105,10 @@ data class LauncherActions(
     val controlMedia: (String, MediaCommand) -> Unit = { _, _ -> },
     val dismissMedia: (String, Long) -> Boolean = { _, _ -> false },
     val dismissNotification: (String, Long) -> Boolean = { _, _ -> false },
+    val dismissAllNotifications: (String) -> Boolean = { false },
     val openNotification: (String, Long) -> Boolean = { _, _ -> false },
+    val performNotificationAction: (String, Long, String, String?, Boolean) -> NotificationActionResult =
+        { _, _, _, _, _ -> NotificationActionResult.Unavailable },
     val requestWeatherAccess: () -> Unit = {},
     val requestCalendarAccess: () -> Unit = {},
     val addWidget: () -> Unit = {},
@@ -111,4 +119,5 @@ data class LauncherActions(
     val openWeatherApp: () -> Unit = {},
     val openBreezyWeather: () -> Unit = {},
     val installBreezyWeather: () -> Unit = {},
+    val refreshWeatherIfNeeded: () -> Unit = {},
 )

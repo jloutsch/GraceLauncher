@@ -96,11 +96,17 @@ internal fun TasksSettings(uiState: LauncherUiState, actions: LauncherActions, o
                     SettingsActionItem(stringResource(R.string.tasks_choose_lists),
                         if (ids == null) stringResource(R.string.tasks_all_lists)
                         else pluralStringResource(R.plurals.tasks_lists_selected, ids.size, ids.size),
-                        0, 2, "tasks_choose_lists", enabled = state.status == TasksStatus.Ready || state.lists.isNotEmpty(), onClick = onLists)
+                        0, 3, "tasks_choose_lists", enabled = state.status == TasksStatus.Ready || state.lists.isNotEmpty(), onClick = onLists)
                 }
                 item {
                     SettingsActionItem(stringResource(R.string.calendar_refresh_now), stringResource(R.string.tasks_refresh_summary),
-                        1, 2, "tasks_refresh", enabled = state.status != TasksStatus.Loading, onClick = actions.refreshTasks)
+                        1, 3, "tasks_refresh", enabled = state.status != TasksStatus.Loading, onClick = actions.refreshTasks)
+                }
+                item {
+                    SettingsToggleItem(stringResource(R.string.tasks_show_overdue), null, preferences.showOverdue,
+                        2, 3, "tasks_show_overdue") { show ->
+                        actions.updateSettings { it.copy(calendar = it.calendar.copy(tasksOrg = it.calendar.tasksOrg.copy(showOverdue = show))) }
+                    }
                 }
                 item { SettingsHeading(stringResource(R.string.tasks_sorting)) }
                 item {

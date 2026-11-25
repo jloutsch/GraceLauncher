@@ -29,6 +29,17 @@ internal suspend fun calendarAppPackages(context: Context): Set<String> = withCo
     }.toSet()
 }
 
+/** Use Android's calendar selector, then a provider date link for apps without that category. */
+internal fun openDefaultCalendar(context: Context): Boolean {
+    val intent = Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_CALENDAR)
+    if (runCatching { context.startActivity(intent) }.isSuccess) return true
+    return runCatching {
+        context.startActivity(Intent(Intent.ACTION_VIEW,
+            CalendarContract.CONTENT_URI.buildUpon().appendPath("time")
+                .appendPath(System.currentTimeMillis().toString()).build()))
+    }.isSuccess
+}
+
 /** Preserve Android's default resolver unless the user explicitly selected a calendar app. */
 internal fun openCalendarEvent(context: Context, event: ScheduleEvent, appPackage: String?): Boolean {
     val intent = calendarEventIntent(event.id)

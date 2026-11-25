@@ -9,6 +9,7 @@ import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.time.DayOfWeek
 
 @RunWith(AndroidJUnit4::class)
 class AppCategoryPersistenceTest {
@@ -65,9 +66,10 @@ class AppCategoryPersistenceTest {
         } + AppCategory("custom", "News", listOf("shortcut:manual"), CategoryCondition.Time,
             startMinute = 1320, endMinute = 420, placement = CategoryPlacement.AppList,
             inclusion = CategoryInclusion.Dynamic, dynamicRule = CategoryDynamicRule.Notifications,
-            notificationLevels = setOf(CategoryNotificationLevel.High), appLimit = 6, icon = CategoryIcon.Info)
+            notificationLevels = setOf(CategoryNotificationLevel.High), appLimit = 6, icon = CategoryIcon.Info,
+            daysOfWeek = setOf(DayOfWeek.MONDAY, DayOfWeek.WEDNESDAY, DayOfWeek.FRIDAY), allDay = true)
         assertEquals(categories, AppCategory.decode(AppCategory.encode(categories)))
-        val none = categories.map { it.copy(notificationLevels = emptySet()) }
+        val none = categories.map { it.copy(notificationLevels = emptySet(), daysOfWeek = emptySet()) }
         assertEquals(none, AppCategory.decode(AppCategory.encode(none)))
     }
 
@@ -87,6 +89,7 @@ class AppCategoryPersistenceTest {
         assertEquals(CategoryPlacement.AppList, categories[3].placement)
         assertEquals(CategoryPlacement.None, categories[4].placement)
         assertEquals(CategoryInclusion.Dynamic, categories[4].inclusion)
+        assertTrue(categories.all { it.daysOfWeek == DayOfWeek.entries.toSet() && !it.allDay })
         assertEquals(categories, AppCategory.decode(AppCategory.encode(categories)))
     }
 
@@ -94,7 +97,8 @@ class AppCategoryPersistenceTest {
         val json = """[null,{},3,
             {"id":"custom","name":"Custom","placement":"AppList","showOnHome":true,
              "inclusion":"unknown","dynamicRule":"unknown","icon":"unknown","appLimit":999,
-             "notificationLevels":["High","unknown"],"items":["app:a",null,8,"category:bad"]}
+             "notificationLevels":["High","unknown"],"items":["app:a",null,8,"category:bad"],
+             "daysOfWeek":["MONDAY","unknown",3,null]}
         ]"""
         val custom = requireNotNull(AppCategory.decode(json)).first()
         assertEquals("custom", custom.id)
@@ -104,6 +108,7 @@ class AppCategoryPersistenceTest {
         assertEquals(CategoryIcon.Circle, custom.icon)
         assertEquals(30, custom.appLimit)
         assertEquals(setOf(CategoryNotificationLevel.High), custom.notificationLevels)
+        assertEquals(setOf(DayOfWeek.MONDAY), custom.daysOfWeek)
         assertEquals(listOf("app:a"), custom.itemKeys)
         assertNull(AppCategory.decode(null))
         assertNull(AppCategory.decode("not json"))

@@ -1,5 +1,9 @@
 package com.galaxyrio.gracelauncher.ui.components
 
+import androidx.compose.runtime.CompositionLocalProvider
+import com.galaxyrio.gracelauncher.ui.theme.LocalFontShadowEnabled
+import com.galaxyrio.gracelauncher.ui.theme.WithoutFontShadow
+
 import android.os.Process
 import android.os.UserHandle
 import androidx.compose.foundation.Image
@@ -27,11 +31,9 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.Text
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowText as Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
@@ -39,7 +41,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
@@ -52,8 +53,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -78,6 +77,8 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.stringResource
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.ShortcutsFoldersSettings
+import com.galaxyrio.gracelauncher.data.PopupGesture
+import com.galaxyrio.gracelauncher.data.PopupGestureAction
 import com.galaxyrio.gracelauncher.data.CategoryIcon
 import com.galaxyrio.gracelauncher.data.IconDisplaySettings
 import com.galaxyrio.gracelauncher.data.IconDisplayStyle
@@ -89,6 +90,8 @@ import com.galaxyrio.gracelauncher.data.WorkProfileFolderId
 import com.galaxyrio.gracelauncher.data.RecentlyInstalledFolderId
 import com.galaxyrio.gracelauncher.data.icons.iconShapePath
 import com.galaxyrio.gracelauncher.data.notifications.AppNotification
+import com.galaxyrio.gracelauncher.data.notifications.isTitleRedundant
+import com.galaxyrio.gracelauncher.data.notifications.forDisplay
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.theme.effectiveDisplay
 
@@ -172,7 +175,7 @@ fun AppIcon(app: LauncherApp, modifier: Modifier = Modifier, size: Dp = 38.dp, a
                     PrivateSpaceFolderId -> LauncherSymbol.Lock
                     WorkProfileFolderId -> LauncherSymbol.Work
                     RecentlyInstalledFolderId -> LauncherSymbol.History2
-                    else -> if (app.isAppStack) LauncherSymbol.Steppers else LauncherSymbol.Folder
+                    else -> if (app.isWidgetStack) LauncherSymbol.Widgets else if (app.isAppStack) LauncherSymbol.Steppers else LauncherSymbol.Folder
                 })
             }
             else -> {
@@ -181,12 +184,14 @@ fun AppIcon(app: LauncherApp, modifier: Modifier = Modifier, size: Dp = 38.dp, a
                     modifier = Modifier.size(displaySize).background(color, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(
-                        text = app.label.firstOrNull()?.uppercase().orEmpty(),
-                        color = Color(0xFF13201E),
-                        fontSize = (displaySize.value * 0.43f).sp,
-                        fontWeight = FontWeight.Medium,
-                    )
+                    WithoutFontShadow {
+                        Text(
+                            text = app.label.firstOrNull()?.uppercase().orEmpty(),
+                            color = Color(0xFF13201E),
+                            fontSize = (displaySize.value * 0.43f).sp,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
                 }
             }
         }
@@ -235,6 +240,7 @@ fun LauncherAppRow(
         onDrag = { bounds, expanded -> gestures.onDrag(app, bounds, expanded) },
         onDragEnd = gestures.onDragEnd,
         popupsEnabled = gestures.popupsEnabled,
+        gestureOwner = app, gestureActions = gestures,
         onSwipeLeft = gestures.onOpenFirst?.let { open -> { bounds -> open(app, bounds) } },
         openDescription = stringResource(R.string.app_shortcuts),
         detailsDescription = stringResource(R.string.app_actions),
@@ -265,6 +271,7 @@ fun FolderRow(
     trailing: (@Composable () -> Unit)? = null,
     notifications: List<AppNotification> = emptyList(),
     categoryIcon: CategoryIcon = CategoryIcon.None,
+    gestures: AppRowGestures = AppRowGestures(),
 ) {
     val display = app.effectiveDisplay(LocalLauncherAppearance.current)
     // Return contracts currently support the personal user only. A foreign installation must
@@ -283,6 +290,7 @@ fun FolderRow(
         onDrag = onDrag,
         onDragEnd = onDragEnd,
         onSwipeLeft = onSwipeLeft,
+        gestureOwner = app, gestureActions = gestures,
         openDescription = stringResource(R.string.open_folder),
         detailsDescription = stringResource(R.string.folder_actions),
         modifier = modifier,
@@ -316,6 +324,8 @@ private fun LauncherRow(
     detailsDescription: String,
     modifier: Modifier,
     highlighted: Boolean,
+    gestureOwner: LauncherApp,
+    gestureActions: AppRowGestures,
     popupsEnabled: Boolean = true,
     onSwipeLeft: ((Rect) -> Unit)? = null,
     notifications: List<AppNotification> = emptyList(),
@@ -333,20 +343,18 @@ private fun LauncherRow(
     val inputEnabled = LocalLauncherInputEnabled.current
     val popupSettings = LocalPopupGestureSettings.current
     val list = LocalListAppearance.current
-    val openFirstDescription = stringResource(R.string.popup_swipe_left_first)
-    val currentPrepare by rememberUpdatedState(onPrepare)
-    val currentDrag by rememberUpdatedState(onDrag)
-    val currentDragEnd by rememberUpdatedState(onDragEnd)
-    val currentSwipeLeft by rememberUpdatedState(onSwipeLeft)
+    val leftDescription = stringResource(R.string.grace_button_swipe_left)
+    val rightDescription = stringResource(R.string.grace_button_swipe_right)
     var bounds by remember { mutableStateOf(Rect.Zero) }
+    val notificationBounds = remember(rowKey) { mutableMapOf<String, Rect>() }
     var iconCoordinates by remember { mutableStateOf<LayoutCoordinates?>(null) }
     // Query at activation time: a graphics-layer translation need not trigger layout.
     fun iconBounds(): Rect = iconCoordinates?.takeIf { it.isAttached }?.boundsInWindow() ?: Rect.Zero
     var dragging by remember(rowKey) { mutableStateOf(false) }
-    var leftPull by remember(rowKey) { mutableFloatStateOf(0f) }
+    var pull by remember(rowKey) { mutableFloatStateOf(0f) }
     val resistanceDistance = with(LocalDensity.current) { 72.dp.toPx() }
     val pullOffset by animateFloatAsState(
-        targetValue = resistedPopupPull(leftPull, resistanceDistance),
+        targetValue = resistedSignedPopupPull(pull, resistanceDistance),
         animationSpec = if (dragging) snap() else spring(dampingRatio = 0.58f, stiffness = 420f),
         label = "launcherRowPull",
     )
@@ -358,9 +366,25 @@ private fun LauncherRow(
     val labelVisible = showLabel || hideIcon
     val highlight by animateColorAsState(
         // Keep the long-press state layer while a left action is being pulled.
-        if (highlighted || leftPull > 0f) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f) else Color.Transparent,
+        if (highlighted || pull != 0f) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.12f) else Color.Transparent,
         animationSpec = tween(100), label = "launcherRowPressSurface",
     )
+    fun resolve(gesture: PopupGesture, notification: AppNotification? = null): PopupGestureAction? {
+        val resolver = gestureActions.resolveGesture
+        if (resolver != null) return resolver(gestureOwner, gesture, notification)
+        return popupSettings.gesture(gesture).enabledActions.firstOrNull {
+            it == PopupGestureAction.OpenPopup || (it == PopupGestureAction.OpenFirstItem && onSwipeLeft != null)
+        }
+    }
+    fun perform(gesture: PopupGesture, notification: AppNotification? = null, anchor: Rect = iconBounds()) {
+        val handler = gestureActions.onGesture
+        if (handler != null) handler(gestureOwner, gesture, anchor, notification)
+        else when (resolve(gesture, notification)) {
+            PopupGestureAction.OpenPopup -> onOpen(anchor)
+            PopupGestureAction.OpenFirstItem -> onSwipeLeft?.invoke(anchor)
+            else -> Unit
+        }
+    }
     // The hit area stays still; only the surface below follows the finger.
     Box(
         modifier = modifier
@@ -368,48 +392,15 @@ private fun LauncherRow(
             .heightIn(min = 48.dp)
             .testTag(rowKey)
             .onGloballyPositioned { bounds = it.boundsInWindow() }
-            .pointerInput(rowKey, inputEnabled, popupsEnabled) {
-                if (!inputEnabled || !popupsEnabled) return@pointerInput
-                awaitEachGesture {
-                    awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                    currentPrepare()
-                }
-            }
-            .pointerInput(rowKey, inputEnabled, popupsEnabled, onSwipeLeft != null,
-                popupSettings.popupSwipeDistanceDp, popupSettings.popupSwipeAngleDegrees) {
-                if (!inputEnabled || !popupsEnabled) return@pointerInput
-                val swipe = PopupSwipeIntent(reversalSlop = 8.dp.toPx(),
-                    firstItemSlop = if (currentSwipeLeft != null) 40.dp.toPx() else Float.POSITIVE_INFINITY)
-                fun resetPull() { dragging = false; leftPull = 0f }
-                try {
-                    detectPopupDragGestures(
-                        extraDistance = popupSettings.popupSwipeDistanceDp.coerceIn(0, 48).dp.toPx(),
-                        maxAngleDegrees = popupSettings.popupSwipeAngleDegrees.coerceIn(10, 90),
-                        leftEnabled = currentSwipeLeft != null,
-                        onDragStart = { swipe.reset(); leftPull = 0f; dragging = true },
-                        onDragCancel = {
-                            if (swipe.revealed) currentDragEnd(false)
-                            swipe.reset()
-                            resetPull()
-                        },
-                        onDragEnd = {
-                            if (swipe.revealed) currentDragEnd(swipe.expanded)
-                            else if (swipe.opensFirst) currentSwipeLeft?.invoke(iconBounds())
-                            swipe.reset()
-                            resetPull()
-                        },
-                    ) { change, amount ->
-                        change.consume()
-                        swipe.drag(amount)?.let { expanded ->
-                            currentDrag(iconBounds(), expanded)
-                        }
-                        leftPull = swipe.firstItemPullDistance
+            .popupRowGestureInput(rowKey, inputEnabled && popupsEnabled, popupSettings,
+                resolve = { resolve(it) }, perform = { perform(it) }, prepare = onPrepare,
+                onPopupDrag = { onDrag(iconBounds(), it) }, onPopupDragEnd = onDragEnd,
+                onPull = { distance, active -> pull = distance; dragging = active },
+                canStart = { position ->
+                    gestureActions.onGesture == null || notifications.none {
+                        notificationBounds[it.key]?.contains(position + bounds.topLeft) == true
                     }
-                } finally {
-                    // Covering the page or disabling the gesture must never leave a row displaced.
-                    resetPull()
-                }
-            }
+                })
             .semantics {
                 // Visual labels may be hidden, but TalkBack must still identify
                 // favorites and expose their existing launch/shortcut actions.
@@ -417,7 +408,10 @@ private fun LauncherRow(
                 selected = pressed || highlighted
                 customActions = buildList {
                     if (popupsEnabled) add(CustomAccessibilityAction(openDescription) { onOpen(iconBounds()); true })
-                    if (popupsEnabled && onSwipeLeft != null) add(CustomAccessibilityAction(openFirstDescription) { onSwipeLeft(iconBounds()); true })
+                    if (popupsEnabled && resolve(PopupGesture.SwipeLeft) != null)
+                        add(CustomAccessibilityAction(leftDescription) { perform(PopupGesture.SwipeLeft); true })
+                    if (popupsEnabled && resolve(PopupGesture.SwipeRight) != null)
+                        add(CustomAccessibilityAction(rightDescription) { perform(PopupGesture.SwipeRight); true })
                     if (onLongClick != null) add(CustomAccessibilityAction(detailsDescription) { onLongClick(); true })
                 }
             }
@@ -426,6 +420,8 @@ private fun LauncherRow(
                 interactionSource = interactionSource, indication = null,
                 onClick = { onClick(bounds, iconBounds()) },
                 onLongClick = onLongClick,
+                onDoubleClick = if (popupsEnabled && popupSettings.doubleTap.selected.isNotEmpty())
+                    ({ perform(PopupGesture.DoubleTap) }) else null,
             ),
     ) {
         Row(
@@ -454,7 +450,20 @@ private fun LauncherRow(
                     usageText = usageText,
                     labelModifier = Modifier.testTag("$rowKey:label"),
                     notificationBodyLines = if (popupSettings.singleLineNotificationPreviews) 1 else 2,
-                    categoryIcon = if (showLabel) categoryIcon else CategoryIcon.None)
+                    categoryIcon = if (showLabel) categoryIcon else CategoryIcon.None,
+                    notificationContent = { notification, content ->
+                        if (gestureActions.onGesture == null) content()
+                        else PopupNotificationGesturePreview(
+                            notification.key, notification.revision, inputEnabled && popupsEnabled, popupSettings,
+                            resolve = { resolve(it, notification) },
+                            perform = { gesture, anchor -> perform(gesture, notification, anchor) },
+                            onDrag = { anchor, expanded ->
+                                gestureActions.onNotificationDrag?.invoke(gestureOwner, notification, anchor, expanded)
+                            }, onDragEnd = gestureActions.onDragEnd,
+                            onBoundsChanged = { notificationBounds[notification.key] = it },
+                            onClick = { onClick(bounds, iconBounds()) }, onLongClick = onLongClick,
+                            content = content)
+                    })
             }
             trailing?.invoke()
             if (notifications.isNotEmpty()) {
@@ -486,7 +495,8 @@ internal fun AppNotificationLabel(
     notificationBodyLines: Int = 1,
     usageText: String? = null,
     categoryIcon: CategoryIcon = CategoryIcon.None,
-) {
+    notificationContent: @Composable (AppNotification, @Composable () -> Unit) -> Unit = { _, content -> content() },
+) = CompositionLocalProvider(LocalFontShadowEnabled provides (LocalFontShadowEnabled.current && onWallpaper)) {
     val style = listLabelStyle(onWallpaper)
     val list = LocalListAppearance.current
     Column(modifier) {
@@ -518,19 +528,25 @@ internal fun AppNotificationLabel(
                     Modifier.size(16.dp).testTag("category_indicator:${categoryIcon.name}"), tint = style.color)
             }
         }
-        notifications.forEachIndexed { index, notification ->
+        val reduceRepeatedSenders = LocalPopupGestureSettings.current.reduceRepeatedSenders
+        notifications.forEachIndexed { index, original ->
+            val notification = remember(original, reduceRepeatedSenders) { original.forDisplay(reduceRepeatedSenders) }
             key(notification.key) {
                 if (index > 0) Spacer(Modifier.height(6.dp))
                 else if (showLabel) Spacer(Modifier.height(2.dp))
-                val previewStyle = style.copy(fontSize = (list.fontSize - 2).sp, color = style.color.copy(alpha = 0.88f))
-                if (notification.title.isNotBlank()) Text(notification.title,
-                    style = previewStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                if (notification.text.isNotBlank()) Text(
-                    text = if (notificationBodyLines > 1) notification.text else notification.text.replace('\n', ' '),
-                    modifier = Modifier.testTag("notification_preview:${notification.key}:body"),
-                    // Use the body's font metrics instead of the larger app label's line height.
-                    style = previewStyle.copy(lineHeight = TextUnit.Unspecified),
-                    maxLines = notificationBodyLines, overflow = TextOverflow.Ellipsis)
+                notificationContent(notification) {
+                    Column {
+                        val previewStyle = style.copy(fontSize = (list.fontSize - 2).sp, color = style.color.copy(alpha = 0.88f))
+                        if (notification.title.isNotBlank() && (!reduceRepeatedSenders || !isTitleRedundant(notification.title, notification.text))) Text(notification.title,
+                            style = previewStyle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        if (notification.text.isNotBlank()) Text(
+                            text = if (notificationBodyLines > 1) notification.text else notification.text.replace('\n', ' '),
+                            modifier = Modifier.testTag("notification_preview:${notification.key}:body"),
+                            // Use the body's font metrics instead of the larger app label's line height.
+                            style = previewStyle.copy(lineHeight = TextUnit.Unspecified),
+                            maxLines = notificationBodyLines, overflow = TextOverflow.Ellipsis)
+                    }
+                }
             }
         }
     }
@@ -543,4 +559,7 @@ data class AppRowGestures(
     val onLaunchAt: ((LauncherApp, Rect) -> Unit)? = null,
     val popupsEnabled: Boolean = true,
     val onOpenFirst: ((LauncherApp, Rect) -> Unit)? = null,
+    val resolveGesture: ((LauncherApp, PopupGesture, AppNotification?) -> PopupGestureAction?)? = null,
+    val onGesture: ((LauncherApp, PopupGesture, Rect, AppNotification?) -> Unit)? = null,
+    val onNotificationDrag: ((LauncherApp, AppNotification, Rect, Boolean) -> Unit)? = null,
 )

@@ -77,4 +77,29 @@ class WidgetGridLayoutTest {
         val saved = moved.mapIndexed { index, cell -> PopupItem(cell.key, HomeLayout(widgetId = index), cell.placement()) }
         assertEquals(moved, restoreWidgetGrid(saved, 4, emptyMap()))
     }
+
+    @Test fun fullWidthTogglePreservesNormalGeometryAndDisplacesNeighbours() {
+        val normal = WidgetGridPlacement(1, 0, 2, 2)
+        val expanded = normal.withFullWidth(true, 4)
+        val cells = compactWidgetRows(moveWidgetGrid(
+            listOf(cell("widget", 1, 0, 2, 2), cell("left", 0, 0), cell("right", 3, 1)),
+            cell("widget", expanded.column!!, expanded.row!!, expanded.columns, expanded.rows), 4))
+        assertEquals(cell("widget", 0, 0, 4, 2), cells.first { it.key == "widget" })
+        assertTrue(cells.filterNot { it.key == "widget" }.all { it.row >= 2 })
+        assertFits(cells, 4)
+        // Vertical edits and moves must not consume the saved horizontal geometry.
+        val moved = expanded.copy(row = 3, rows = 4).withFullWidth(false, 4)
+        assertEquals(WidgetGridPlacement(1, 3, 2, 4), moved)
+    }
+
+    @Test fun fullWidthFollowsGridColumnChangesAndRestoresWithinAvailableWidth() {
+        val saved = WidgetGridPlacement(3, 0, 3, 2).withFullWidth(true, 6)
+        val widget = PopupItem("widget", HomeLayout(widgetId = 1, widgetFullWidth = true), saved)
+        val wider = restoreWidgetGrid(listOf(widget), 8, emptyMap()).single()
+        assertEquals(cell("widget", 0, 0, 8, 2), wider)
+        val narrower = restoreWidgetGrid(listOf(widget, PopupItem("app")), 2, emptyMap())
+        assertEquals(2, narrower.first { it.key == "widget" }.size.columns)
+        assertFits(narrower, 2)
+        assertEquals(WidgetGridPlacement(0, 0, 2, 2), saved.withFullWidth(false, 2))
+    }
 }

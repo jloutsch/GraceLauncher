@@ -58,7 +58,8 @@ class HomepageCategoriesTest {
             assertEquals(listOf(app.key), state.appCategories.first().itemKeys)
         }
         listOf("favorites_grace_widgets", "popup_add_widget", "favorites_add_category", "favorites_add_folder", "favorites_add_stack").forEach {
-            compose.onNodeWithTag(it).performScrollTo().assertIsEnabled()
+            scrollListUntilComposed(it)
+            compose.onNodeWithTag(it).assertIsEnabled()
         }
     }
 
@@ -83,6 +84,15 @@ class HomepageCategoriesTest {
                 compose.runOnIdle { assertTrue(state.folders.first { it.id == group.id }.placement.inFavorites) }
                 compose.onNodeWithTag("popup_editor_done").performClick()
             }
+        }
+    }
+
+    // Swipe like a finger: performScrollTo cannot reach the bottom buttons once the header grows.
+    private fun scrollListUntilComposed(tag: String) {
+        repeat(20) {
+            if (compose.onAllNodesWithTag(tag).fetchSemanticsNodes().isNotEmpty()) return
+            compose.onNodeWithTag("favorites_list").performTouchInput { swipeUp() }
+            compose.waitForIdle()
         }
     }
 }

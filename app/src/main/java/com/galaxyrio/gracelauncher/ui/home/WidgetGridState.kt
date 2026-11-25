@@ -3,7 +3,6 @@ package com.galaxyrio.gracelauncher.ui.home
 import androidx.compose.foundation.gestures.ScrollableState
 import androidx.compose.runtime.*
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
 import com.galaxyrio.gracelauncher.data.*
 import kotlin.math.roundToInt
 
@@ -32,13 +31,11 @@ internal class WidgetGridState(
     private var origin = Offset.Zero
     private var viewport = 0f
     private var bottomInset = 0f
-    private var deleteBounds = Rect.Zero
     private var widgetKeys = emptySet<String>()
     private var pointerInCell = Offset.Zero
     private var before = emptyList<WidgetGridCell>()
     private var resizeDelta = Offset.Zero
     val busy get() = draggingKey != null || resizing
-    val overDelete get() = draggingKey != null && deleteBounds.contains(pointerViewport)
     private val pointerViewport get() = dragPosition + pointerInCell + origin - Offset(0f, scroll)
     val scrolling = ScrollableState { delta ->
         val previous = scroll
@@ -47,9 +44,9 @@ internal class WidgetGridState(
     }
 
     fun configure(columns: Int, width: Float, height: Float, origin: Offset, viewport: Float,
-        bottom: Float, deleteBounds: Rect, widgetKeys: Set<String>) {
+        bottom: Float, widgetKeys: Set<String>) {
         this.columns = columns; cellWidth = width; cellHeight = height; this.origin = origin
-        this.viewport = viewport; bottomInset = bottom; this.deleteBounds = deleteBounds; this.widgetKeys = widgetKeys
+        this.viewport = viewport; bottomInset = bottom; this.widgetKeys = widgetKeys
         updateScrollRange()
     }
 
@@ -84,24 +81,23 @@ internal class WidgetGridState(
     fun drag(delta: Offset) {
         val key = draggingKey ?: return
         dragPosition += delta
-        if (!overDelete) {
-            val original = before.firstOrNull { it.key == key } ?: return
-            val next = original.copy(
-                column = (dragPosition.x / cellWidth).roundToInt().coerceIn(0, columns - original.size.columns),
-                row = (dragPosition.y / cellHeight).roundToInt().coerceAtLeast(0),
-            )
-            if (cells.firstOrNull { it.key == key } != next) cells = moveWidgetGrid(before, next, columns)
-        }
+        val original = before.firstOrNull { it.key == key } ?: return
+        val next = original.copy(
+            column = (dragPosition.x / cellWidth).roundToInt().coerceIn(0, columns - original.size.columns),
+            row = (dragPosition.y / cellHeight).roundToInt().coerceAtLeast(0),
+        )
+        if (cells.firstOrNull { it.key == key } != next) cells = moveWidgetGrid(before, next, columns)
         updateScrollRange()
     }
 
     /** Leave space below the current viewport while held, so dragging can grow the canvas indefinitely. */
-    fun autoScroll(edge: Float, maxStep: Float) {
-        if (draggingKey == null || overDelete) return
+    fun autoScroll(edge: Float, maxStep: Float, viewportTranslation: Float = 0f) {
+        if (draggingKey == null) return
         val y = pointerViewport.y
         val factor = when {
             y < origin.y + edge -> -((origin.y + edge - y) / edge).coerceIn(0f, 1f)
-            y > viewport - bottomInset - edge -> ((y - viewport + bottomInset + edge) / edge).coerceIn(0f, 1f)
+            y > viewport - viewportTranslation - bottomInset - edge ->
+                ((y - viewport + viewportTranslation + bottomInset + edge) / edge).coerceIn(0f, 1f)
             else -> 0f
         }
         val previous = scroll
@@ -111,13 +107,10 @@ internal class WidgetGridState(
 
     fun finishDrag(cancelled: Boolean) {
         val key = draggingKey ?: return
-        val removed = if (!cancelled && overDelete) key else null
         draggingKey = null
-        cells = if (cancelled) before else compactWidgetRows(
-            if (removed != null) before.filterNot { it.key == removed } else cells,
-        )
-        selectedKey = key.takeIf { !cancelled && removed == null && it in widgetKeys }
-        if (!cancelled) commit(cells, removed)
+        cells = if (cancelled) before else compactWidgetRows(cells)
+        selectedKey = key.takeIf { !cancelled && it in widgetKeys }
+        if (!cancelled) commit(cells, null)
         updateScrollRange()
         revealSelection()
         onEditing(selectedKey != null)

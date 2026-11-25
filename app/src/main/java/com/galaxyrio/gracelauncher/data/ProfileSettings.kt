@@ -15,9 +15,9 @@ enum class PrivateSpaceDisplay { List, Folder, NormalApp }
 /** Shared presentation. Security fields are used only by Private Space, never Work Profile. */
 data class ProfileSettings(
     val enabled: Boolean = true,
-    val passwordProtected: Boolean = true,
+    val passwordProtected: Boolean = false,
     val showIndicator: Boolean = true,
-    val lockImmediately: Boolean = true,
+    val lockImmediately: Boolean = false,
     val display: PrivateSpaceDisplay = PrivateSpaceDisplay.Folder,
     val name: String = PrivateSpaceDefaultName,
     val appOrder: List<String> = emptyList(),

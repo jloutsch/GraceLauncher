@@ -1,269 +1,102 @@
 package com.galaxyrio.gracelauncher.ui.settings
 
-import android.content.Context
-import android.content.Intent
 import android.net.Uri
-import android.provider.DocumentsContract
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.galaxyrio.gracelauncher.R
-import com.galaxyrio.gracelauncher.data.backup.BackupController
-import com.galaxyrio.gracelauncher.data.backup.BackupProblem
-import com.galaxyrio.gracelauncher.data.backup.BackupStatusStore
-import com.galaxyrio.gracelauncher.data.backup.BackupTask
-import com.galaxyrio.gracelauncher.data.backup.ImportResult
-import com.galaxyrio.gracelauncher.data.backup.ImportSummary
-import com.galaxyrio.gracelauncher.data.backup.manualBackupName
-import com.galaxyrio.gracelauncher.data.NotificationDisplay
-import com.galaxyrio.gracelauncher.data.weather.WeatherConnectionMode
-import com.galaxyrio.gracelauncher.data.weather.WeatherStatus
 import com.galaxyrio.gracelauncher.ui.LauncherActions
-import com.galaxyrio.gracelauncher.ui.LauncherUiState
-import com.galaxyrio.gracelauncher.ui.ScheduleStatus
-import com.galaxyrio.gracelauncher.ui.components.LauncherIcon
-import com.galaxyrio.gracelauncher.ui.components.LauncherSymbol
-import java.time.Instant
-import java.time.LocalDate
-import java.time.ZoneId
+import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
 
-private const val DayMillis = 86_400_000L
-private const val TreeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+private val BackupNameStamp = DateTimeFormatter.ofPattern("yyyyMMdd-HHmm")
+private val BackupMimeTypes = arrayOf("application/zip", "application/x-zip-compressed", "application/octet-stream")
 
 @Composable
-fun BackupSettings(uiState: LauncherUiState, onBack: () -> Unit) {
+internal fun BackupSettings(actions: LauncherActions, onBack: () -> Unit, inProgress: Boolean = false) {
     val context = LocalContext.current
-    val store = remember(context) { BackupStatusStore(context) }
-    val task by BackupController.state.collectAsState()
-    var revision by remember { mutableIntStateOf(0) }
-    // Re-read after each finished task and each change made here.
-    val lastExport = remember(task, revision) { store.lastExportAtMillis }
-    val autoEnabled = remember(task, revision) { store.autoEnabled }
-    val folder = remember(task, revision) { store.autoFolderUri }
-    val failureAt = remember(task, revision) { store.lastFailureAtMillis }
-    val failureReason = remember(task, revision) { store.lastFailureReason }
-    val folderName by produceState<String?>(null, folder) { value = folder?.let { withContext(Dispatchers.IO) { treeName(context, it) } } }
-    // Without the app list an export has no labels and an import would report every app as missing.
-    val ready = !uiState.isLoadingApps && !uiState.appLoadFailed
-    val busy = task == BackupTask.Exporting || task == BackupTask.Importing
-    var pendingImport by rememberSaveable { mutableStateOf<Uri?>(null) }
-    var enableAfterPick by rememberSaveable { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    var message by remember { mutableStateOf<String?>(null) }
+    var pendingRestore by remember { mutableStateOf<Uri?>(null) }
+    BackHandler(enabled = inProgress) { }
+    if (inProgress) AlertDialog(
+        onDismissRequest = {},
+        confirmButton = {},
+        icon = { CircularProgressIndicator() },
+        title = { Text(stringResource(R.string.backup_in_progress)) },
+        properties = androidx.compose.ui.window.DialogProperties(dismissOnBackPress = false, dismissOnClickOutside = false),
+    )
 
-    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
-        if (uri != null) BackupController.export(context, uri, uiState.apps.associate { it.key to it.label })
-    }
-    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { pendingImport = it }
-    val folderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        val enable = enableAfterPick
-        enableAfterPick = false
-        if (uri == null || runCatching { context.contentResolver.takePersistableUriPermission(uri, TreeFlags) }.isFailure) return@rememberLauncherForActivityResult
-        store.autoFolderUri?.takeIf { it != uri.toString() }?.let { old ->
-            runCatching { context.contentResolver.releasePersistableUriPermission(Uri.parse(old), TreeFlags) }
+    val exportPicker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+        if (uri != null) scope.launch {
+            message = actions.exportBackup(uri).fold(
+                onSuccess = { context.getString(R.string.backup_exported) },
+                onFailure = { context.getString(R.string.backup_export_failed) + detail(it) },
+            )
         }
-        store.autoFolderUri = uri.toString()
-        if (enable) store.autoEnabled = true
-        revision++
+    }
+    val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) pendingRestore = uri
     }
 
-    SettingsScaffold(stringResource(R.string.settings_backup), "settings_backup", onBack) { padding ->
+    pendingRestore?.let { uri ->
+        AlertDialog(onDismissRequest = { pendingRestore = null }, shape = RoundedCornerShape(40.dp),
+            title = { Text(stringResource(R.string.backup_restore_title)) },
+            text = { Text(stringResource(R.string.backup_restore_message)) },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingRestore = null
+                    scope.launch {
+                        actions.restoreBackup(uri).fold(
+                            onSuccess = { },
+                            onFailure = { message = context.getString(R.string.backup_restore_failed) + detail(it) },
+                        )
+                    }
+                }, modifier = Modifier.testTag("backup_restore_confirm")) {
+                    Text(stringResource(R.string.backup_restore_confirm))
+                }
+            },
+            dismissButton = { TextButton(onClick = { pendingRestore = null }) { Text(stringResource(R.string.cancel)) } })
+    }
+
+    SettingsScaffold(stringResource(R.string.settings_backup), "settings_backup", { if (!inProgress) onBack() }) { padding ->
         SettingsList(padding) {
             item { Spacer(Modifier.height(24.dp)) }
             item {
-                SettingsActionItem(stringResource(R.string.backup_export),
-                    stringResource(if (task == BackupTask.Exporting) R.string.backup_exporting else R.string.backup_export_summary),
-                    0, 2, "backup_export", enabled = ready && !busy, leading = { LauncherIcon(LauncherSymbol.Outbound) },
-                ) { exportLauncher.launch(manualBackupName(LocalDate.now())) }
-            }
-            item {
-                SettingsActionItem(stringResource(R.string.backup_import),
-                    stringResource(if (task == BackupTask.Importing) R.string.backup_importing else R.string.backup_import_summary),
-                    1, 2, "backup_import", enabled = ready && !busy, leading = { LauncherIcon(LauncherSymbol.History2) },
-                ) { importLauncher.launch(arrayOf("application/zip", "application/octet-stream")) }
-            }
-            item {
-                val days = lastExport?.let { ((System.currentTimeMillis() - it) / DayMillis).coerceAtLeast(0).toInt() }
-                Text(
-                    when (days) {
-                        null -> stringResource(R.string.backup_last_exported_never)
-                        0 -> stringResource(R.string.backup_last_exported_today)
-                        else -> pluralStringResource(R.plurals.backup_last_exported_days, days, days)
-                    },
-                    Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp).testTag("backup_last_exported"),
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            item { Spacer(Modifier.height(24.dp)) }
-            item {
-                SettingsToggleItem(stringResource(R.string.backup_auto), stringResource(R.string.backup_auto_summary),
-                    autoEnabled, 0, 2, "backup_auto") { on ->
-                    if (on && folder == null) { enableAfterPick = true; folderLauncher.launch(null) }
-                    else { store.autoEnabled = on; revision++ }
+                SettingsActionItem(stringResource(R.string.backup_export), stringResource(R.string.backup_export_summary),
+                    0, 2, "backup_export", enabled = !inProgress) {
+                    exportPicker.launch("grace-launcher-backup-${LocalDateTime.now().format(BackupNameStamp)}.zip")
                 }
             }
             item {
-                SettingsActionItem(stringResource(R.string.backup_folder),
-                    if (folder == null) stringResource(R.string.backup_folder_none) else folderName.orEmpty(),
-                    1, 2, "backup_folder", leading = { LauncherIcon(LauncherSymbol.Folder) },
-                ) { enableAfterPick = false; folderLauncher.launch(null) }
+                SettingsActionItem(stringResource(R.string.backup_restore), stringResource(R.string.backup_restore_summary),
+                    1, 2, "backup_restore", enabled = !inProgress) { restorePicker.launch(BackupMimeTypes) }
             }
-            if (failureAt != null && (lastExport == null || failureAt > lastExport)) item {
-                val date = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).format(Instant.ofEpochMilli(failureAt).atZone(ZoneId.systemDefault()))
-                Text(stringResource(R.string.backup_auto_failed, date, failureReason.orEmpty()),
-                    Modifier.padding(start = 16.dp, top = 12.dp, end = 16.dp).testTag("backup_failure"),
-                    style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.error)
-            }
-        }
-    }
-
-    pendingImport?.let { uri ->
-        AlertDialog(onDismissRequest = { pendingImport = null },
-            title = { Text(stringResource(R.string.backup_import_confirm_title)) },
-            text = { Text(stringResource(R.string.backup_import_confirm)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    pendingImport = null
-                    BackupController.import(context, uri, uiState.apps.map { it.key }.toSet())
-                }, Modifier.testTag("backup_import_confirm")) { Text(stringResource(R.string.backup_import_action)) }
-            },
-            dismissButton = { TextButton(onClick = { pendingImport = null }) { Text(stringResource(R.string.settings_cancel)) } })
-    }
-    when (val current = task) {
-        // An import result shows from LauncherRoute, on every screen.
-        is BackupTask.ExportFailed -> AlertDialog(onDismissRequest = BackupController::dismiss,
-            text = { Text(stringResource(R.string.backup_export_failed)) },
-            confirmButton = { TextButton(onClick = BackupController::dismiss) { Text(stringResource(R.string.backup_ok)) } })
-        else -> Unit
-    }
-}
-
-@Composable
-internal fun ImportResultDialog(result: ImportResult, onDismiss: () -> Unit, access: List<ImportAccess> = emptyList(),
-    actions: LauncherActions = LauncherActions()) {
-    val title = when (result) {
-        is ImportResult.Success -> R.string.backup_summary_title
-        is ImportResult.Rejected -> R.string.backup_rejected_title
-        is ImportResult.Failed -> R.string.backup_import_failed_title
-    }
-    AlertDialog(onDismissRequest = onDismiss, modifier = Modifier.testTag("backup_result"),
-        title = { Text(stringResource(title)) },
-        text = {
-            when (result) {
-                is ImportResult.Success -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ImportSummaryText(result.summary)
-                    ImportAccessRows(access, actions)
-                }
-                is ImportResult.Rejected -> Text(stringResource(when (result.problem) {
-                    is BackupProblem.NewerFormat, is BackupProblem.NewerSchema -> R.string.backup_rejected_newer
-                    BackupProblem.NotABackup -> R.string.backup_rejected_not_backup
-                    BackupProblem.TooLarge -> R.string.backup_rejected_too_large
-                    is BackupProblem.UnsafeEntry -> R.string.backup_rejected_unsafe
-                }))
-                is ImportResult.Failed -> Text(stringResource(
-                    if (result.restored) R.string.backup_import_failed_restored else R.string.backup_import_failed_unrestored))
-            }
-        },
-        confirmButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.backup_ok)) } })
-}
-
-@Composable
-private fun ImportSummaryText(summary: ImportSummary) {
-    // summary.widgets counts every widget in the backup, including those left out for a missing provider.
-    val widgets = (summary.widgets - summary.widgetsMissingProvider.size).coerceAtLeast(0)
-    val restored = listOfNotNull(
-        pluralStringResource(R.plurals.backup_summary_folders, summary.folders, summary.folders),
-        pluralStringResource(R.plurals.backup_summary_apps, summary.apps, summary.apps),
-        pluralStringResource(R.plurals.backup_summary_favorites, summary.favorites, summary.favorites),
-        pluralStringResource(R.plurals.backup_summary_widgets, widgets, widgets),
-        if (summary.settingsRestored) stringResource(R.string.backup_summary_settings) else null,
-    ).joinToString(", ")
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text(stringResource(R.string.backup_summary_restored, restored))
-        if (summary.notInstalled.isNotEmpty())
-            Text(stringResource(R.string.backup_summary_not_installed, summary.notInstalled.joinToString(", ")))
-        if (widgets > 0) Column {
-            Text(stringResource(R.string.backup_summary_widgets_setup, widgets))
-            Text(stringResource(R.string.backup_summary_widgets_hint), style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        if (summary.widgetsMissingProvider.isNotEmpty())
-            Text(stringResource(R.string.backup_summary_widgets_missing, summary.widgetsMissingProvider.joinToString(", ")))
-        if (summary.leftOut.isNotEmpty())
-            Text(stringResource(R.string.backup_summary_left_out, summary.leftOut.joinToString(", ")))
-    }
-}
-
-/** Fork #9: a restored feature that needs a permission Android does not restore from a backup. */
-internal enum class ImportAccess { Calendar, Weather, Notifications }
-
-internal fun missingImportAccess(state: LauncherUiState): List<ImportAccess> = buildList {
-    val settings = state.settings
-    if (settings.calendarAgenda && state.scheduleStatus == ScheduleStatus.PermissionRequired) add(ImportAccess.Calendar)
-    if (settings.weatherEnabled && settings.weatherConnection.mode != WeatherConnectionMode.Gadgetbridge &&
-        state.weather.status == WeatherStatus.PermissionRequired) add(ImportAccess.Weather)
-    val popups = settings.shortcutsFolders
-    val previews = popups.enabled &&
-        (popups.normalNotifications != NotificationDisplay.Hidden || popups.silentNotifications != NotificationDisplay.Hidden)
-    if ((settings.mediaPlayer || previews) && !state.media.hasAccess) add(ImportAccess.Notifications)
-}
-
-/** Says up front that each Allow brings up Android's own request; a row goes away once its access is granted. */
-@Composable
-private fun ImportAccessRows(missing: List<ImportAccess>, actions: LauncherActions) {
-    if (missing.isEmpty()) return
-    Column(Modifier.testTag("backup_access")) {
-        Text(stringResource(R.string.backup_access_title), style = MaterialTheme.typography.titleSmall)
-        Text(stringResource(R.string.backup_access_explanation), style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant)
-        missing.forEach { access ->
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(when (access) {
-                    ImportAccess.Calendar -> R.string.backup_access_calendar
-                    ImportAccess.Weather -> R.string.backup_access_weather
-                    ImportAccess.Notifications -> R.string.backup_access_notifications
-                }), Modifier.weight(1f))
-                TextButton(onClick = when (access) {
-                    ImportAccess.Calendar -> actions.requestCalendarAccess
-                    ImportAccess.Weather -> actions.requestWeatherAccess
-                    ImportAccess.Notifications -> actions.requestMediaAccess
-                }, modifier = Modifier.testTag("backup_access:${access.name}")) { Text(stringResource(R.string.backup_access_allow)) }
+            message?.let { text ->
+                item { Text(text, modifier = Modifier.padding(horizontal = 4.dp, vertical = 12.dp).testTag("backup_message")) }
             }
         }
     }
 }
 
-private fun treeName(context: Context, tree: String): String? = runCatching {
-    val uri = Uri.parse(tree)
-    val document = DocumentsContract.buildDocumentUriUsingTree(uri, DocumentsContract.getTreeDocumentId(uri))
-    context.contentResolver.query(document, arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME), null, null, null)
-        ?.use { if (it.moveToFirst()) it.getString(0) else null }
-}.getOrNull() ?: runCatching { DocumentsContract.getTreeDocumentId(Uri.parse(tree)).substringAfter(':') }.getOrNull()
+private fun detail(error: Throwable): String = error.message?.let { " $it" }.orEmpty()

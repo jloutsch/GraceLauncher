@@ -9,7 +9,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowText as Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
@@ -27,6 +27,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.galaxyrio.gracelauncher.ui.theme.ProvideFontShadow
+import com.galaxyrio.gracelauncher.ui.theme.resolvedFontShadow
 import com.galaxyrio.gracelauncher.R
 import com.galaxyrio.gracelauncher.data.ClockAlignment
 import com.galaxyrio.gracelauncher.data.ClockTaskField
@@ -56,7 +58,7 @@ internal fun clockTaskFields(task: TaskItem, requested: List<ClockTaskField>): L
 internal fun ClockTaskContent(
     task: TaskItem, now: Instant, fields: List<ClockTaskField>, settings: ClockTasks, color: Color,
     modifier: Modifier = Modifier, animatePositions: Boolean = false, wrapWidth: Boolean = false,
-) {
+) = ProvideFontShadow(settings.typography.shadow) {
     val locale = LocalConfiguration.current.locales[0]
     val dateLocale = remember(locale, settings.useLatinLetters) { clockCalendarLocale(locale, settings.useLatinLetters) }
     val use24Hour = DateFormat.is24HourFormat(LocalContext.current)
@@ -64,6 +66,11 @@ internal fun ClockTaskContent(
     val dateFormat = remember(dateLocale, zone) {
         DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(dateLocale, "MMMEd"), dateLocale)
             .withDecimalStyle(DecimalStyle.of(dateLocale)).withZone(zone)
+    }
+    val today = now.atZone(zone).toLocalDate()
+    fun dateLabel(value: Instant): String {
+        val relative = if (settings.useRelativeDates) clockRelativeDate(value.atZone(zone).toLocalDate(), today, dateLocale) else null
+        return relative ?: dateFormat.format(value)
     }
     val timeFormat = remember(locale, use24Hour, zone) {
         DateTimeFormatter.ofPattern(DateFormat.getBestDateTimePattern(locale, if (use24Hour) "Hm" else "hm"), locale)
@@ -73,7 +80,7 @@ internal fun ClockTaskContent(
     val style = MaterialTheme.typography.bodyLarge.copy(
         fontFamily = rememberAppFontFamily(typography.fontId), fontSize = typography.size.sp,
         lineHeight = (typography.size * 1.5f).sp, fontWeight = FontWeight(typography.weight),
-        shadow = clockFontShadow(typography.fontShadow),
+        shadow = resolvedFontShadow().shadow,
     )
     val leftCount = fields.count { it !in settings.rightAligned }
     ClockMetadataLayout(fields.map { it == ClockTaskField.Title || it == ClockTaskField.List || it == ClockTaskField.Notes },
@@ -95,11 +102,11 @@ internal fun ClockTaskContent(
                         val value = when (field) {
                             ClockTaskField.Title -> task.title
                             ClockTaskField.Countdown -> taskRemainingText(task, now)
-                            ClockTaskField.DueDate -> task.dueAt?.let(dateFormat::format).orEmpty()
+                            ClockTaskField.DueDate -> task.dueAt?.let(::dateLabel).orEmpty()
                             ClockTaskField.DueTime -> if (task.dueAllDay) stringResource(R.string.all_day)
                                 else task.dueAt?.let(timeFormat::format).orEmpty()
                             ClockTaskField.StartDate -> task.startsAt?.let {
-                                dateFormat.format(it) + if (task.startAllDay) "" else " " + timeFormat.format(it)
+                                dateLabel(it) + if (task.startAllDay) "" else " " + timeFormat.format(it)
                             }.orEmpty()
                             ClockTaskField.Priority -> stringResource(when (task.priority) {
                                 TaskPriority.High -> R.string.tasks_priority_high

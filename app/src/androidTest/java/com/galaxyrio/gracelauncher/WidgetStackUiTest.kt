@@ -34,6 +34,7 @@ import com.galaxyrio.gracelauncher.data.HomeLayout
 import com.galaxyrio.gracelauncher.data.LauncherApp
 import com.galaxyrio.gracelauncher.data.LauncherFolder
 import com.galaxyrio.gracelauncher.data.PopupItem
+import com.galaxyrio.gracelauncher.data.WidgetStackStyle
 import com.galaxyrio.gracelauncher.data.ShortcutResult
 import com.galaxyrio.gracelauncher.data.ShortcutStatus
 import com.galaxyrio.gracelauncher.ui.LauncherActions
@@ -54,7 +55,7 @@ class WidgetStackUiTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
     private val app = LauncherApp(ComponentName("test.app", "Main"), "Some app", null)
     private val widgetStack = LauncherFolder("ws", "Widgets", emptyList(), FolderPlacement.Favorites,
-        isAppStack = true, isWidgetStack = true)
+        widgetStack = WidgetStackStyle())
     private val appStack = LauncherFolder("as", "Apps", emptyList(), FolderPlacement.Favorites, isAppStack = true)
     private val state = LauncherUiState(apps = listOf(app), folders = listOf(widgetStack, appStack), isLoadingApps = false)
 

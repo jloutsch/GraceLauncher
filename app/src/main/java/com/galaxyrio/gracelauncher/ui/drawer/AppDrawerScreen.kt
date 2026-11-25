@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Text
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowText as Text
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,8 +49,8 @@ import com.galaxyrio.gracelauncher.ui.components.LauncherAppRow
 import com.galaxyrio.gracelauncher.ui.components.FolderRow
 import com.galaxyrio.gracelauncher.ui.components.LauncherLayout
 import com.galaxyrio.gracelauncher.ui.components.LocalListAppearance
-import com.galaxyrio.gracelauncher.ui.components.startPadding
-import com.galaxyrio.gracelauncher.ui.components.endPadding
+import com.galaxyrio.gracelauncher.ui.components.horizontalPadding
+import com.galaxyrio.gracelauncher.ui.components.appListEndPadding
 import com.galaxyrio.gracelauncher.ui.components.stableStatusBarInset
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.settings.categoryLabel
@@ -136,7 +136,7 @@ fun AppDrawerScreen(
         // may occupy this area after jumping to a later letter. The small, real
         // bottom inset lets LazyColumn naturally clamp sections near the end
         // without clipping scrolling rows above the navigation bar.
-        contentPadding = PaddingValues(start = listAppearance.startPadding, end = listAppearance.endPadding, top = topSpace, bottom = 24.dp + bottomInset),
+        contentPadding = PaddingValues(start = listAppearance.horizontalPadding, end = listAppearance.appListEndPadding, top = topSpace, bottom = 24.dp + bottomInset),
         userScrollEnabled = selectedLetter == null,
     ) {
         items(
@@ -172,7 +172,7 @@ fun AppDrawerScreen(
                         highlighted = highlightedAppKey == item.app.key,
                         notifications = notificationsFor(item.app),
                     )
-                    is DrawerItem.Folder -> if (item.folder.isAppStack && appStackContent != null) appStackContent(item.folder) else FolderRow(
+                    is DrawerItem.Folder -> if ((item.folder.isAppStack || item.folder.isWidgetStack) && appStackContent != null) appStackContent(item.folder) else FolderRow(
                         showLabel = listAppearance.showNames(favorites = false),
                         folder = item.folder,
                         app = folderApps[item.folder.id] ?: item.folder.asApp(),
@@ -182,15 +182,13 @@ fun AppDrawerScreen(
                         onLongClick = { onEditFolder(item.folder) },
                         onDrag = { bounds, expanded -> onFolderDrag(item.folder, bounds, expanded) },
                         onDragEnd = onFolderDragEnd,
-                        onSwipeLeft = rowGestures.onOpenFirst?.let { open -> { bounds ->
-                            open(folderApps[item.folder.id] ?: item.folder.asApp(), bounds)
-                        } },
+                        gestures = rowGestures,
                     )
                     is DrawerItem.PrivateApp -> LauncherAppRow(
                         showLabel = listAppearance.showNames(favorites = false, insideFolder = true),
                         app = item.app, onClick = { onLaunchApp(item.app) }, onLongClick = { onAppDetails(item.app) },
                         onSwipeRight = { if (privateAppsPublic) onAppShortcuts(item.app, it) },
-                        gestures = if (privateAppsPublic) rowGestures else AppRowGestures(onLaunchAt = rowGestures.onLaunchAt),
+                        gestures = if (privateAppsPublic) rowGestures else AppRowGestures(onLaunchAt = rowGestures.onLaunchAt, popupsEnabled = false),
                         highlighted = highlightedAppKey == item.app.key,
                         modifier = Modifier.animateItem(fadeOutSpec = null),
                     )

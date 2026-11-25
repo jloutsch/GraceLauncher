@@ -9,6 +9,52 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class ClockStylePersistenceTest {
+    @Test fun digitAlignmentChoicesSurviveLayoutChangesAndSerializationIndependently() {
+        ClockLayout.entries.forEach { layout ->
+            val defaults = ClockStyle().selectPreset(layout).resolvedRegions().face(ClockElement.Clock)
+            assertFalse(defaults.equalWidthDigits(stacked = false))
+            assertFalse(defaults.centerDigits(stacked = false))
+            assertTrue(defaults.equalWidthDigits(stacked = true))
+            assertTrue(defaults.centerDigits(stacked = true))
+        }
+        val face = ClockFaceStyle().withEqualWidthDigits(false, true).withCenterDigits(false, true)
+            .withEqualWidthDigits(true, false).withCenterDigits(true, false)
+        val original = ClockStyle(singleLine = face, twoLines = face,
+            presets = mapOf(ClockLayout.DoublePlaster to face),
+            regions = ClockRegions(primaryFaces = mapOf(ClockElement.Clock to face)))
+        val restored = ClockStyle.decode(original.encode())
+        assertEquals(face, restored.singleLine)
+        assertEquals(face, restored.twoLines)
+        assertEquals(face, restored.presets[ClockLayout.DoublePlaster])
+        listOf(false, true, false).forEach { stacked ->
+            val selected = restored.resolvedRegions().copy(stackedClock = stacked).face(ClockElement.Clock)
+            assertEquals(!stacked, selected.equalWidthDigits(stacked))
+            assertEquals(!stacked, selected.centerDigits(stacked))
+        }
+    }
+
+    @Test fun oldSharedDigitAlignmentMigratesOnlyToVerticalIncludingExplicitFalse() {
+        listOf(false, true).forEach { equal ->
+            listOf(false, true).forEach { center ->
+                val shared = """{"equalWidthDigits":$equal,"centerDigits":$center}"""
+                val original = ClockStyle.decode("""{
+                    "singleLine":$shared,"twoLines":$shared,
+                    "presets":{"DoublePlaster":$shared},
+                    "regions":{"stackedClock":false,"primaryFaces":{"Clock":$shared}}
+                }""")
+                listOf(original, ClockStyle.decode(original.encode())).forEach { style ->
+                    listOf(style.singleLine, style.twoLines, style.presets.getValue(ClockLayout.DoublePlaster),
+                        style.resolvedRegions().face(ClockElement.Clock)).forEach { face ->
+                        assertFalse(face.equalWidthDigits(stacked = false))
+                        assertFalse(face.centerDigits(stacked = false))
+                        assertEquals(equal, face.equalWidthDigits(stacked = true))
+                        assertEquals(center, face.centerDigits(stacked = true))
+                    }
+                }
+            }
+        }
+    }
+
     @Test fun emptyPrimaryRegionOrderAndIndependentTypographyRoundTrip() {
         val regions = ClockRegions(
             primary = null,

@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalResources
 import com.materialkolor.PaletteStyle
 import com.galaxyrio.gracelauncher.data.FontLibrary
 import com.galaxyrio.gracelauncher.data.FontColors
+import com.galaxyrio.gracelauncher.data.FontShadow
 import com.galaxyrio.gracelauncher.data.launcherThemeSeed
 import com.galaxyrio.gracelauncher.data.launcherColorScheme
 
@@ -68,6 +69,7 @@ fun GraceLauncherTheme(
     seedColor: Color? = null,
     fontLibrary: FontLibrary = FontLibrary(),
     fontColors: FontColors = FontColors(),
+    fontShadow: FontShadow = FontShadow(),
     amoledMode: Boolean = false,
     paletteStyle: PaletteStyle = PaletteStyle.TonalSpot,
     content: @Composable () -> Unit,
@@ -99,6 +101,7 @@ fun GraceLauncherTheme(
     CompositionLocalProvider(
         LocalFontLibrary provides fontLibrary,
         LocalFontColors provides fontColors,
+        LocalFontShadow provides fontShadow,
         LocalWallpaperFontColor provides wallpaperScheme.onSurface,
         LocalLauncherTypography provides typography,
         // Elevation tint must not turn the black sheets back into tinted gray.

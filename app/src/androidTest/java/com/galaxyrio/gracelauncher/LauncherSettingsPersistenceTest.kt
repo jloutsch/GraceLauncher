@@ -20,10 +20,13 @@ import com.galaxyrio.gracelauncher.data.LauncherApp
 import com.galaxyrio.gracelauncher.data.LauncherDatabase
 import com.galaxyrio.gracelauncher.data.SearchSettings
 import com.galaxyrio.gracelauncher.data.ShortcutsFoldersSettings
+import com.galaxyrio.gracelauncher.data.PopupGestureAction
+import com.galaxyrio.gracelauncher.data.PopupGestureActions
 import com.galaxyrio.gracelauncher.data.NotificationDisplay
 import com.galaxyrio.gracelauncher.data.LauncherFolder
 import com.galaxyrio.gracelauncher.data.LauncherSettings
 import com.galaxyrio.gracelauncher.data.LauncherSettingsRepository
+import com.galaxyrio.gracelauncher.data.ProfileSettings
 import com.galaxyrio.gracelauncher.data.ThemeMode
 import com.galaxyrio.gracelauncher.data.LauncherItemsRepository
 import com.galaxyrio.gracelauncher.data.PopupItem
@@ -75,9 +78,84 @@ class LauncherSettingsPersistenceTest {
                 LauncherDatabase.Migration26To27, LauncherDatabase.Migration27To28,
                 LauncherDatabase.Migration28To29, LauncherDatabase.Migration29To30,
                 LauncherDatabase.Migration30To31, LauncherDatabase.Migration31To32,
-                LauncherDatabase.Migration32To33, LauncherDatabase.Migration33To34).build()
+                LauncherDatabase.Migration32To33, LauncherDatabase.Migration33To34,
+                LauncherDatabase.Migration34To35, LauncherDatabase.Migration35To36,
+                LauncherDatabase.Migration36To37).build()
         database = reopened
         return LauncherSettingsRepository(reopened)
+    }
+
+    @Test
+    fun screenPreferencesMigrateFromVersion36AndSurviveReopening() = runBlocking {
+        val schema = InstrumentationRegistry.getInstrumentation().context.assets
+            .open("com.galaxyrio.gracelauncher.data.LauncherDatabase/36.json")
+            .bufferedReader().use { JSONObject(it.readText()).getJSONObject("database") }
+        context.openOrCreateDatabase(databaseName, 0, null).use { legacy ->
+            val entities = schema.getJSONArray("entities")
+            for (index in 0 until entities.length()) {
+                val entity = entities.getJSONObject(index)
+                val table = entity.getString("tableName")
+                legacy.execSQL(entity.getString("createSql").replace('$' + "{TABLE_NAME}", table))
+                entity.optJSONArray("indices")?.let { indices ->
+                    for (i in 0 until indices.length()) legacy.execSQL(indices.getJSONObject(i).getString("createSql")
+                        .replace('$' + "{TABLE_NAME}", table))
+                }
+            }
+            val setup = schema.getJSONArray("setupQueries")
+            for (index in 0 until setup.length()) legacy.execSQL(setup.getString(index))
+            legacy.execSQL("INSERT INTO launcher_settings (id, calendarAgenda, showBatteryPercentage, allowHapticFeedback, " +
+                "allowScreenRotation, useDynamicColors, themeColor, darkMode) VALUES (0, 1, 1, 1, 0, 1, 12345, 'System')")
+            legacy.version = 36
+        }
+        val repository = openRepository()
+        val migrated = withTimeout(10_000) { repository.snapshots.first().settings }
+        assertFalse(migrated.rememberScreenPosition)
+        assertFalse(migrated.allowScreenRotation)
+        assertEquals(12345, migrated.themeColor)
+        repository.mutateSettings { it.copy(rememberScreenPosition = true) }
+        openRepository().mutateSettings { it.copy(allowScreenRotation = true) }
+        assertEquals(migrated.copy(rememberScreenPosition = true, allowScreenRotation = true),
+            withTimeout(10_000) { openRepository().snapshots.first().settings })
+    }
+
+    @Test
+    fun dateActionsRoundTripAndHaveIndependentDefaults() {
+        val chosen = com.galaxyrio.gracelauncher.data.CalendarPreferences(
+            dateTapAction = com.galaxyrio.gracelauncher.data.DateAction.Calendar,
+            dateLongPressAction = com.galaxyrio.gracelauncher.data.DateAction.NewTask)
+        assertEquals(chosen, com.galaxyrio.gracelauncher.data.CalendarPreferences.decode(chosen.encode()))
+        for (stored in listOf(null, "{}", """{"dateTapAction":"Bogus"}""")) {
+            assertEquals(com.galaxyrio.gracelauncher.data.DateAction.Agenda,
+                com.galaxyrio.gracelauncher.data.CalendarPreferences.decode(stored).dateTapAction)
+        }
+    }
+
+    @Test
+    fun privateSpaceDefaultsFollowSystemWithoutEnablingLauncherProtection() = runBlocking {
+        val saved = withTimeout(10_000) { openRepository().snapshots.first().settings.privateSpace }
+        for (settings in listOf(saved, ProfileSettings.decode(null), ProfileSettings.decode("{}"))) {
+            assertTrue(settings.enabled)
+            assertFalse(settings.passwordProtected)
+            assertFalse(settings.lockImmediately)
+            assertFalse(settings.protectsApps)
+            assertFalse(settings.locksOnExit)
+        }
+    }
+
+    @Test
+    fun privateSpaceSecurityChoicesSurviveReopeningAndUnrelatedUpdates() = runBlocking {
+        for (passwordProtected in listOf(false, true)) {
+            for (lockImmediately in listOf(false, true)) {
+                val expected = ProfileSettings(passwordProtected = passwordProtected, lockImmediately = lockImmediately,
+                    name = "Private apps", appOrder = listOf("profile:10:app"))
+                openRepository().mutateSettings { it.copy(privateSpace = expected) }
+                openRepository().mutateSettings { it.copy(showBatteryPercentage = false) }
+                val saved = withTimeout(10_000) { openRepository().snapshots.first().settings.privateSpace }
+                assertEquals(expected, saved)
+                assertEquals(passwordProtected, saved.protectsApps)
+                assertEquals(lockImmediately, saved.locksOnExit)
+            }
+        }
     }
 
     @Test
@@ -526,7 +604,10 @@ class LauncherSettingsPersistenceTest {
     }
 
     @Test fun popupOptionsRoundTripAndMissingOrInvalidValuesKeepDefaults() = runBlocking {
-        val options = ShortcutsFoldersSettings(enabled = false, swipeLeftToOpenFirst = true,
+        val options = ShortcutsFoldersSettings(enabled = false,
+            swipeLeft = PopupGestureActions(order = PopupGestureAction.entries.reversed(),
+                selected = setOf(PopupGestureAction.OpenFirstItem, PopupGestureAction.DismissFirstNotification)),
+            doubleTap = PopupGestureActions(selected = setOf(PopupGestureAction.OpenFirstNotification)),
             silentNotifications = NotificationDisplay.ExpandedOnly, normalNotifications = NotificationDisplay.Hidden,
             popupSwipeDistanceDp = 24, popupSwipeAngleDegrees = 30,
             singleLineNotificationPreviews = true, multipleAppNotificationPreviews = true)
@@ -541,6 +622,13 @@ class LauncherSettingsPersistenceTest {
         assertEquals(ShortcutsFoldersSettings(), ShortcutsFoldersSettings.decode("invalid"))
         assertEquals(ShortcutsFoldersSettings(), ShortcutsFoldersSettings.decode("{\"normalNotifications\":\"unknown\"}"))
         val oldOptions = ShortcutsFoldersSettings.decode("""{"enabled":true,"swipeLeftToOpenFirst":true,"normalNotifications":"normal"}""")
+        assertEquals(setOf(PopupGestureAction.OpenFirstItem), oldOptions.swipeLeft.selected)
+        assertTrue(ShortcutsFoldersSettings.decode("""{"swipeLeftToOpenFirst":false}""").swipeLeft.selected.isEmpty())
+        val partial = ShortcutsFoldersSettings.decode("""{"swipeLeft":[{"action":"unknown","enabled":true},
+            {"action":"openPopup","enabled":true},{"action":"openPopup","enabled":false}]}""")
+        assertEquals(PopupGestureAction.OpenPopup, partial.swipeLeft.order.first())
+        assertEquals(PopupGestureAction.entries.size, partial.swipeLeft.order.size)
+        assertEquals(setOf(PopupGestureAction.OpenPopup), partial.swipeLeft.selected)
         assertFalse(oldOptions.singleLineNotificationPreviews)
         assertFalse(oldOptions.multipleAppNotificationPreviews)
         openRepository().mutateSettings { it.copy(shortcutsFolders = options) }

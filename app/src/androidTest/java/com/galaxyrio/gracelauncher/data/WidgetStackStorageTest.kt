@@ -14,7 +14,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import java.util.UUID
 
-/** Widget stacks and the weather app are stored in settings JSON, not in columns of their own. */
+/** Widget stacks use upstream's column; the fork's older stacks and weather app choice move into upstream's storage. */
 @RunWith(AndroidJUnit4::class)
 class WidgetStackStorageTest {
     private val context = InstrumentationRegistry.getInstrumentation().targetContext
@@ -29,7 +29,7 @@ class WidgetStackStorageTest {
     }
 
     private fun widgetStack(id: String = "ws") =
-        LauncherFolder(id, "Widgets", emptyList(), FolderPlacement.Favorites, isAppStack = true, isWidgetStack = true)
+        LauncherFolder(id, "Widgets", emptyList(), FolderPlacement.Favorites, widgetStack = WidgetStackStyle())
 
     private suspend fun folder(id: String) = settings.snapshots.first().folders.single { it.id == id }
 
@@ -40,16 +40,7 @@ class WidgetStackStorageTest {
 
         val snapshot = settings.snapshots.first()
         assertEquals(mapOf("ws" to true, "apps" to false, "plain" to false), snapshot.folders.associate { it.id to it.isWidgetStack })
-        assertEquals(setOf("ws"), snapshot.settings.widgetStackFolderIds)
-        assertTrue(folder("ws").isAppStack)
-    }
-
-    @Test fun savingTheFolderAsAnAppStackClearsTheMark() = runBlocking {
-        settings.saveFolder(widgetStack())
-        settings.saveFolder(widgetStack().copy(isWidgetStack = false))
-
-        assertFalse(folder("ws").isWidgetStack)
-        assertEquals(emptySet<String>(), settings.snapshots.first().settings.widgetStackFolderIds)
+        assertFalse(folder("ws").isAppStack)
     }
 
     @Test fun widgetStackSurvivesFolderEditsAndUnrelatedSettings() = runBlocking {
@@ -64,14 +55,27 @@ class WidgetStackStorageTest {
         assertEquals("Renamed", stack.name)
     }
 
-    @Test fun deletingAWidgetStackForgetsIt() = runBlocking {
-        settings.saveFolder(widgetStack())
-        settings.deleteFolder("ws")
-        assertEquals(emptySet<String>(), settings.snapshots.first().settings.widgetStackFolderIds)
+    @Test fun forkWidgetStacksBecomeUpstreamWidgetStacksOnce() = runBlocking {
+        // Before upstream's column, a fork stack was an app stack listed in shortcutsFoldersJson.
+        settings.saveFolder(LauncherFolder("ws", "Widgets", emptyList(), FolderPlacement.Favorites, isAppStack = true))
+        settings.saveFolder(LauncherFolder("apps", "Apps", emptyList(), FolderPlacement.Favorites, isAppStack = true))
+        val members = listOf(PopupItem("a/a.Main"),
+            PopupItem("widget:51", HomeLayout(widgetId = 51, widgetProvider = "w/w.Provider", widgetHeightDp = 180)),
+            PopupItem("widget:52", HomeLayout(widgetId = 52, widgetProvider = "w/w.Provider", widgetHeightDp = 320)))
+        database.itemsDao().savePopup(AppPopupEntity("folder:ws", PopupItem.encode(members)))
+        database.openHelper.writableDatabase.execSQL(
+            "UPDATE launcher_settings SET shortcutsFoldersJson = '{\"widgetStackFolderIds\":[\"ws\"]}'")
 
-        // A new folder that reuses the id starts as a normal folder.
-        settings.saveFolder(LauncherFolder("ws", "Plain", emptyList(), FolderPlacement.AppList))
-        assertFalse(folder("ws").isWidgetStack)
+        settings.migrateWidgetStackBackgrounds()
+
+        val stack = folder("ws")
+        assertEquals(WidgetStackStyle(320), stack.widgetStack)
+        assertFalse(stack.isAppStack)
+        assertTrue(folder("apps").isAppStack)
+        assertNull(folder("apps").widgetStack)
+        // Members, apps included, are kept; the old list is cleared so the conversion runs only once.
+        assertEquals(members.map { it.key }, PopupItem.decode(database.itemsDao().popup("folder:ws")!!.itemsJson).map { it.key })
+        assertEquals(emptySet<String>(), stringSetField(database.settingsDao().readSettings()!!.shortcutsFoldersJson, WidgetStackFoldersField))
     }
 
     @Test fun widgetStacksKeepWidgetsAndAppsAndAppStacksKeepOnlyApps() = runBlocking {

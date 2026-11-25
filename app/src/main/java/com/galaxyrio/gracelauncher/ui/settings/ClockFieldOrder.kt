@@ -132,6 +132,7 @@ internal fun <T : Enum<T>> ClockFieldOrder(
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
     onEdit: ((T) -> Unit)? = null,
     fieldModifier: @Composable (T) -> Modifier = { Modifier },
+    fieldSupportingContent: @Composable (T) -> Unit = {},
     listState: LazyListState = rememberLazyListState(),
 ) {
     val list = listState
@@ -242,12 +243,12 @@ internal fun <T : Enum<T>> ClockFieldOrder(
                     if (dragging) MaterialTheme.colorScheme.surfaceContainerHigh else containerColor,
                     label = "clockFieldLift",
                 )
-                Row(
+                Column(
                     modifier = Modifier.then(if (dragging) Modifier else Modifier.animateItem())
                         .zIndex(if (dragging || reorder.drop?.key == key) 1f else 0f)
                         .graphicsLayer { translationY = offset }
                         .then(if (field != null && field !in positionIcons) fieldModifier(field) else Modifier)
-                        .fillMaxWidth().height(64.dp).clip(shape).background(background)
+                        .fillMaxWidth().clip(shape).background(background)
                         .then(if (onEdit != null && field != null && field !in positionIcons)
                             Modifier.clickable(enabled = enabled && !dragging) { onEdit(field) } else Modifier)
                         .testTag("$tag:$key")
@@ -256,9 +257,10 @@ internal fun <T : Enum<T>> ClockFieldOrder(
                                 if (canMoveUp) add(CustomAccessibilityAction(up) { reorder.moveBy(key, -1) })
                                 if (canMoveDown) add(CustomAccessibilityAction(down) { reorder.moveBy(key, 1) })
                             }
-                        }.padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        },
                 ) {
+                  Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
                     val positionIcon = field?.let { positionIcons[it] }
                     if (field != null && positionIcon == null) Checkbox(
                         checked = if (primaryLine != null) index < reorder.keys.indexOf(ClockFieldUnselectedHeading) else field in selected,
@@ -307,6 +309,8 @@ internal fun <T : Enum<T>> ClockFieldOrder(
                                 onClick = { reorder.moveBy(key, 1); menu = false })
                         }
                     }
+                  }
+                  if (field != null) fieldSupportingContent(field)
                 }
             }
         }

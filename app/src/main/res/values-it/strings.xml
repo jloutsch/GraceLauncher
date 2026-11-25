@@ -550,8 +550,6 @@
     <string name="icon_designer_rotation">Rotazione</string>
     <string name="shortcuts_folders_title">Scorciatoie e cartelle</string>
     <string name="shortcuts_folders_enable">Abilita i pop-up delle app</string>
-    <string name="popup_swipe_left_first">Scorri a sinistra per aprire il primo elemento</string>
-    <string name="popup_swipe_left_first_summary">Apri la prima scorciatoia, app o l’app del widget nel pop-up</string>
     <string name="popup_silent_notifications">Notifiche silenziose</string>
     <string name="popup_normal_notifications">Notifiche normali</string>
     <string name="popup_notification_normal">Mostra</string>

@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.absoluteOffset
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.material3.Text
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowText as Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.layout
@@ -24,11 +24,14 @@ import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 /** The real drawer and appearance preview share one offset for every section heading. */
 @Composable
 internal fun AppListSectionHeader(label: String, modifier: Modifier = Modifier, icon: CategoryIcon? = null) {
+    val list = LocalListAppearance.current
+    // Keep the drawer's section anchor, but remove the heading's entire height in both surfaces.
+    if (list.hideSymbol) return
     val labelStyle = listLabelStyle()
     val style = TextStyle(fontFamily = labelStyle.fontFamily, fontSize = 18.sp, lineHeight = 24.sp,
         fontWeight = FontWeight.Normal, shadow = LocalLauncherAppearance.current.textShadow)
     val headerModifier = modifier.height(44.dp)
-        .absoluteOffset(x = LocalListAppearance.current.symbolHorizontalOffset.dp)
+        .absoluteOffset(x = list.symbolHorizontalOffset.dp)
         .padding(start = LauncherLayout.ContentInset, end = LauncherLayout.ContentInset, top = 12.dp)
         .semantics { heading() }
     if (icon == null) Text(label, headerModifier, color = labelStyle.color, style = style)

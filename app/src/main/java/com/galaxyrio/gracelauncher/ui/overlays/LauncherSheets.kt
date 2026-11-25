@@ -1,5 +1,7 @@
 package com.galaxyrio.gracelauncher.ui.overlays
 
+import com.galaxyrio.gracelauncher.ui.theme.WithoutFontShadow
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.activity.compose.BackHandler
@@ -15,6 +17,7 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.material3.*
+import com.galaxyrio.gracelauncher.ui.theme.FontShadowText as Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -24,6 +27,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -76,8 +80,8 @@ sealed interface LauncherOverlay {
 
 @Composable
 internal fun LauncherPanelTheme(content: @Composable () -> Unit) {
-    // Panels share the chosen dynamic/custom scheme and dark mode with settings.
-    content()
+    // Panels share the theme's colors, but their filled backgrounds need no wallpaper text shadow.
+    WithoutFontShadow(content)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -151,7 +155,7 @@ internal fun LauncherOverlays(
                 val folder = (overlay as? LauncherOverlay.FolderSettings)?.folderId?.let { id ->
                     // Stacks have no details sheet: that sheet redirects straight
                     // back to this editor. Close instead of creating a return loop.
-                    if (uiState.folders.any { it.id == id && it.isAppStack }) null
+                    if (uiState.folders.any { it.id == id && (it.isAppStack || it.isWidgetStack) }) null
                     else uiState.findItem("folder:$id")
                 }
                 onChange(if ((overlay as? LauncherOverlay.SettingsDestination)?.returnToSearch == true && uiState.settings.search.enabled)
@@ -310,7 +314,7 @@ private fun AppDetailsSheet(app: LauncherApp, actions: LauncherActions, onChange
         LaunchedEffect(app.key) { onChange(null) }
         return
     }
-    if (folder?.isAppStack == true) {
+    if (folder != null && (folder.isAppStack || folder.isWidgetStack)) {
         LaunchedEffect(folder.id) { onChange(LauncherOverlay.FolderSettings(folder.id)) }
         return
     }
@@ -453,7 +457,7 @@ private fun CategoryPicker(app: LauncherApp, uiState: LauncherUiState, actions: 
     Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 32.dp)) {
         PanelTitle(stringResource(R.string.add_to_folder))
         Text(app.label, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        uiState.folders.filterNot { it.isAppStack }.forEach { folder ->
+        uiState.folders.filterNot { it.isAppStack || it.isWidgetStack }.forEach { folder ->
             val isMember = app.key in folder.appKeys
             PanelAction(if (isMember) LauncherSymbol.Check else LauncherSymbol.Folder, folder.name) {
                 actions.updatePopup(uiState.folderItem(folder), listOf(app)) { current ->
@@ -496,13 +500,17 @@ private fun CategoryAppsSheet(name: String, uiState: LauncherUiState, onLaunch: 
 }
 
 @Composable
-internal fun TextEntryDialog(title: String, initial: String, onDismiss: () -> Unit, onSave: (String) -> Unit, onReset: (() -> Unit)? = null) {
-    var value by remember { mutableStateOf(initial) }
+internal fun TextEntryDialog(title: String, initial: String, onDismiss: () -> Unit, onSave: (String) -> Unit, onReset: (() -> Unit)? = null) = WithoutFontShadow {
+    val input = androidx.compose.foundation.text.input.rememberTextFieldState(initial)
+    val value = input.text.toString()
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = RoundedCornerShape(40.dp),
         title = { Text(title) },
-        text = { OutlinedTextField(value, onValueChange = { value = it.take(80) }, singleLine = true, modifier = Modifier.testTag("text_entry")) },
+        text = {
+            OutlinedTextField(value, onValueChange = { next -> input.edit { replace(0, length, next.take(80)) } },
+                singleLine = true, modifier = Modifier.testTag("text_entry"))
+        },
         confirmButton = { TextButton(onClick = { onSave(value.trim()) }, enabled = value.isNotBlank()) { Text(stringResource(R.string.save)) } },
         dismissButton = {
             Row {
@@ -553,5 +561,15 @@ internal fun DeleteFolderDialog(name: String, onDismiss: () -> Unit, appStack: B
             else if (appStack) R.string.app_stack_delete_confirmation else R.string.settings_folder_delete_confirmation, name)) },
         confirmButton = { TextButton(onClick = onDelete, modifier = Modifier.testTag("folder_confirm_delete")) {
             Text(stringResource(R.string.settings_delete), color = MaterialTheme.colorScheme.error)
+        } }, dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })
+}
+
+@Composable
+internal fun DismissNotificationsDialog(count: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    AlertDialog(onDismissRequest = onDismiss, shape = RoundedCornerShape(40.dp),
+        title = { Text(stringResource(R.string.dismiss_notifications_title)) },
+        text = { Text(pluralStringResource(R.plurals.dismiss_notifications_message, count, count)) },
+        confirmButton = { TextButton(onClick = onConfirm, modifier = Modifier.testTag("dismiss_notifications_confirm")) {
+            Text(stringResource(R.string.dismiss_notifications_confirm))
         } }, dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } })
 }

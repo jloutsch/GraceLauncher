@@ -2,6 +2,7 @@
 
 package com.galaxyrio.gracelauncher.ui.settings
 
+import com.galaxyrio.gracelauncher.ui.theme.LocalFontShadowEnabled
 import android.net.Uri
 import android.os.Build
 import androidx.activity.compose.BackHandler
@@ -77,6 +78,7 @@ import com.galaxyrio.gracelauncher.ui.LauncherUiState
 import com.galaxyrio.gracelauncher.ui.components.LauncherIcon
 import com.galaxyrio.gracelauncher.ui.components.LauncherSearchBar
 import com.galaxyrio.gracelauncher.ui.components.LauncherSymbol
+import com.galaxyrio.gracelauncher.ui.theme.withFontShadow
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherTypography
 import com.galaxyrio.gracelauncher.ui.theme.SystemLauncherTypography
 import kotlinx.coroutines.CancellationException
@@ -88,14 +90,14 @@ import kotlinx.coroutines.withContext
 internal const val OpenedFromSearchKey = "opened_from_search"
 
 internal enum class SettingsPage {
-    Root, Productivity, Clock, ClockStyle, Calendar, CalendarSources, CalendarApp, Weather, WeatherApp, Themes, Advanced, Language, About, HiddenApps, Folders, FolderEditor,
+    Root, Productivity, Clock, ClockStyle, Calendar, CalendarSources, CalendarApp, Weather, WeatherApp, Themes, Advanced, Backup, Language, About, HiddenApps, Folders, FolderEditor,
     Changelog, Licenses, AppLicense, IconPacks, IconDesigner, IconDesignerApp, PrivateSpace, PrivateSpaceEditor, Search,
     MediaPlayer, GraceButton, GraceAction, GraceApp, GraceShortcut, GraceFolder, Gestures, WorkProfile, WorkProfileEditor,
-    LabGraceButton, LabGesture, LabPopup, LabAccessibility, LabDismiss, Fonts, FontColors, ListAppearance, Alphabet, ShortcutsFolders, AppStacks,
+    LabGraceButton, LabGesture, LabPopup, LabAccessibility, LabDismiss, Fonts, FontColors, FontShadow, ListAppearance, Alphabet, ShortcutsFolders, AppStacks, WidgetStacks,
     GraceButtonAppearance, GraceButtonPosition, AgendaAppearance, SearchAppearance, MediaPlayerAppearance,
-    WidgetScreen, WidgetScreenEditor, Homepage, AppList, FeedScreen, StatusScreen, DigitalWellbeing, TabletsFoldables,
-    Wallpaper, WallpaperDesigner,
-    AppCategories, CategoryEditor, TasksOrg, TaskLists, Backup,
+    WidgetScreen, WidgetScreenEditor, HomeScreen, Homepage, AppList, FeedScreen, StatusScreen, DigitalWellbeing, TabletsFoldables,
+    Wallpaper, WallpaperDesigner, Screens,
+    AppCategories, CategoryEditor, TasksOrg, TaskLists,
 }
 
 /** The window's existing system-bar owner follows the active settings surface. */
@@ -173,8 +175,9 @@ fun LauncherSettingsScreen(
     )
     val reportSystemBarBackground by rememberUpdatedState(LocalSettingsSystemBarBackground.current)
     DisposableEffect(Unit) { onDispose { reportSystemBarBackground(SettingsSystemBarBackground.Surface) } }
-    MaterialTheme(typography = if (uiState.settings.applyFontToSettings) LocalLauncherTypography.current else SystemLauncherTypography) {
-     CompositionLocalProvider(LocalSettingsStorageState provides storage) {
+    MaterialTheme(typography = (if (uiState.settings.applyFontToSettings) LocalLauncherTypography.current else SystemLauncherTypography)
+        .withFontShadow(androidx.compose.ui.graphics.Shadow.None)) {
+     CompositionLocalProvider(LocalFontShadowEnabled provides false, LocalSettingsStorageState provides storage) {
       NavHost(
         navController = navController,
         startDestination = startDestination,
@@ -183,7 +186,7 @@ fun LauncherSettingsScreen(
             translationX = distance * direction * rootExit.value
         }.background(if (currentEntry?.destination?.route in listOf(SettingsPage.ClockStyle.name, SettingsPage.IconDesigner.name,
             SettingsPage.ListAppearance.name, SettingsPage.Alphabet.name, SettingsPage.GraceButtonAppearance.name, SettingsPage.GraceButtonPosition.name,
-            SettingsPage.MediaPlayerAppearance.name))
+            SettingsPage.MediaPlayerAppearance.name, SettingsPage.FontShadow.name))
             Color.Transparent else MaterialTheme.colorScheme.surfaceContainer),
         enterTransition = { settingsEnter(distance) },
         exitTransition = { settingsExit(distance) },
@@ -250,6 +253,7 @@ fun LauncherSettingsScreen(
                     SettingsPage.CategoryEditor -> AppCategoryEditorSettings(entry.arguments?.getString("categoryId"), uiState, actions, back)
                     SettingsPage.DigitalWellbeing -> DigitalWellbeingSettingsScreen(uiState, actions, back)
                     SettingsPage.TabletsFoldables -> SettingsPlaceholder(stringResource(R.string.settings_tablets_foldables), "tablets_foldables_settings", back)
+                    SettingsPage.HomeScreen -> HomeScreenSettings(uiState, actions, back) { navigate(SettingsPage.Homepage) }
                     SettingsPage.Homepage -> com.galaxyrio.gracelauncher.ui.overlays.HomepageEditorScreen(
                         uiState, actions, actions.toggleFavorite, actions.reorderFavorites, onDone = back)
                     SettingsPage.AppList -> com.galaxyrio.gracelauncher.ui.overlays.AppListEditorScreen(uiState, actions, back)
@@ -342,8 +346,10 @@ fun LauncherSettingsScreen(
                     SettingsPage.MediaPlayerAppearance -> MediaPlayerAppearanceSettings(uiState, actions, back)
                     SettingsPage.ClockStyle -> ClockStyleSettings(uiState, actions, back,
                         expandAllGroups = entry.savedStateHandle.get<Boolean>(OpenedFromSearchKey) == true) { navigate(SettingsPage.Fonts) }
-                    SettingsPage.Fonts -> FontSettings(uiState, actions, back) { navigate(SettingsPage.FontColors) }
+                    SettingsPage.Fonts -> FontSettings(uiState, actions, back,
+                        onFontColors = { navigate(SettingsPage.FontColors) }, onFontShadow = { navigate(SettingsPage.FontShadow) })
                     SettingsPage.FontColors -> FontColorSettings(uiState, actions, back)
+                    SettingsPage.FontShadow -> FontShadowSettings(uiState, uiState.settings.fontShadow, back, actions.applyFontShadow)
                     SettingsPage.Wallpaper -> WallpaperSettings(uiState, actions, back,
                         onDesigner = { navigate(SettingsPage.WallpaperDesigner) },
                         onChooseWallpaper = { if (isCurrent()) actions.chooseWallpaper() })
@@ -379,8 +385,10 @@ fun LauncherSettingsScreen(
                     SettingsPage.TasksOrg -> TasksSettings(uiState, actions, back,
                         onLists = { navigate(SettingsPage.TaskLists) }, onAppearance = { navigate(SettingsPage.ClockStyle) })
                     SettingsPage.TaskLists -> TasksListsSettings(uiState, actions, back)
-                    SettingsPage.Advanced -> AdvancedSettings(uiState, actions, back, navigate,
+                    SettingsPage.Advanced -> AdvancedSettings(back, navigate,
                         onChooseDefaultHome = { if (isCurrent()) actions.requestDefaultHome() })
+                    SettingsPage.Backup -> BackupSettings(actions, back, uiState.backupInProgress)
+                    SettingsPage.Screens -> ScreenSettings(uiState, actions, back)
                     SettingsPage.Language -> LanguageSettings(back)
                     SettingsPage.LabGraceButton -> LabGraceButtonSettings(uiState, actions, back)
                     SettingsPage.LabGesture -> LabGestureSettings(uiState, actions, back)
@@ -388,7 +396,6 @@ fun LauncherSettingsScreen(
                     SettingsPage.LabAccessibility -> LabAccessibilitySettings(uiState, actions, back)
                     SettingsPage.LabDismiss -> LabDismissSettings(uiState, actions, back)
                     SettingsPage.About -> AboutSettings(back, navigate)
-                    SettingsPage.Backup -> BackupSettings(uiState, back)
                     SettingsPage.HiddenApps -> HiddenAppsSettings(uiState, actions, back)
                     SettingsPage.PrivateSpace -> ProfileSettingsScreen(uiState, actions, back) { navigate(SettingsPage.PrivateSpaceEditor) }
                     SettingsPage.WorkProfile -> ProfileSettingsScreen(uiState, actions, back, work = true) { navigate(SettingsPage.WorkProfileEditor) }
@@ -411,6 +418,9 @@ fun LauncherSettingsScreen(
                     SettingsPage.AppStacks -> FolderSettings(uiState, actions, back, appStacks = true) { folderId ->
                         if (isCurrent()) navController.navigate("FolderEditor/${Uri.encode(folderId)}")
                     }
+                    SettingsPage.WidgetStacks -> WidgetStackSettings(uiState, actions, back, onEdit = { folderId ->
+                        if (isCurrent()) navController.navigate("FolderEditor/${Uri.encode(folderId)}")
+                    })
                     SettingsPage.FolderEditor -> FolderEditorSettings(entry.arguments?.getString("folderId"), uiState, actions, back,
                         onEditIcon = { app ->
                             if (isCurrent()) {
@@ -445,7 +455,7 @@ private fun SettingsHome(
         add(SettingsPage.Productivity to LauncherSymbol.Star)
         add(SettingsPage.Themes to LauncherSymbol.Palette)
         add(SettingsPage.Advanced to LauncherSymbol.Settings)
-        add(SettingsPage.Backup to LauncherSymbol.History2)
+        add(SettingsPage.Backup to LauncherSymbol.Cloud)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             add(SettingsPage.Language to LauncherSymbol.Language)
         }

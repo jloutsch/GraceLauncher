@@ -11,6 +11,7 @@ data class TasksPreferences(
     val selectedListIds: Set<Long>? = null,
     val sortMode: TaskSortMode = TaskSortMode.DueDate,
     val undatedFirst: Boolean = true,
+    val showOverdue: Boolean = true,
 ) {
     fun normalized() = copy(selectedListIds = selectedListIds?.filterTo(linkedSetOf()) { it > 0 })
 
@@ -19,6 +20,7 @@ data class TasksPreferences(
         .put("selectedListIds", value.selectedListIds?.let { JSONArray(it.sorted()) } ?: JSONObject.NULL)
         .put("sortMode", value.sortMode.name)
         .put("undatedFirst", value.undatedFirst)
+        .put("showOverdue", value.showOverdue)
     }
 
     companion object {
@@ -34,6 +36,7 @@ data class TasksPreferences(
                 } },
                 sortMode = TaskSortMode.entries.firstOrNull { it.name == json.optString("sortMode") } ?: TaskSortMode.DueDate,
                 undatedFirst = json.optBoolean("undatedFirst", true),
+                showOverdue = json.optBoolean("showOverdue", true),
             )
         }
     }

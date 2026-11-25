@@ -14,13 +14,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.getValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.res.stringResource
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.mutableStateOf
@@ -34,7 +28,6 @@ import com.galaxyrio.gracelauncher.data.LauncherProfiles
 import com.galaxyrio.gracelauncher.data.LauncherProfileType
 import com.galaxyrio.gracelauncher.data.HomeLayout
 import com.galaxyrio.gracelauncher.data.PopupItem
-import com.galaxyrio.gracelauncher.data.backup.WidgetRestoreRepository
 import com.galaxyrio.gracelauncher.platform.HomeWidgetHost
 import com.galaxyrio.gracelauncher.platform.hasOptionalConfiguration
 import com.galaxyrio.gracelauncher.platform.initialWidgetOptions
@@ -48,7 +41,6 @@ import com.galaxyrio.gracelauncher.ui.theme.rememberLauncherAppearance
 import com.galaxyrio.gracelauncher.ui.theme.LocalLauncherAppearance
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -58,9 +50,7 @@ class WidgetSetupActivity : ComponentActivity() {
     private val viewModel: LauncherViewModel by viewModels()
     private val repository by lazy { LauncherSettingsRepository(LauncherDatabase.getInstance(this)) }
     private val itemsRepository by lazy { LauncherItemsRepository(LauncherDatabase.getInstance(this)) }
-    private val restoreRepository by lazy { WidgetRestoreRepository(LauncherDatabase.getInstance(this)) }
-    private val popupOwner get() = intent.getStringExtra(EXTRA_POPUP_OWNER) ?: intent.getStringExtra(EXTRA_RESTORE_OWNER)
-    private var restorePlaceholder: Int? = null
+    private val popupOwner get() = intent.getStringExtra(EXTRA_POPUP_OWNER)
     private val manager by lazy { AppWidgetManager.getInstance(this) }
     private val host by lazy { HomeWidgetHost(this) }
     private var pendingId = -1
@@ -74,9 +64,6 @@ class WidgetSetupActivity : ComponentActivity() {
     private var saving by mutableStateOf(false)
     private var busy by mutableStateOf(true)
     private var providers by mutableStateOf<List<AppWidgetProviderInfo>?>(null)
-    // Fork: before Android's own bind prompt during restore, say that "Always allow" stops it repeating per widget.
-    private var bindNote by mutableStateOf<AppWidgetProviderInfo?>(null)
-    private var bindNoteShown = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -87,9 +74,6 @@ class WidgetSetupActivity : ComponentActivity() {
         configuringExisting = savedInstanceState?.getBoolean("configuringExisting") ?: false
         stage = savedInstanceState?.getString("stage") ?: "loading"
         expectedProfile = savedInstanceState?.getLong("expectedProfile", -1)?.takeIf { it >= 0 }
-        restorePlaceholder = (savedInstanceState ?: intent.extras)?.takeIf { it.containsKey(EXTRA_RESTORE_PLACEHOLDER) }
-            ?.getInt(EXTRA_RESTORE_PLACEHOLDER)
-        bindNoteShown = savedInstanceState?.getBoolean("bindNoteShown") ?: false
         setContent {
             LauncherAppTheme(viewModel) {
                 val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -97,15 +81,6 @@ class WidgetSetupActivity : ComponentActivity() {
                 CompositionLocalProvider(LocalLauncherAppearance provides rememberLauncherAppearance(state.textMode,
                     themedIcons = state.themedIcons, iconSize = state.settings.iconDesign?.design?.iconSize ?: 100)) {
                     WidgetPicker(providers, busy, state, onBack = { if (!saving) cancelSetup() }, onSelect = ::select)
-                    bindNote?.let { info ->
-                        val later = { bindNote = null; skipRestore() }
-                        AlertDialog(onDismissRequest = later, modifier = Modifier.testTag("widget_bind_note"),
-                            title = { Text(stringResource(R.string.widget_bind_note_title)) },
-                            text = { Text(stringResource(R.string.widget_bind_note_text)) },
-                            confirmButton = { TextButton({ bindNote = null; bindNoteShown = true; select(info) }) {
-                                Text(stringResource(R.string.widget_bind_note_continue)) } },
-                            dismissButton = { TextButton(later) { Text(stringResource(R.string.widget_bind_note_later)) } })
-                    }
                 }
             }
         }
@@ -131,8 +106,6 @@ class WidgetSetupActivity : ComponentActivity() {
                     pendingId = configureId
                     configuringExisting = true
                     configure()
-                } else if (restorePlaceholder != null) {
-                    restoreWidget()
                 } else {
                     providers = withContext(Dispatchers.IO) {
                         LauncherProfiles(this@WidgetSetupActivity).snapshot().profiles.filter { profile ->
@@ -159,25 +132,6 @@ class WidgetSetupActivity : ComponentActivity() {
         }
     }
 
-    /** Restore mode skips the picker: the provider is the one the backup saved for this placeholder. */
-    private suspend fun restoreWidget() {
-        val placeholderId = restorePlaceholder ?: return
-        val provider = restoreRepository.pending().firstOrNull { it.placeholderId == placeholderId }?.provider
-        val info = provider?.let { wanted ->
-            withContext(Dispatchers.IO) {
-                runCatching { manager.getInstalledProvidersForProfile(Process.myUserHandle()) }.getOrDefault(emptyList())
-            }.firstOrNull { it.provider.flattenToString() == wanted }
-        }
-        Log.i(TAG, "restore placeholder=$placeholderId provider=$provider found=${info != null}")
-        if (info == null) {
-            // Fork: the slot can never be set up, so drop it as before, but say why instead of closing silently.
-            Toast.makeText(this, R.string.widget_restore_app_missing, Toast.LENGTH_LONG).show()
-            cancelSetup(); return
-        }
-        busy = false
-        select(info)
-    }
-
     private fun select(info: AppWidgetProviderInfo) {
         if (busy) return
         busy = true
@@ -192,7 +146,6 @@ class WidgetSetupActivity : ComponentActivity() {
                 "min=${info.minWidth}x${info.minHeight} resizeMode=${info.resizeMode} configure=${info.configure} " +
                 "size=${options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH)}x${options.getInt(AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT)}")
             if (manager.bindAppWidgetIdIfAllowed(pendingId, info.profile, info.provider, options)) configure()
-            else if (restorePlaceholder != null && !bindNoteShown) showBindNote(info)
             else startActivityForResult(Intent(AppWidgetManager.ACTION_APPWIDGET_BIND).apply {
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, pendingId)
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_PROVIDER, info.provider)
@@ -200,16 +153,6 @@ class WidgetSetupActivity : ComponentActivity() {
                 putExtra(AppWidgetManager.EXTRA_APPWIDGET_OPTIONS, options)
             }, REQUEST_BIND)
         } catch (error: Exception) { fail(R.string.widget_bind_error, error) }
-    }
-
-    /** Releases the unbound ID first: the note may be left with "Not now", and Continue allocates again. */
-    private fun showBindNote(info: AppWidgetProviderInfo) {
-        runCatching { host.deleteAppWidgetId(pendingId) }
-        host.untrackPendingId(pendingId)
-        pendingId = -1
-        stage = "bind_note"
-        busy = false
-        bindNote = info
     }
 
     private fun configure() {
@@ -320,13 +263,8 @@ class WidgetSetupActivity : ComponentActivity() {
             try {
                 val layout = HomeLayout(widgetId = id, widgetProvider = info.provider.flattenToString(),
                     widgetLabel = runCatching { info.loadLabel(packageManager) }.getOrDefault(info.provider.className))
-                val placeholder = restorePlaceholder
                 val owner = popupOwner ?: com.galaxyrio.gracelauncher.data.HomeContentKey
-                // A widget re-bound after a backup import goes back to its saved slot.
-                val removed = if (placeholder != null) {
-                    // A slot that now expects another widget keeps waiting; this one is not used.
-                    if (restoreRepository.resolve(placeholder, id, info.provider.flattenToString())) emptyList() else listOf(id)
-                } else itemsRepository.updatePopup(owner, emptyList()) { entries ->
+                val removed = itemsRepository.updatePopup(owner, emptyList()) { entries ->
                     if (owner == com.galaxyrio.gracelauncher.data.AgendaWidgetDraftKey) listOf(PopupItem("widget:$id", layout))
                     else if (entries.any { it.widget?.widgetId == id }) entries else entries + PopupItem("widget:$id", layout)
                 }
@@ -345,16 +283,7 @@ class WidgetSetupActivity : ComponentActivity() {
     private fun fail(message: Int, error: Throwable? = null) {
         Log.e(TAG, "failed stage=$stage id=$pendingId provider=$expectedProvider existing=$configuringExisting", error)
         Toast.makeText(this, message, Toast.LENGTH_LONG).show()
-        // An error is not a refusal: keep the imported slot so a later home start can retry it.
-        if (restorePlaceholder != null) skipRestore() else cancelSetup()
-    }
-
-    private fun skipRestore() {
-        if (pendingId >= 0) runCatching { host.deleteAppWidgetId(pendingId) }
-        host.untrackPendingId(pendingId)
-        pendingId = -1
-        setResult(RESULT_RESTORE_SKIPPED, Intent().putExtra(EXTRA_RESTORE_PLACEHOLDER, restorePlaceholder))
-        finish()
+        cancelSetup()
     }
 
     private fun cancelSetup() {
@@ -363,17 +292,7 @@ class WidgetSetupActivity : ComponentActivity() {
         if (!configuringExisting && pendingId >= 0) runCatching { host.deleteAppWidgetId(pendingId) }
         host.untrackPendingId(pendingId)
         pendingId = -1
-        val placeholder = restorePlaceholder ?: return finish()
-        // Finish only after the slot is gone, so the home screen's next resume sees the shorter queue.
-        // A repeated cancel repeats the drop, which is then a no-op.
-        lifecycleScope.launch {
-            try { withContext(NonCancellable) { restoreRepository.drop(placeholder) } }
-            catch (error: Exception) {
-                if (error is CancellationException) throw error
-                Log.e(TAG, "restore drop failed placeholder=$placeholder", error)
-            }
-            finish()
-        }
+        finish()
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -382,9 +301,7 @@ class WidgetSetupActivity : ComponentActivity() {
         outState.putBoolean("configuringExisting", configuringExisting)
         outState.putBoolean("saving", saving)
         outState.putString("stage", stage)
-        outState.putBoolean("bindNoteShown", bindNoteShown)
         expectedProfile?.let { outState.putLong("expectedProfile", it) }
-        restorePlaceholder?.let { outState.putInt(EXTRA_RESTORE_PLACEHOLDER, it) }
         super.onSaveInstanceState(outState)
     }
 
@@ -398,9 +315,6 @@ class WidgetSetupActivity : ComponentActivity() {
         private const val TAG = "GraceWidgetSetup"
         const val EXTRA_POPUP_OWNER = "popupOwner"
         const val EXTRA_CONFIGURE_ID = "configureWidgetId"
-        const val EXTRA_RESTORE_PLACEHOLDER = "restorePlaceholderId"
-        const val EXTRA_RESTORE_OWNER = "restoreOwner"
-        const val RESULT_RESTORE_SKIPPED = Activity.RESULT_FIRST_USER
         private const val REQUEST_BIND = 4001
         private const val REQUEST_CONFIGURE = 4002
     }

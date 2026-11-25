@@ -660,8 +660,6 @@
     <string name="shortcuts_folders_title">Atalhos e pastas</string>
     <string name="popups_title">Janelas flutuantes</string>
     <string name="shortcuts_folders_enable">Ativar janela flutuante de aplicativos</string>
-    <string name="popup_swipe_left_first">Deslize para a esquerda para abrir o primeiro item</string>
-    <string name="popup_swipe_left_first_summary">Abra o primeiro atalho, aplicativo ou aplicativo do \"widget\" na janela flutuante</string>
     <string name="popup_silent_notifications">Notificações silenciosas</string>
     <string name="popup_normal_notifications">Notificações normais</string>
     <string name="popup_single_line_previews">Visualizações de notificação de linha única</string>

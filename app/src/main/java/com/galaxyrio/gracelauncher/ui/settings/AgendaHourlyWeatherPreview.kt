@@ -2,6 +2,7 @@
 
 package com.galaxyrio.gracelauncher.ui.settings
 
+import com.galaxyrio.gracelauncher.ui.theme.LocalFontShadowEnabled
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.MaterialTheme
@@ -39,7 +40,9 @@ internal fun AgendaHourlyWeatherPreview(snapshot: WeatherSnapshot?, appearance: 
     Box(modifier.testTag("agenda_hourly_preview")
         .clip(ListItemDefaults.segmentedShapes(0, 1).shape).background(MaterialTheme.colorScheme.surfaceContainer)) {
         // Keep the source and expand/series controls reachable even with many text rows enabled.
-        HourlyWeather(weather, now, appearance = appearance, constrainContentHeight = true)
+        androidx.compose.runtime.CompositionLocalProvider(LocalFontShadowEnabled provides false) {
+            HourlyWeather(weather, now, appearance = appearance, constrainContentHeight = true)
+        }
     }
 }
 

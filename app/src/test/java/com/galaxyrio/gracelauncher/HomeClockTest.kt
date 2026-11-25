@@ -18,6 +18,8 @@ class HomeClockTest {
         assertEquals("09:05", clockFaceText("09:05", colon))
         assertEquals("09\n05", clockFaceText("09:05", colon.copy(layout = ClockLayout.TwoLines)))
         assertEquals("٠٩\n٠٥", clockFaceText("٠٩:٠٥", colon.copy(layout = ClockLayout.TwoLines)))
+        assertEquals("09\n05\n37", clockFaceText("09:05:37", colon.copy(layout = ClockLayout.TwoLines)))
+        assertEquals("09:05:37", clockFaceText("09:05:37", colon))
     }
 
     private fun clock(time: String, use24Hour: Boolean = true, locale: Locale = Locale.US, leadingZero: Boolean = true) =
