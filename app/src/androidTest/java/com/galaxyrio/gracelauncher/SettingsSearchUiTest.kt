@@ -48,12 +48,19 @@ class SettingsSearchUiTest {
         compose.onNodeWithTag("settings_category_advanced").assertIsDisplayed()
         compose.onNodeWithTag("settings_search_query").performTextReplacement("screen rotation")
         compose.onNodeWithTag("settings_category_advanced").assertDoesNotExist()
-        compose.onNodeWithTag("settings_search_result:Advanced")
+        compose.onNodeWithTag("settings_search_result:Screens")
             .assertTextContains(context.getString(R.string.settings_allow_screen_rotation))
-            .assertTextContains(context.getString(R.string.settings_advanced))
+            .assertTextContains("${context.getString(R.string.settings_advanced)} › ${context.getString(R.string.settings_screens)}")
             .performClick()
         compose.onNodeWithText(context.getString(R.string.settings_allow_screen_rotation)).assertIsDisplayed()
         compose.onNodeWithTag("settings_search_query").assertDoesNotExist()
+    }
+
+    @Test fun addWidgetStackOpensTheWidgetStacksPage() {
+        show()
+        compose.onNodeWithTag("settings_search_query").performTextReplacement(context.getString(R.string.widget_stack_create))
+        compose.onNodeWithTag("settings_search_result:WidgetStacks").performClick()
+        compose.onNodeWithTag("widget_stack_create").assertIsDisplayed()
     }
 
     @Test fun backFromAResultWalksUpThePathItShowed() {

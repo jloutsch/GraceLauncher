@@ -203,7 +203,7 @@ internal object SettingsSearchIndex {
         SettingsSearchItem(SettingsPage.TasksOrg, R.string.tasks_sort_by),
         SettingsSearchItem(SettingsPage.TasksOrg, R.string.tasks_undated_first),
         SettingsSearchItem(SettingsPage.TaskLists, R.string.tasks_all_lists),
-        SettingsSearchItem(SettingsPage.Advanced, R.string.settings_allow_screen_rotation),
+        SettingsSearchItem(SettingsPage.Screens, R.string.settings_allow_screen_rotation),
         SettingsSearchItem(SettingsPage.Advanced, R.string.choose_default_launcher),
         SettingsSearchItem(SettingsPage.LabGraceButton, R.string.lab_animation),
         SettingsSearchItem(SettingsPage.LabAccessibility, R.string.lab_prefer_non_accessibility),
@@ -213,7 +213,7 @@ internal object SettingsSearchIndex {
         SettingsSearchItem(SettingsPage.PrivateSpace, R.string.private_space_password),
         SettingsSearchItem(SettingsPage.PrivateSpace, R.string.private_space_lock_immediately),
         SettingsSearchItem(SettingsPage.WorkProfile, R.string.private_space_display),
-        SettingsSearchItem(SettingsPage.AppStacks, R.string.widget_stack_create),
+        SettingsSearchItem(SettingsPage.WidgetStacks, R.string.widget_stack_create),
     )
 
     /**
