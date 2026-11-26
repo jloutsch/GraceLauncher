@@ -1,6 +1,7 @@
 package com.galaxyrio.gracelauncher
 
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.isDisplayed
 import androidx.compose.ui.test.isNotDisplayed
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -35,12 +36,17 @@ class SettingsSearchUiTest {
     // Back goes through the app's dispatcher: a test can press back before the keyboard finishes closing.
     private fun back() = compose.runOnIdle { dispatcher.onBackPressed() }
 
-    private fun show() = compose.setContent {
-        val owner = requireNotNull(LocalOnBackPressedDispatcherOwner.current)
-        SideEffect { dispatcher = owner.onBackPressedDispatcher }
-        GraceLauncherTheme(dynamicColor = false) {
-            LauncherSettingsScreen(LauncherUiState(isDefaultHome = true), LauncherActions(), onBack = { closes++ })
+    private fun show() {
+        compose.setContent {
+            val owner = requireNotNull(LocalOnBackPressedDispatcherOwner.current)
+            SideEffect { dispatcher = owner.onBackPressedDispatcher }
+            GraceLauncherTheme(dynamicColor = false) {
+                LauncherSettingsScreen(LauncherUiState(isDefaultHome = true), LauncherActions(), onBack = { closes++ })
+            }
         }
+        // The first test in a run can be idle before Android shows the window (a first frame can take a second),
+        // and nothing counts as displayed until then.
+        compose.waitUntil(5_000) { compose.onNodeWithTag("settings_root").isDisplayed() }
     }
 
     @Test fun aResultShowsItsPathAndOpensThePageThatHoldsIt() {
